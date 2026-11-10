@@ -29,13 +29,34 @@ namespace CyanPreview.Editor
             Require(surfaces.WindowAtEdge(new Vector2(100, 0), out _, out _) == 0, "Closed/minimized window retained edge");
             surfaces.UpdateWindows(new[] { back }); surfaces.UseWindowEdges = false;
             Require(surfaces.Nearest(Vector2.zero, out _) == new Vector2(0, -300), "Frame-only mode used a window");
+            surfaces.UseWindowEdges = true;
+            var edgePosition = new Vector2(86, 0);
+            var moved = new DesktopWindow(1, new Rect(-20, -60, 200, 200));
+            Require(surfaces.UpdateWindows(new[] { moved }, edgePosition, true) == new Vector2(80, 40), "Window translation lost attachment");
+            surfaces.UpdateWindows(new[] { back });
+            var resized = new DesktopWindow(1, new Rect(-100, -100, 300, 240));
+            Require(surfaces.UpdateWindows(new[] { resized }, edgePosition, true) == new Vector2(100, 20), "Resize did not preserve edge-relative grip");
+            surfaces.UpdateWindows(new[] { back });
+            Require(surfaces.UpdateWindows(new[] { moved }, edgePosition, false) == Vector2.zero, "Window carried an airborne or grabbed pet");
+            surfaces.UpdateWindows(new[] { back });
+            Require(surfaces.UpdateWindows(new DesktopWindow[0], edgePosition, true) == Vector2.zero, "Removed window moved pet");
+            surfaces.UpdateWindows(new[] { back });
+            var occluder = new DesktopWindow(3, new Rect(-40, -80, 240, 240));
+            Require(surfaces.UpdateWindows(new[] { occluder, moved }, edgePosition, true) == Vector2.zero, "Newly covered support moved pet");
+            surfaces.UpdateWindows(new[] { back });
+            var offscreen = new DesktopWindow(1, new Rect(450, -100, 200, 200));
+            Require(surfaces.UpdateWindows(new[] { offscreen }, edgePosition, true) == Vector2.zero, "Off-screen window pulled pet outside work area");
+            surfaces.UseWindowEdges = false;
             using (var pet = context.CreatePet())
             {
                 pet.Generate("42"); var motion = new PetMotion(pet, surfaces, 42) { Roam = false };
                 for (int i = 0; i < 40; i++) motion.Advance(.025f);
                 var position = motion.Position;
                 var limbs = (Array)Get(pet.Graphics, "limbs"); var foot = (Vector2)Get(limbs.GetValue(0), "pos");
-                motion.ShiftWithSurface(new Vector2(80, 20));
+                var chunks = (Array)Get(pet.Lizard, "bodyChunks");
+                Set(chunks.GetValue(0), "vel", new Vector2(2, 1));
+                motion.ShiftWithSurface(new Vector2(80, 20), false);
+                Require((Vector2)Get(chunks.GetValue(0), "vel") == new Vector2(2, 1), "Window movement erased crawling velocity");
                 Require(Vector2.Distance(motion.Position, position + new Vector2(80, 20)) < .001f, "Moving window did not carry body");
                 Require(Vector2.Distance((Vector2)Get(limbs.GetValue(0), "pos"), foot + new Vector2(80, 20)) < .001f, "Moving window left feet behind");
                 Require(motion.State == PetMotionState.Crawling, "Moving window changed interaction state");

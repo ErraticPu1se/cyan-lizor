@@ -37,6 +37,22 @@ namespace CyanPreview.Editor
                 Require(motion.State == PetMotionState.Crawling, "Dropped pet did not regain footing");
                 input.Press(motion.Position); input.Hold(motion.Position, .4f); input.Cancel();
                 Require(motion.State != PetMotionState.Grabbed, "Focus loss left pet grabbed");
+                input.Press(motion.Position); input.Hold(motion.Position, .05f); input.Release(motion.Position, true);
+                Require(!input.CapturesPointer && motion.State != PetMotionState.Grabbed, "Short click retained a grab");
+                input.Press(motion.Position); input.Cancel(); input.Hold(motion.Position, .2f);
+                Require(!input.CapturesPointer && motion.State != PetMotionState.Grabbed, "Cancelled pending hold became a grab");
+                var beforeFastGrab = motion.Position;
+                input.Press(beforeFastGrab);
+                Require(input.CapturesPointer, "Pending hold did not retain pointer ownership");
+                var fastTarget = beforeFastGrab + new Vector2(-20, 20);
+                input.Hold(fastTarget, .11f);
+                Require(motion.State == PetMotionState.Grabbed && Vector2.Distance(motion.Position, fastTarget) < .01f,
+                    "Moving cursor before hold threshold lost the grab");
+                input.Release(fastTarget, false);
+                Require(!input.CapturesPointer && motion.State != PetMotionState.Grabbed, "Release outside work area left grab active");
+                input.Press(new Vector2(1000, 1000)); input.Hold(motion.Position, .2f);
+                Require(!input.CapturesPointer && motion.State != PetMotionState.Grabbed, "Application drag crossing pet stole pointer");
+                input.Cancel();
                 Debug.Log("HOLD_GRAB_DROP_EXPLORE_TOGGLE_CHECK_PASSED");
             }
             using (var pet = context.CreatePet())

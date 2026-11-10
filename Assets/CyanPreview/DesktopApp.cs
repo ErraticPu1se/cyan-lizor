@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using UnityEngine;
@@ -74,9 +73,10 @@ namespace CyanPreview
         PetInteraction input;
         DesktopSurfaces surfaces;
         Camera cameraView;
-        List<DesktopWindow> previousWindows = new List<DesktopWindow>();
         float refresh;
-        bool ready, leftWasDown;
+        bool ready, buttonHeld;
+        uint pressTime;
+        float holdElapsed;
         IEnumerator Start()
         {
             try
@@ -99,7 +99,8 @@ namespace CyanPreview
             try
             {
                 if (!native.Initialize()) throw new InvalidOperationException("Owned overlay window not found.");
-                ready = true; leftWasDown = native.LeftDown; RefreshWindows();
+                native.HitTest = cursor => motion.Contains(DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale));
+                ready = true; RefreshWindows();
                 Debug.Log("DESKTOP_OVERLAY_READY " + native.WorkArea);
             }
             catch (Exception e) { Debug.LogException(e); Application.Quit(); }
@@ -122,25 +123,17 @@ namespace CyanPreview
                 var restingPoint = surfaces.Nearest(keepPosition.Value, out var inward) + inward * 14;
                 motion.ShiftWithSurface(restingPoint - motion.Position);
             }
+            motion.StateChanged += state => Debug.Log("DESKTOP_STATE " + state + " " + motion.Position);
             input = new PetInteraction(motion) { ClickToExplore = settings.clickToExplore };
             cameraView.orthographicSize = area.height / (2 * settings.scale);
-            previousWindows.Clear();
         }
         void RefreshWindows()
         {
-            var snapshot = native.Snapshot(settings.scale);
-            long attached = motion.State == PetMotionState.Crawling && motion.GripCount > 0
-                ? surfaces.WindowAtEdge(motion.Position, out _, out _) : 0;
-            if (attached != 0)
-            foreach (var old in previousWindows)
-            foreach (var next in snapshot)
-                if (old.Id == attached && next.Id == attached && Vector2.Distance(old.Bounds.size, next.Bounds.size) < 3)
-                {
-                    var offset = next.Bounds.position - old.Bounds.position;
-                    if (offset.sqrMagnitude > 0) motion.ShiftWithSurface(offset);
-                }
-            surfaces.UpdateWindows(snapshot); previousWindows = snapshot;
+            var delta = surfaces.UpdateWindows(native.Snapshot(settings.scale), motion.Position,
+                motion.State == PetMotionState.Crawling && motion.GripCount > 0 && !input.CapturesPointer);
+            if (delta.sqrMagnitude > 0) motion.ShiftWithSurface(delta, resetVelocity: false);
         }
+
         void Update()
         {
             if (!ready) return;
@@ -163,24 +156,42 @@ namespace CyanPreview
                     if (rebuild) RebuildPet(keepPosition);
                     motion.Roam = settings.roam; motion.AutonomousJumps = settings.jumps;
                     input.ClickToExplore = settings.clickToExplore;
-                    RefreshWindows();
                 }
                 var cursor = native.Cursor;
                 var point = DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale);
                 motion.LookAt(point);
-                bool down = native.LeftDown, hit = motion.Contains(point);
-                native.SetClickThrough(!hit && motion.State != PetMotionState.Grabbed);
-                if (down && !leftWasDown && native.WorkArea.Contains(cursor) && (hit || !native.ControllerFocused)) input.Press(point);
-                if (down) input.Hold(point, Time.unscaledDeltaTime);
-                if (!down && leftWasDown) input.Release(point, native.WorkArea.Contains(cursor));
-                leftWasDown = down;
+                while (native.TryReadButton(out var button))
+                {
+                    var eventPoint = DesktopCoordinates.ToWorld(button.Position, native.WorkArea, settings.scale);
+                    if (button.Down)
+                    {
+                        buttonHeld = true; pressTime = button.Time; holdElapsed = 0;
+                        if (native.WorkArea.Contains(button.Position) && (motion.Contains(eventPoint) || !button.ControllerFocused))
+                            input.Press(eventPoint);
+                    }
+                    else
+                    {
+                        AdvanceHold(eventPoint, button.Time);
+                        input.Release(eventPoint, native.WorkArea.Contains(button.Position)); buttonHeld = false;
+                    }
+                }
+                AdvanceHold(point, unchecked((uint)Environment.TickCount));
+                // The native button callback owns pet presses; other application drags pass through.
+                native.SetClickThrough(!input.CapturesPointer && (buttonHeld || !motion.Contains(point)));
+                RefreshWindows();
                 motion.Advance(Time.unscaledDeltaTime); pet.Draw(motion.Interpolation); view.Refresh(pet);
             }
             catch (Exception e) { Debug.LogException(e); Application.Quit(); }
         }
+        void AdvanceHold(Vector2 point, uint now)
+        {
+            if (!buttonHeld) return;
+            float elapsed = unchecked(now - pressTime) / 1000f;
+            input.Hold(point, Mathf.Max(0, elapsed - holdElapsed)); holdElapsed = elapsed;
+        }
         void OnDestroy()
         {
-            input?.Cancel(); view?.Dispose(); pet?.Dispose(); context?.Dispose(); native?.Dispose();
+            native?.Dispose(); input?.Cancel(); view?.Dispose(); pet?.Dispose(); context?.Dispose();
         }
     }
 }

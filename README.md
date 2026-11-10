@@ -195,8 +195,9 @@ The desktop size slider is separate from the large preview's size.
 
 - Default movement follows the monitor work-area frame.
 - **Free climbing + visible window edges** allows background movement and uses
-  nearby visible application edges as grips. Windows are sampled four times a
-  second; translating a gripped window carries the body and feet together.
+  nearby visible application edges as grips. Windows are sampled each rendered frame; moving or resizing a gripped window
+  carries the body, feet and drawing history together without resetting crawling
+  velocity. Hidden, removed and off-screen supports stop carrying the pet.
 - **React to desktop clicks** is off by default. When enabled, clicks outside the
   pet still reach the underlying application while inviting exploration. Control
   panel clicks are excluded.
@@ -208,11 +209,19 @@ no tray controls or installer yet. Desktop audio, jump smoke and soft head glow
 are not connected; those remain available in the preview. Color-key transparency
 is used, so soft translucent effects need a later rendering pass. Window-edge
 navigation is local, not a complete pathfinder around overlapping applications.
-Fast resizing, mixed-DPI monitors and native dragging need more hands-on testing.
+Mixed-DPI and secondary monitors remain unverified. A native left-button listener
+retains press/release positions between rendered frames and is removed on exit.
+Only presses beginning on the pet are consumed; a drag beginning in another app
+remains owned by that app. The 0.1-second grab delay still applies.
 
 Validation: full `PreviewBuild.Verify` suite and Windows player build passed.
 New checks cover coordinate scaling and negative screen origins, covered/removed
 window edges, frame-only behavior, and moving the body and feet together.
 Live Windows checks confirmed a visible transparent overlay, usable underlying
-controls and Start/Stop shutdown. These checks do not establish full native drag
-or moving-window behavior across different desktop configurations.
+controls and Start/Stop shutdown. Attachment was observed across maximized-to-
+restored window size changes and repeated window translation, then released when
+the window was minimized. The user confirmed native hold/drag/release. Automated
+checks cover fast movement during the hold delay, short presses, cancellation,
+release outside the work area, application drags crossing the pet, resize-relative
+attachment, occlusion, removal, off-screen supports and preserved crawl velocity.
+These checks do not establish parity across all Windows/DPI configurations.

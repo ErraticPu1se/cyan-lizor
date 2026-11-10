@@ -27,6 +27,30 @@ namespace CyanPreview
             foreach (var window in snapshot)
                 if (window.Bounds.width > 20 && window.Bounds.height > 20 && window.Bounds.Overlaps(Bounds)) windows.Add(window);
         }
+        public Vector2 UpdateWindows(IEnumerable<DesktopWindow> snapshot, Vector2 position, bool gripping)
+        {
+            long attached = gripping ? WindowAtEdge(position, out _, out _) : 0;
+            Rect oldBounds = default;
+            foreach (var window in windows) if (window.Id == attached) oldBounds = window.Bounds;
+            UpdateWindows(snapshot);
+            if (attached == 0) return Vector2.zero;
+            foreach (var window in windows)
+            {
+                if (window.Id != attached) continue;
+                var oldEdge = new FrameSurfaces(oldBounds).Nearest(position, out var normal);
+                var fraction = new Vector2(Mathf.InverseLerp(oldBounds.xMin, oldBounds.xMax, oldEdge.x),
+                    Mathf.InverseLerp(oldBounds.yMin, oldBounds.yMax, oldEdge.y));
+                var nextEdge = window.Bounds.min + Vector2.Scale(fraction, window.Bounds.size);
+                var delta = nextEdge - oldEdge;
+                var nextPosition = position + delta;
+                // A hidden or off-screen support must release the pet, not teleport it.
+                var safeBounds = new Rect(Bounds.x + 8, Bounds.y + 8, Bounds.width - 16, Bounds.height - 16);
+                if (!safeBounds.Contains(nextPosition) || WindowAtEdge(nextEdge + normal, out _, out _) != attached)
+                    return Vector2.zero;
+                return delta;
+            }
+            return Vector2.zero;
+        }
         public long WindowAtEdge(Vector2 point, out Vector2 edge, out Vector2 normal)
         {
             edge = point; normal = Vector2.zero; float best = 30; long id = 0;

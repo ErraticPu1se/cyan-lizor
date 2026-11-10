@@ -26,9 +26,45 @@ namespace CyanPreview
         [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
         [DllImport("user32.dll")] static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint color, byte alpha, uint flags);
         [DllImport("user32.dll")] static extern bool GetCursorPos(out Point point);
-        [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint action, uint param, out NativeRect rect, uint flags);
+        delegate IntPtr MouseProc(int code, IntPtr message, IntPtr data);
+        [StructLayout(LayoutKind.Sequential)] struct MouseData { public Point Position; public uint Mouse, Flags, Time; public UIntPtr Extra; }
+        [DllImport("user32.dll", SetLastError = true)] static extern IntPtr SetWindowsHookEx(int kind, MouseProc callback, IntPtr module, uint thread);
+        [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hook);
+        [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr message, IntPtr data);
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr GetModuleHandle(string name);
+        public struct MouseButtonEvent { public Vector2 Position; public bool Down, ControllerFocused; public uint Time; }
+        readonly Queue<MouseButtonEvent> buttons = new Queue<MouseButtonEvent>();
+        MouseProc mouseCallback;
+        IntPtr mouseHook;
+        bool capturedButton;
+        public Func<Vector2, bool> HitTest { private get; set; }
+        public bool TryReadButton(out MouseButtonEvent value)
+        {
+            if (buttons.Count == 0) { value = default; return false; }
+            value = buttons.Dequeue(); return true;
+        }
+        // Keep this callback short: queue button events only; simulate in Update.
+        IntPtr MouseMessage(int code, IntPtr message, IntPtr data)
+        {
+            if (code >= 0 && (message.ToInt64() == 0x201 || message.ToInt64() == 0x202))
+            {
+                var mouse = Marshal.PtrToStructure<MouseData>(data);
+                var point = new Vector2(mouse.Position.X, mouse.Position.Y);
+                bool down = message.ToInt64() == 0x201;
+                bool consume = capturedButton;
+                try
+                {
+                    if (down) consume = capturedButton = WorkArea.Contains(point) && (HitTest?.Invoke(point) ?? false);
+                    buttons.Enqueue(new MouseButtonEvent { Position = point, Down = down, Time = mouse.Time, ControllerFocused = ControllerFocused });
+                }
+                catch { capturedButton = false; consume = false; }
+                if (!down) capturedButton = false;
+                if (consume) return new IntPtr(1);
+            }
+            return CallNextHookEx(mouseHook, code, message, data);
+        }
         const int ExLayered = 0x80000, ExTransparent = 0x20, ExNoActivate = 0x08000000, ExToolWindow = 0x80;
         readonly int ownPid = Process.GetCurrentProcess().Id;
         readonly int controllerPid;
@@ -57,7 +93,11 @@ namespace CyanPreview
             SetWindowLong(handle, -16, unchecked((int)0x80000000));
             SetWindowLong(handle, -20, originalExStyle | ExLayered | ExTransparent | ExNoActivate | ExToolWindow);
             if (!SetLayeredWindowAttributes(handle, 0x00FF00FF, 255, 1)) throw new InvalidOperationException("Cannot make the desktop pet window transparent.");
-            Resize(); return true;
+            Resize();
+            mouseCallback = MouseMessage;
+            mouseHook = SetWindowsHookEx(14, mouseCallback, GetModuleHandle(null), 0);
+            if (mouseHook == IntPtr.Zero) throw new InvalidOperationException("Cannot capture desktop pet mouse presses.");
+            return true;
         }
         public bool RefreshWorkArea()
         {
@@ -77,7 +117,6 @@ namespace CyanPreview
             SetWindowLong(handle, -20, value ? style | ExTransparent : style & ~ExTransparent);
         }
         public Vector2 Cursor { get { GetCursorPos(out var p); return new Vector2(p.X, p.Y); } }
-        public bool LeftDown => (GetAsyncKeyState(1) & 0x8000) != 0;
         public bool ControllerFocused
         { get { GetWindowThreadProcessId(GetForegroundWindow(), out var pid); return pid == controllerPid; } }
         public bool ControllerAlive
@@ -103,6 +142,8 @@ namespace CyanPreview
         }
         public void Dispose()
         {
+            if (mouseHook != IntPtr.Zero) { UnhookWindowsHookEx(mouseHook); mouseHook = IntPtr.Zero; }
+            HitTest = null; buttons.Clear();
             if (handle == IntPtr.Zero) return;
             SetWindowLong(handle, -16, originalStyle); SetWindowLong(handle, -20, originalExStyle); handle = IntPtr.Zero;
         }
