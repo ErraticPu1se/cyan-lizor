@@ -127,6 +127,7 @@ namespace CyanPreview.Editor
                 CompanionChecks.Run(context);
                 TargetingChecks.Run(context);
                 DesktopEffectsChecks.Run(context);
+                InteractionUpgradeChecks.Run(context);
                 JumpEffectChecks.Run(context);
                 PetInteractionChecks.Run(context);
                 VerifyAutonomousRoaming(context);

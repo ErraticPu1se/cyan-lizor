@@ -28,7 +28,7 @@ namespace CyanPreview
         int jumpWait = 320, poseTicks;
         readonly Vector2[] restingPose = new Vector2[3];
         bool resting;
-        Vector2 grabOffset, grabAnchor;
+        Vector2 grabOffset, grabAnchor, grabVelocity;
         int grabbedChunk, heldTicks;
         float turnDirection = 1;
         bool propelled;
@@ -95,6 +95,7 @@ namespace CyanPreview
             finally { UnityEngine.Random.state = state; }
         }
         public void LookAt(Vector2? point) { lookTarget = point; }
+        public LizardSpecies Species => pet.Species;
         public void ObserveCursor(Vector2? point)
         {
             // Nearby pointer attention changes the pose without creating a movement goal.
@@ -128,16 +129,17 @@ namespace CyanPreview
             for (int i = 1; i < chunks.Length; i++)
                 if (Vector2.Distance(point, (Vector2)Get(chunks[i], "pos")) < Vector2.Distance(point, (Vector2)Get(chunks[grabbedChunk], "pos"))) grabbedChunk = i;
             grabAnchor = (Vector2)Get(chunks[grabbedChunk], "pos");
-            grabOffset = grabAnchor - point; heldTicks = 0; propelled = false;
+            grabOffset = grabAnchor - point; grabVelocity = Vector2.zero; heldTicks = 0; propelled = false;
             Behavior.Rest(); ChangeState(PetMotionState.Grabbed);
             for (int i = 0; i < 4; i++) { planted[i] = seeking[i] = false; gripAge[i] = 0; }
         }
         public void DragTo(Vector2 point)
         {
             if (State != PetMotionState.Grabbed) return;
+            // Cursor updates set a target; physics owns body and tail momentum.
+            if (float.IsNaN(point.x) || float.IsNaN(point.y) || float.IsInfinity(point.x) || float.IsInfinity(point.y))
+                throw new ArgumentOutOfRangeException(nameof(point));
             grabAnchor = surfaces.Constrain(point + grabOffset, 8, out _);
-            var delta = grabAnchor - (Vector2)Get(chunks[grabbedChunk], "pos");
-            ShiftWithSurface(delta);
         }
         public void ShiftWithSurface(Vector2 delta, bool resetVelocity = true)
         {
@@ -176,8 +178,16 @@ namespace CyanPreview
         public void EndGrab()
         {
             if (State != PetMotionState.Grabbed) return;
+            Set(chunks[grabbedChunk], "vel", grabVelocity);
+            foreach (var chunk in chunks) Set(chunk, "vel", Vector2.ClampMagnitude((Vector2)Get(chunk, "vel"), 18));
             cooldown = 0; flightTicks = 0; Behavior.Rest();
             ChangeState(PetMotionState.Airborne);
+        }
+        public void ReleaseSupport()
+        {
+            if (State != PetMotionState.Crawling) return;
+            for (int i = 0; i < planted.Length; i++) planted[i] = seeking[i] = false;
+            flightTicks = 0; propelled = false; Behavior.Rest(); ChangeState(PetMotionState.Airborne);
         }
         public bool JumpTo(Vector2 point, float power = .25f)
         {
@@ -214,6 +224,12 @@ namespace CyanPreview
             if (State == PetMotionState.Grabbed)
             {
                 heldTicks++;
+                var dragDelta = grabAnchor - (Vector2)Get(chunks[grabbedChunk], "pos");
+                // Carry only excess displacement on extreme cursor warps to bound joint stretch.
+                var impulse = Vector2.ClampMagnitude(dragDelta, 24);
+                grabVelocity = impulse;
+                if (dragDelta.magnitude > 24) ShiftWithSurface(dragDelta - impulse, false);
+                Set(chunks[grabbedChunk], "vel", impulse);
                 for (int i = 0; i < chunks.Length; i++)
                 {
                     var p = (Vector2)Get(chunks[i], "pos");

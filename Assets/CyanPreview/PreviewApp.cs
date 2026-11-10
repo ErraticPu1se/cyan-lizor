@@ -174,6 +174,7 @@ namespace CyanPreview
                     if (Input.GetMouseButtonUp(0)) interaction.Release(point, inside);
                     if (inside && Input.GetMouseButtonDown(1)) motion.JumpTo(point);
                     if (petAudio != null) petAudio.Enabled = soundEnabled && !desktop.Active;
+                    if (interaction.Hover(point, Time.deltaTime, !inside || Input.GetMouseButton(0) || Input.GetMouseButton(1))) petAudio?.PettingCall();
                     petAudio?.Advance(Time.deltaTime);
                     motion.Advance(Time.deltaTime);
                     jumpEffects.Advance(Time.deltaTime);

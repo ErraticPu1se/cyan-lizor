@@ -62,8 +62,13 @@ namespace CyanPreview.Editor
                             foreach (var source in root.GetComponentsInChildren<AudioSource>()) source.Stop();
                             for (int i = 0; i < 40; i++) audio.Advance(.25f);
                             foreach (var source in root.GetComponentsInChildren<AudioSource>()) Require(!source.isPlaying, "Suppressed calls were queued");
-                            Require(audio.Vocalize(), "Cooldown never became ready again");
-                            audio.Enabled = false; audio.Vocalize(); audio.Advance(float.PositiveInfinity);
+                            Require(audio.PettingCall(), "Affection call was unavailable after cooldown");
+                            bool loveClip = false;
+                            foreach (var source in root.GetComponentsInChildren<AudioSource>())
+                                loveClip |= source.clip != null && source.clip.name.StartsWith("LizardLoveVoiceCyan");
+                            Require(loveClip, "Petting used the ordinary vocal clip");
+                            Require(!audio.PettingCall(), "Petting overlapped its own call");
+                            audio.Enabled = false; Require(!audio.PettingCall(), "Muted petting played audio"); audio.Vocalize(); audio.Advance(float.PositiveInfinity);
                             Require(motion.VoiceIntensity == 0, "Muted voice intensity persisted");
                             foreach (var source in root.GetComponentsInChildren<AudioSource>()) Require(!source.isPlaying, "Mute left a sound playing");
                             for (int i = 0; i < 40; i++) motion.Advance(.025f);

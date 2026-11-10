@@ -20,6 +20,7 @@ namespace CyanPreview
         public bool SupportsFreeClimbing => UseWindowEdges;
         public Rect Bounds => frame.Bounds;
         public int WindowCount => windows.Count;
+        public bool SupportLost { get; private set; }
         public DesktopSurfaces(Rect bounds) { frame = new FrameSurfaces(bounds); background = new BackgroundSurfaces(bounds); }
         public void UpdateWindows(IEnumerable<DesktopWindow> snapshot)
         {
@@ -29,11 +30,13 @@ namespace CyanPreview
         }
         public Vector2 UpdateWindows(IEnumerable<DesktopWindow> snapshot, Vector2 position, bool gripping)
         {
+            SupportLost = false;
             long attached = gripping ? WindowAtEdge(position, out _, out _) : 0;
             Rect oldBounds = default;
             foreach (var window in windows) if (window.Id == attached) oldBounds = window.Bounds;
             UpdateWindows(snapshot);
             if (attached == 0) return Vector2.zero;
+            SupportLost = true;
             foreach (var window in windows)
             {
                 if (window.Id != attached) continue;
@@ -47,6 +50,7 @@ namespace CyanPreview
                 var safeBounds = new Rect(Bounds.x + 8, Bounds.y + 8, Bounds.width - 16, Bounds.height - 16);
                 if (!safeBounds.Contains(nextPosition) || WindowAtEdge(nextEdge + normal, out _, out _) != attached)
                     return Vector2.zero;
+                SupportLost = false;
                 return delta;
             }
             return Vector2.zero;
@@ -65,6 +69,18 @@ namespace CyanPreview
                 best = distance; edge = candidate; normal = inward; id = windows[i].Id;
             }
             return id;
+        }
+        public bool IsWindowChrome(Vector2 point, float scale)
+        {
+            foreach (var window in windows)
+            {
+                var b = window.Bounds;
+                if (!b.Contains(point)) continue;
+                // Custom title bars do not consistently return HTCAPTION. Keep a conservative top strip.
+                return point.y >= b.yMax - 40 / scale || point.x < b.xMin + 8 / scale
+                    || point.x > b.xMax - 8 / scale || point.y < b.yMin + 8 / scale;
+            }
+            return false;
         }
         public Vector2 Nearest(Vector2 point, out Vector2 inward)
         {

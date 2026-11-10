@@ -10,6 +10,7 @@ namespace CyanPreview
         public abstract string Id { get; }
         public abstract string DisplayName { get; }
         public virtual float HeadLightRadius => 0;
+        public virtual string AffectionSound(int seed) => null;
         public abstract MovementCapabilities Movement { get; }
         internal abstract object CreateLizard(ReferenceContext context, int spawner, int seed);
         static readonly LizardSpecies cyan = new CyanSpecies();
@@ -23,6 +24,7 @@ namespace CyanPreview
     sealed class CyanSpecies : LizardSpecies
     {
         public override string Id => "cyan";
+        public override string AffectionSound(int seed) => "LizardLoveVoiceCyan" + "ABC"[(int)((uint)seed % 3)];
         public override string DisplayName => "Cyan lizard";
         public override float HeadLightRadius => 100f;
         public override MovementCapabilities Movement { get; } = new MovementCapabilities(true, 2.4f, 14f, 50f);

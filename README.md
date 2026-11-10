@@ -29,7 +29,8 @@ Preparation reads your game installation without modifying it. Game graphics and
 - Choose a cyan's appearance by ID and adjust its desktop size.
 - Watch it roam, rest, crawl, and propel itself, with personality-influenced decisions.
 - Enable **Climb backgrounds and window edges** to let it grip and follow visible windows.
-- Move the cursor nearby for head attention; hold the pet for **0.1 seconds** to grab it, then release to drop.
+- Move the cursor nearby for head attention; hold the pet for **0.1 seconds** to grab it, then release to drop. The body and tail react to dragging, with bounded momentum on release.
+- Hover or gently move over a resting lizard for about **one second** for a cyan affection call. Continued petting has a **10-second cooldown** followed by fresh contact; grabbing and menus do not count as petting. Calls respect mute and never overlap.
 - Enable **Explore where I click** and **Allow cyan propulsion**: nearby clicks invite direct hops; farther clicks invite longer hops that stop short of the cursor. Very short distances use crawling, and jumps require a valid trajectory.
 - Hear cyan calls and jump sounds, with head glow and propulsion particles. Calls have a **10-second cooldown**; idle calls wait **30–60 seconds of idle time**. Sound can be muted.
 

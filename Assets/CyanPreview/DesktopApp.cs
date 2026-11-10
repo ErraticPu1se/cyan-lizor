@@ -172,7 +172,8 @@ namespace CyanPreview
         {
             var delta = surfaces.UpdateWindows(native.Snapshot(settings.scale), motion.Position,
                 motion.State == PetMotionState.Crawling && motion.GripCount > 0 && !input.CapturesPointer);
-            if (delta.sqrMagnitude > 0) motion.ShiftWithSurface(delta, resetVelocity: false);
+            if (surfaces.SupportLost) motion.ReleaseSupport();
+            else if (delta.sqrMagnitude > 0) { motion.Behavior.Rest(); motion.ShiftWithSurface(delta, resetVelocity: false); }
         }
 
         void Update()
@@ -228,7 +229,7 @@ namespace CyanPreview
                     if (button.Down)
                     {
                         buttonHeld = true; pressTime = button.Time; holdElapsed = 0;
-                        if (native.WorkArea.Contains(button.Position) && (motion.Contains(eventPoint) || !button.ControllerFocused))
+                        if (native.WorkArea.Contains(button.Position) && (motion.Contains(eventPoint) || (!button.ControllerFocused && !surfaces.IsWindowChrome(eventPoint, settings.scale) && !native.IsWindowControl(button.Position))))
                             input.Press(eventPoint);
                     }
                     else
@@ -241,6 +242,7 @@ namespace CyanPreview
                 // The native button callback owns pet presses; other application drags pass through.
                 native.SetClickThrough(!input.CapturesPointer && (buttonHeld || !motion.Contains(point)));
                 RefreshWindows();
+                if (input.Hover(point, Time.unscaledDeltaTime, buttonHeld)) petAudio?.PettingCall();
                 petAudio?.Advance(Time.unscaledDeltaTime);
                 motion.Advance(Time.unscaledDeltaTime);
                 jumpEffects.Advance(Time.unscaledDeltaTime);

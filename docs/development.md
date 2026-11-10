@@ -34,3 +34,7 @@ python tools/collect_notices.py
 
 The packaging script includes the player, importer, and dependency notices and rejects game assemblies or reference caches. Send the resulting ZIP, not just the executable or your `local-data` folder.
 
+
+## Interaction verification
+
+`PreviewBuild.Verify` includes contact timing, cooldown/mute, the local cyan love clip, independent duplicate-ID pets, flexible dragging, extreme cursor movement, limb reach, bounded release, window movement/resizing, and support loss. Native window-control hit-testing still needs hands-on checks across applications. Custom title bars use a conservative 40-screen-pixel top strip to avoid interpreting close/drag clicks as exploration. Only one desktop pet and cyan are currently exposed in the app.

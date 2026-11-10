@@ -190,6 +190,17 @@ namespace CyanPreview
             int style = GetWindowLong(handle, -20);
             SetWindowLong(handle, -20, value ? style | ExTransparent : style & ~ExTransparent);
         }
+        [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Point point);
+        [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr window, uint flags);
+        [DllImport("user32.dll", SetLastError = true)] static extern IntPtr SendMessageTimeout(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+        public bool IsWindowControl(Vector2 point)
+        {
+            var window = GetAncestor(WindowFromPoint(new Point { X = (int)point.x, Y = (int)point.y }), 2);
+            if (window == IntPtr.Zero || window == handle) return false;
+            int packed = ((int)point.x & 0xffff) | (((int)point.y & 0xffff) << 16);
+            if (SendMessageTimeout(window, 0x84, IntPtr.Zero, new IntPtr(packed), 2, 20, out var hit) == IntPtr.Zero) return true;
+            return hit.ToInt64() != 1; // HTCLIENT; caption, borders and system buttons are not invitations.
+        }
         public Vector2 Cursor { get { GetCursorPos(out var p); return new Vector2(p.X, p.Y); } }
         public bool ControllerFocused
         { get { GetWindowThreadProcessId(GetForegroundWindow(), out var pid); return pid == controllerPid; } }

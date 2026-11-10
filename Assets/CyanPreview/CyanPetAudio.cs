@@ -11,6 +11,7 @@ namespace CyanPreview
         readonly PetMotion motion;
         readonly CyanJumpEffects effects;
         readonly AudioSource charge, voice;
+        readonly AudioClip regularVoice, affectionVoice;
         readonly AudioSource[] launch = new AudioSource[3];
         readonly AudioClip[] charges = new AudioClip[3], clangs = new AudioClip[3];
         readonly float[] samples = new float[128];
@@ -44,6 +45,11 @@ namespace CyanPreview
                 launch[0].clip = context.LoadSound("Flip3C"); launch[2].clip = context.LoadSound("CoralBreakA_7");
                 // shortcut: deterministic A/B/C voice selection, not the game's voice personality generator.
                 voice.clip = context.LoadSound("LizardVoiceCyan" + "ABC"[(int)((uint)seed % 3)]);
+                regularVoice = voice.clip;
+                var affection = motion.Species.AffectionSound(seed);
+                if (affection != null)
+                    try { affectionVoice = context.LoadSound(affection); }
+                    catch (System.IO.IOException e) { Debug.LogWarning("Affection sound unavailable: " + e.Message); }
                 voice.volume = .4f;
                 motion.StateChanged += StateChanged; motion.JumpLaunched += Launched;
             }
@@ -75,10 +81,13 @@ namespace CyanPreview
             foreach (var source in launch) source.Play();
         }
         float NextIdleDelay() => 30 + (float)voiceRandom.NextDouble() * 30;
-        public bool Vocalize()
+        public bool PettingCall() => PlayVoice(affectionVoice, .55f);
+        public bool Vocalize() => PlayVoice(regularVoice, .4f);
+        bool PlayVoice(AudioClip clip, float volume)
         {
             // Drop repeat requests; never queue calls or extend the cooldown.
-            if (!enabled || disposed || vocalCooldown > 0 || voice.isPlaying) return false;
+            if (!enabled || disposed || clip == null || vocalCooldown > 0 || voice.isPlaying) return false;
+            voice.clip = clip; voice.volume = volume;
             voice.Play(); vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay();
             return true;
         }
