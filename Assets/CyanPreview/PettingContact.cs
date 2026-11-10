@@ -5,6 +5,7 @@ namespace CyanPreview
     // One contact timer per pet; no species, audio or desktop dependencies.
     public sealed class PettingContact
     {
+        public const float ActivationSeconds = .7f;
         public const float CooldownSeconds = 3;
         float contact, cooldown, missed;
         public void ResetContact() { contact = missed = 0; }
@@ -20,8 +21,8 @@ namespace CyanPreview
                 return false;
             }
             missed = 0;
-            contact = Mathf.Min(1, contact + seconds);
-            if (contact < 1 || cooldown > 0 || !canRespond) return false;
+            contact = Mathf.Min(ActivationSeconds, contact + seconds);
+            if (contact < ActivationSeconds || cooldown > 0 || !canRespond) return false;
             contact = 0; cooldown = CooldownSeconds; return true;
         }
     }

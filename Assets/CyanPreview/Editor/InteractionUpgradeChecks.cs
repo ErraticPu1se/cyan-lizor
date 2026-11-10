@@ -9,14 +9,14 @@ namespace CyanPreview.Editor
         public static void Run(ReferenceContext context)
         {
             var contact = new PettingContact(); var other = new PettingContact();
-            for (int i = 0; i < 3; i++) Check(!contact.Advance(.25f, true), "Petting fired early");
-            Check(contact.Advance(.25f, true), "One second petting failed");
+            foreach (float step in new[] { .25f, .25f, .19f }) Check(!contact.Advance(step, true), "Petting fired before 0.7 seconds");
+            Check(contact.Advance(.01f, true), "Petting did not fire at 0.7 seconds");
             for (int i = 0; i < 11; i++) Check(!contact.Advance(.25f, true), "Continuous petting bypassed three second cooldown");
             Check(contact.Advance(.25f, true), "Sustained petting did not resume at three seconds");
             for (int i = 0; i < 12; i++) Check(!contact.Advance(.25f, false), "Leaving queued a petting call");
-            for (int i = 0; i < 3; i++) Check(!contact.Advance(.25f, true), "New contact skipped the one second trigger");
-            Check(contact.Advance(.25f, true), "Fresh petting failed after leaving");
-            for (int i = 0; i < 3; i++) Check(!other.Advance(.25f, true), "Other pet fired early");
+            for (int i = 0; i < 2; i++) Check(!contact.Advance(.25f, true), "New contact skipped the 0.7 second trigger");
+            Check(contact.Advance(.2f, true), "Fresh petting failed after leaving");
+            for (int i = 0; i < 2; i++) Check(!other.Advance(.25f, true), "Other pet fired early");
             other.Advance(.25f, false);
             Check(!other.Advance(.25f, true), "Leaving sprite retained contact");
             other.ResetContact(); Check(!other.Advance(100, true), "Frame stall completed contact");
@@ -27,7 +27,7 @@ namespace CyanPreview.Editor
             for (int i=0;i<8;i++) Check(!waiting.Advance(.25f,true,false), "Unavailable response spent contact");
             Check(waiting.Advance(0,true), "Continuing contact did not respond when audio became available");
             var jitter = new PettingContact();
-            for(int i=0;i<3;i++) jitter.Advance(.25f,true);
+            for(int i=0;i<2;i++) jitter.Advance(.25f,true);
             Check(!jitter.Advance(.1f,false), "Outside sprite triggered petting");
             Check(jitter.Advance(.25f,true), "Brief sprite motion reset all contact");
             var surface = new DesktopSurfaces(new Rect(-500,-300,1000,600)) { UseWindowEdges = true };
