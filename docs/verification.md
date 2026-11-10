@@ -18,7 +18,7 @@ Still pending:
 
 - Side-by-side comparison with the same ID in Rain World. Original generation and drawing calls are used, but the preview uses a controlled pose and neutral palette; exact visual parity is not established.
 - Testing on a clean second Windows machine and other game versions. The current adapter deliberately supports the inspected game assembly only.
-- Desktop overlay, climbing, cursor petting, sound, den behavior, and installer. This milestone is an appearance preview, not the finished desktop pet.
+- Desktop overlay, climbing, cursor petting, den behavior, and installer. This milestone is an appearance preview, not the finished desktop pet.
 
 ## 2026-11-10: architecture refactor
 
@@ -125,3 +125,45 @@ Effects research: local `LizardJumpModule.Jump`, `JumpingUpdate`, `JumpLight`, a
 `Smoke.CyanLizardSmoke`. The preview maps their burst/trail, power-dependent
 lifetimes, flash, bubbles and shockwave into bounded per-pet particle meshes.
 It does not load game room shaders or reproduce underwater/terrain lighting.
+
+
+## Drag and click-target corrections (2026-11-10)
+
+`TargetingChecks.Run` verifies a 200+ unit drag carries rendered feet even before
+the next fixed update; alternating rapid drags keep feet within limb reach.
+It also checks immediate idle interruption without position changes on input,
+near-target crawling without a jump or position snap, and far-target propulsion
+followed by arrival on both frame and background surfaces. Exploration remains
+optional. Four autonomous roaming seeds and the prior checks continue to pass.
+
+The adapter was compared with local `LizardAI` destination/run-speed decisions,
+`Lizard` path-following front/middle driving, `LizardJumpModule.JumpFinder`
+trajectory iteration, and `JumpingUpdate` landing behavior. Click exploration is
+not treated as prey hunting: it uses gentler speed, middle-chunk alignment
+weighting and destination-facing head motion. The target planner solves candidate
+launch velocities and verifies them using discrete drag/gravity and host surface
+collision checks. This is an adaptation, not execution of the full game AI.
+
+Logs: parent workspace `research/unity-targeting-verify.log` and
+`research/unity-targeting-build.log`. Original game files remain local only.
+
+## Charge smoke and sound follow-up (2026-11-10)
+
+Reviewed installed-game `Smoke.CyanLizardSmoke`, `LizardJumpModule`,
+`LizardCosmetics.JumpRings`, `LizardBubble`, `LizardVoice`, and the sound mappings.
+Also inspected the user's Cyan Lizard charge GIF on the official wiki.
+The original charge animation is now passed to original ring drawing. Smoke
+radius, damping, growth and darkening follow the reference formulas; room shader,
+water interactions, sticky mouth bubbles and full voice personality remain adapted
+or unimplemented. Free-floating head bubbles follow the voice amplitude.
+
+Verification: `PreviewBuild.Verify` passed in the isolated project, including all
+11 nonempty game sound clips, charge animation and draw, head bubble emission,
+burst lifetime, movement regression checks and independent-pet checks.
+`PreviewBuild.Windows` completed with exit code 0. Logs:
+`research/unity-targeting-verify.log` and `research/unity-targeting-build.log`.
+Player smoke test: movement and new sound controls shown; distant click visibly
+entered Pursuing/Charging then landed at the selected upper frame edge. Player
+log contains no runtime exceptions. Audio was loaded and playback controls
+exercised; audible fidelity and exact frame-by-frame particle parity were not verified.
+Local build: `Builds/TargetingPreview/CyanLizor.exe` (ignored).

@@ -19,6 +19,9 @@ namespace CyanPreview
         PetMotion motion;
         PetInteraction interaction;
         CyanJumpEffects jumpEffects;
+        CyanPetAudio petAudio;
+        bool soundEnabled = true;
+        string audioError;
         bool clickToExplore = true, autonomousJumps = true;
         Vector2 panelScroll;
         int surfaceMode;
@@ -33,12 +36,16 @@ namespace CyanPreview
         {
             reference.Pose(0, surfaceMode == 1 ? 0 : .7f);
             interaction?.Cancel();
+            petAudio?.Dispose(); petAudio = null;
             jumpEffects?.Dispose();
             IPetSurfaces surfaces = surfaceMode == 1 ? (IPetSurfaces)new BackgroundSurfaces(movementFrame.Bounds)
                 : surfaceMode == 2 ? (IPetSurfaces)new PoleSurfaces(movementFrame.Bounds, 0) : movementFrame;
             motion = new PetMotion(reference, surfaces) { AutonomousJumps = autonomousJumps && surfaceMode != 2 };
             jumpEffects = new CyanJumpEffects(transform, motion, reference.EffectColor, reference.Seed);
             jumpEffects.SetScale(zoom);
+            audioError = null;
+            try { petAudio = new CyanPetAudio(transform, context, motion, jumpEffects, reference.Seed) { Enabled = soundEnabled }; }
+            catch (Exception e) { audioError = e.Message; Debug.LogWarning("Pet audio unavailable: " + e.Message); }
             interaction = new PetInteraction(motion) { ClickToExplore = clickToExplore };
         }
         string gameFolder = @"C:\Program Files (x86)\Steam\steamapps\common\Rain World";
@@ -62,6 +69,7 @@ namespace CyanPreview
             var cameraObject = new GameObject("Preview camera");
             previewCamera = cameraObject.AddComponent<Camera>();
             previewCamera.orthographic = true;
+            if (FindObjectOfType<AudioListener>() == null) cameraObject.AddComponent<AudioListener>();
             previewCamera.orthographicSize = 130;
             previewCamera.transform.position = new Vector3(-40, 0, -10);
             previewCamera.clearFlags = CameraClearFlags.SolidColor;
@@ -137,6 +145,7 @@ namespace CyanPreview
                     if (Input.GetMouseButton(0)) interaction.Hold(point, Time.deltaTime);
                     if (Input.GetMouseButtonUp(0)) interaction.Release(point, inside);
                     if (inside && Input.GetMouseButtonDown(1)) motion.JumpTo(point);
+                    petAudio?.Advance(Time.deltaTime);
                     motion.Advance(Time.deltaTime);
                     jumpEffects.Advance(Time.deltaTime);
                 }
@@ -198,12 +207,16 @@ namespace CyanPreview
                 try
                 {
                     if (locomotion) BeginMotion();
-                    else { jumpEffects?.Dispose(); jumpEffects = null; reference.Pose(phase, depth); reference.Draw(); view.Refresh(reference); }
+                    else { petAudio?.Dispose(); petAudio = null; jumpEffects?.Dispose(); jumpEffects = null; reference.Pose(phase, depth); reference.Draw(); view.Refresh(reference); }
                 }
                 catch (Exception e) { locomotion = false; Fail(e); }
             }
             if (locomotion)
             {
+                soundEnabled = GUILayout.Toggle(soundEnabled, " Pet sounds");
+                if (petAudio != null) petAudio.Enabled = soundEnabled;
+                if (GUILayout.Button("Vocalize")) petAudio?.Vocalize();
+                if (audioError != null) GUILayout.Label("Sound unavailable: " + audioError, small);
                 motion.Roam = GUILayout.Toggle(motion.Roam, " Roam after resting");
                 clickToExplore = GUILayout.Toggle(clickToExplore, " Click to explore");
                 interaction.ClickToExplore = clickToExplore;
@@ -287,6 +300,6 @@ namespace CyanPreview
             Destroy(image);
             status = "Saved: " + file;
         }
-        void OnDestroy() { jumpEffects?.Dispose(); view?.Dispose(); reference?.Dispose(); context?.Dispose(); }
+        void OnDestroy() { petAudio?.Dispose(); jumpEffects?.Dispose(); view?.Dispose(); reference?.Dispose(); context?.Dispose(); }
     }
 }

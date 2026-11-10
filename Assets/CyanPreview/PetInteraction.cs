@@ -15,6 +15,7 @@ namespace CyanPreview
         {
             pressed = true; heldSeconds = 0; dragging = false;
             startedOnPet = pet.Contains(point);
+            if (!startedOnPet && ClickToExplore) pet.MoveTo(point);
         }
         public void Hold(Vector2 point, float seconds)
         {
@@ -28,7 +29,6 @@ namespace CyanPreview
         {
             if (!pressed) return;
             if (dragging) pet.EndGrab();
-            else if (!startedOnPet && insidePreview && ClickToExplore) pet.MoveTo(point);
             pressed = dragging = false;
         }
         public void Cancel()

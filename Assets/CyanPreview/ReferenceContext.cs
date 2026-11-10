@@ -159,6 +159,20 @@ namespace CyanPreview
             }
         }
 
+        AssetBundle soundBundle;
+        public AudioClip LoadSound(string name)
+        {
+            if (disposed) throw new ObjectDisposedException(nameof(ReferenceContext));
+            if (soundBundle == null)
+            {
+                soundBundle = AssetBundle.LoadFromFile(Path.Combine(Manifest.gamePath, "RainWorld_Data", "StreamingAssets", "AssetBundles", "loadedsoundeffects"));
+                if (soundBundle == null) throw new IOException("Cannot load this Rain World installation's sound bundle.");
+            }
+            var clip = soundBundle.LoadAsset<AudioClip>("Assets/LoadedSoundEffects/" + name + ".wav");
+            if (clip == null) throw new IOException("Missing local game sound: " + name);
+            return clip;
+        }
+
         public ReferenceBridge CreatePet(string speciesId = "cyan")
         {
             if (disposed) throw new ObjectDisposedException(nameof(ReferenceContext));
@@ -175,6 +189,7 @@ namespace CyanPreview
             AppDomain.CurrentDomain.AssemblyResolve -= Resolve;
             foreach (var texture in Textures.Values) Release(texture);
             Textures.Clear();
+            if (soundBundle != null) soundBundle.Unload(true);
             if (active == this) active = null;
         }
         public static void Release(UnityEngine.Object value)

@@ -3,7 +3,7 @@ Shader "CyanPreview/JumpParticle"
     SubShader
     {
         Tags { "Queue"="Transparent" "RenderType"="Transparent" }
-        Blend SrcAlpha One
+        Blend SrcAlpha OneMinusSrcAlpha
         Cull Off ZWrite Off
         Pass
         {
@@ -17,7 +17,8 @@ Shader "CyanPreview/JumpParticle"
             fixed4 frag(v2f i) : SV_Target
             {
                 float r=length(i.uv.xy);
-                float soft=pow(saturate(1-r),2);
+                float lobes = .07*sin(i.uv.x*18+i.uv.y*7)*sin(i.uv.y*14-i.uv.x*9);
+                float soft=smoothstep(1,.25,r+lobes);
                 float ring=saturate(1-abs(r-.8)*12);
                 return fixed4(i.color.rgb,i.color.a*lerp(soft,ring,i.uv.z));
             }

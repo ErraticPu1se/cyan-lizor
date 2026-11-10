@@ -33,7 +33,11 @@ namespace CyanPreview
         public event Action<Vector2, Vector2, float> JumpSmoke;
         public bool AutonomousJumps { get; set; }
         float accumulator;
-        int chargeTicks, cooldown, flightTicks;
+        int chargeTicks, chargeDuration, cooldown, flightTicks;
+        public float JumpPower => jumpPower;
+        public float SmokeLifeTicks => Mathf.Max(1, (70 * jumpPower - flightTicks) * 1.5f);
+        public Vector2 HeadPosition => pet.HeadPosition;
+        public float VoiceIntensity { get; set; }
         Vector2 destination, launchVelocity, jumpTarget;
         Vector2? lookTarget;
         bool hasDestination;
@@ -106,12 +110,28 @@ namespace CyanPreview
         {
             if (State != PetMotionState.Grabbed) return;
             var delta = surfaces.Constrain(point + grabOffset, 8, out _) - Position;
-            foreach (var chunk in chunks)
+            foreach (var chunk in chunks) { TranslatePart(chunk, delta); Set(chunk, "vel", Vector2.zero); }
+            // Carry the complete pose, including interpolation history. Feet must
+            // not chase an externally moved body at their normal crawling speed.
+            foreach (var part in (Array)Get(graphics, "bodyParts")) TranslatePart(part, delta);
+            foreach (var foot in feet)
             {
-                Set(chunk, "lastPos", Get(chunk, "pos"));
-                Set(chunk, "pos", (Vector2)Get(chunk, "pos") + delta);
-                Set(chunk, "vel", Vector2.zero);
+                TranslatePart(foot, delta);
+                Set(foot, "absoluteHuntPos", (Vector2)Get(foot, "absoluteHuntPos") + delta);
             }
+            for (int i = 0; i < anchors.Length; i++) anchors[i] += delta;
+            var draw = (Vector2[,])Get(graphics, "drawPositions");
+            for (int i = 0; i < 3; i++) for (int history = 0; history < 2; history++) draw[i, history] += delta;
+            var tail = (Array)Get(graphics, "tail");
+            Set(tail.GetValue(0), "connectedPoint", (Vector2?)Get(chunks[2], "pos"));
+            foreach (var cosmetic in (IEnumerable)Get(graphics, "cosmetics"))
+                if (pet.Context.Type("LizardCosmetics.LongBodyScales").IsInstanceOfType(cosmetic))
+                    foreach (var scale in (Array)Get(cosmetic, "scaleObjects")) TranslatePart(scale, delta);
+        }
+        static void TranslatePart(object part, Vector2 delta)
+        {
+            Set(part, "pos", (Vector2)Get(part, "pos") + delta);
+            Set(part, "lastPos", (Vector2)Get(part, "lastPos") + delta);
         }
         public void EndGrab()
         {
@@ -138,7 +158,7 @@ namespace CyanPreview
             jumpTarget = point;
             propelled = true;
             flightTicks = 0;
-            chargeTicks = power > .75f ? 45 : power > .25f ? 30 : 15;
+            chargeTicks = chargeDuration = power > .75f ? 45 : power > .25f ? 30 : 15;
             ChangeState(PetMotionState.Charging);
         }
         void ChangeState(PetMotionState state) { State = state; StateChanged?.Invoke(state); }
@@ -158,10 +178,20 @@ namespace CyanPreview
                     var shoulder = (Vector2)Get(chunks[i < 2 ? 0 : 2], "pos");
                     Set(feet[i], "absoluteHuntPos", shoulder + new Vector2(i % 2 == 0 ? -8 : 8, -14));
                     Call(feet[i], "Update");
+                    float reach = (float)Get(((Array)Get(graphics, "limbs")).GetValue(i), "jointDist");
+                    Call(feet[i], "ConnectToPoint", shoulder, reach, false, 0f, Vector2.zero, 0f, 0f);
                 }
                 UpdateGraphics(); return;
             }
             if (cooldown > 0) cooldown--;
+            var exploration = Behavior.ExplorationTarget;
+            if (State == PetMotionState.Crawling && cooldown == 0 && GripCount > 0 && exploration.HasValue
+                && Vector2.Distance(Position, exploration.Value) > 120
+                && PetJumpPlanner.TryPlanToTarget(Position, exploration.Value, surfaces, capabilities, out var targetedJump))
+            {
+                launchVelocity = targetedJump.Velocity;
+                BeginJump(targetedJump.Landing, targetedJump.Power);
+            }
             if (AutonomousJumps && Roam && Behavior.Intent == PetIntent.Roaming && State == PetMotionState.Crawling && --jumpWait <= 0 && GripCount > 0)
             {
                 jumpWait = jumpRandom.Next(240, 481);
@@ -177,7 +207,7 @@ namespace CyanPreview
                 for (int i = 0; i < 4; i++) { planted[i] = seeking[i] = false; gripAge[i] = 0; }
                 cooldown = 20;
                 ChangeState(PetMotionState.Airborne);
-                JumpLaunched?.Invoke(Position, launchVelocity, jumpPower);
+                JumpLaunched?.Invoke((Vector2)Get(chunks[1], "pos"), launchVelocity, jumpPower);
             }
             var goal = Behavior.Update(Position, surfaces);
             hasDestination = goal.HasValue;
@@ -188,7 +218,7 @@ namespace CyanPreview
             {
                 flightTicks++;
                 if (propelled && flightTicks < 70 * jumpPower)
-                    JumpSmoke?.Invoke((Vector2)Get(chunks[1], "pos"), -(Position - (Vector2)Get(chunks[2], "pos")).normalized * 16, jumpPower);
+                    JumpSmoke?.Invoke((Vector2)Get(chunks[1], "pos"), (Vector2)Get(chunks[1], "vel") - (Position - (Vector2)Get(chunks[2], "pos")).normalized * 16, jumpPower);
             }
             var edge = surfaces.Nearest(Position, out var normal);
             var ahead = hasDestination ? surfaces.Approach(edge, destination, 22) : surfaces.Advance(edge, 22);
@@ -233,8 +263,15 @@ namespace CyanPreview
                             var neckTarget = (Vector2)Get(chunks[1], "pos") + bending * 17;
                             v += (neckTarget - p) * .7f;
                         }
-                        if (i == 1) target += (Position - target).normalized * 17;
-                        if (i < 2) v += (target - p).normalized * capabilities.CrawlSpeed * (Behavior.RunSpeed / .5f) * (i == 0 ? .55f : .35f);
+                        float alignment = 1;
+                        if (i == 1)
+                        {
+                            var leadTarget = target;
+                            target += (Position - target).normalized * 17;
+                            if (Behavior.Intent == PetIntent.Pursuing)
+                                alignment = Mathf.Lerp(.5f, 1, (Vector2.Dot((leadTarget - p).normalized, (target - p).normalized) + 1) * .5f);
+                        }
+                        if (i < 2) v += (target - p).normalized * capabilities.CrawlSpeed * (Behavior.RunSpeed / .5f) * (i == 0 ? .55f : .35f) * alignment;
                     }
                     if (State == PetMotionState.Charging)
                     {
@@ -253,7 +290,14 @@ namespace CyanPreview
             }
             foreach (var connection in connections) Call(connection, "Update");
             foreach (var chunk in chunks) Set(chunk, "pos", surfaces.Constrain((Vector2)Get(chunk, "pos"), 8, out _));
-            if (airborne && landed) { ChangeState(PetMotionState.Crawling); Behavior.Rest(); }
+            if (airborne && propelled && surfaces.SupportsFreeClimbing && flightTicks > 5 && Vector2.Distance(Position, jumpTarget) < 25)
+                landed = true;
+            if (airborne && landed)
+            {
+                ChangeState(PetMotionState.Crawling);
+                if (!Behavior.ExplorationTarget.HasValue) Behavior.Rest();
+                foreach (var chunk in chunks) Set(chunk, "vel", (Vector2)Get(chunk, "vel") * .35f);
+            }
             for (int i = 0; i < 4; i++)
             {
                 var shoulder = (Vector2)Get(chunks[i < 2 ? 0 : 2], "pos");
@@ -285,15 +329,23 @@ namespace CyanPreview
         }
         void UpdateGraphics()
         {
+            Set(pet.Lizard, "animation", pet.Context.Static("Lizard+Animation", State == PetMotionState.Charging ? "PrepareToJump" : "Standard"));
+            Set(pet.Lizard, "timeInAnimation", chargeDuration - chargeTicks);
+            Set(pet.Lizard, "timeToRemainInAnimation", chargeDuration);
+            Set(graphics, "lastVoiceVisualization", Get(graphics, "voiceVisualization"));
+            Set(graphics, "lastVoiceVisualizationIntensity", Get(graphics, "voiceVisualizationIntensity"));
+            Set(graphics, "voiceVisualization", Mathf.Clamp01(VoiceIntensity));
+            Set(graphics, "voiceVisualizationIntensity", VoiceIntensity > 0 ? 1f : 0f);
             Set(graphics, "lastBreath", Get(graphics, "breath"));
             Set(graphics, "breath", (float)Get(graphics, "breath") + .0125f);
             var draw = (Vector2[,])Get(graphics, "drawPositions");
             for (int i = 0; i < 3; i++) { draw[i, 1] = draw[i, 0]; draw[i, 0] = (Vector2)Get(chunks[i], "pos"); }
             var head = Get(graphics, "head");
             var forward = (draw[0, 0] - draw[1, 0]).normalized;
-            var target = Behavior.Intent == PetIntent.Idle && State == PetMotionState.Crawling && lookTarget.HasValue
-                ? lookTarget.Value : State == PetMotionState.Charging || (State == PetMotionState.Airborne && propelled)
-                ? jumpTarget : draw[0, 0] + forward * 100;
+            var target = draw[0, 0] + forward * 100;
+            if (State == PetMotionState.Charging || (State == PetMotionState.Airborne && propelled)) target = jumpTarget;
+            else if (Behavior.ExplorationTarget.HasValue) target = Behavior.ExplorationTarget.Value;
+            else if (Behavior.Intent == PetIntent.Idle && State == PetMotionState.Crawling && lookTarget.HasValue) target = lookTarget.Value;
             Set(graphics, "lookPos", target);
             var aim = (target - draw[0, 0]).normalized;
             float bodyAngle = Mathf.Atan2(forward.y, forward.x) * Mathf.Rad2Deg;
@@ -323,6 +375,13 @@ namespace CyanPreview
             float stiffness = (float)Get(Get(pet.Lizard, "lizardParams"), "tailStiffness");
             for (int i = tails.Length - 1; i >= 0; i--)
             {
+                if (State == PetMotionState.Charging)
+                {
+                    var segment = tails.GetValue(i);
+                    var sideways = new Vector2(-forward.y, forward.x);
+                    Set(segment, "vel", (Vector2)Get(segment, "vel") - launchVelocity.normalized * i
+                        + sideways * ((chargeDuration - chargeTicks) % 6 < 3 ? -5 : 5));
+                }
                 Call(graphics, "UpdateTailSegment", i, stiffness);
                 var tail = tails.GetValue(i);
                 Set(tail, "pos", surfaces.Constrain((Vector2)Get(tail, "pos"), 1, out _));

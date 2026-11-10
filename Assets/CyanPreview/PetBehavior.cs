@@ -24,7 +24,12 @@ namespace CyanPreview
             destination = null; explicitTarget = false;
             restTicks = random.Next(IdleMinTicks, IdleMaxTicks); roamTicks = 0; Intent = PetIntent.Idle;
         }
-        public void Target(Vector2 point) { destination = point; explicitTarget = true; restTicks = 0; }
+        public Vector2? ExplorationTarget => explicitTarget ? destination : null;
+        public void Target(Vector2 point)
+        {
+            destination = point; explicitTarget = true; restTicks = roamTicks = 0;
+            Intent = PetIntent.Pursuing;
+        }
         public Vector2? Update(Vector2 position, IPetSurfaces surfaces)
         {
             if (roamTicks > 0 && --roamTicks == 0 && !explicitTarget) Rest();
@@ -41,7 +46,7 @@ namespace CyanPreview
                 destination = surfaces.Advance(position, random.Next(80, 201) * (random.Next(2) == 0 ? -1 : 1));
             }
             Intent = !destination.HasValue ? PetIntent.Idle : explicitTarget ? PetIntent.Pursuing : PetIntent.Roaming;
-            float requested = Intent == PetIntent.Idle ? 0 : Intent == PetIntent.Pursuing ? .7f : .25f;
+            float requested = Intent == PetIntent.Idle ? 0 : Intent == PetIntent.Pursuing ? .35f : .25f;
             // LizardAI eases hunting speed; idle movement uses a slower destination speed.
             RunSpeed = Mathf.Lerp(RunSpeed, requested, Intent == PetIntent.Pursuing ? .1f : .5f);
             return destination;

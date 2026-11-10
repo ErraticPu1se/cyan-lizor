@@ -11,7 +11,7 @@ for comparing cyan lizard IDs with Rain World.
   small reflection adapter; no game DLLs or sprites are committed or distributed.
 - Size slider, view angle, controlled pose motion, and comparison screenshots.
 - Neutral preview palette. This is not a complete Rain World room simulation.
-- Desktop roaming, window climbing, den placement, and petting/audio come later.
+- Desktop roaming, window climbing, den placement, and cursor petting come later.
 
 The adapter currently targets **Rain World v1.11.8**, with the assembly fingerprint
 checked before loading. Mod hooks, alternate seeds, winterized creatures, rot,
@@ -121,3 +121,24 @@ bout. The default test arena is 720 × 360 world units (previously 180 × 84),
 with a 1× default pet scale and a 1440 × 900 default player window.
 Cyan jumps include a smoke burst/trail, bubbles, flash and expanding shockwave,
 adapted from the locally inspected game behavior to preview shaders.
+
+Click exploration interrupts idle on mouse press. Nearby destinations use paced
+crawling; distant destinations (over 120 world units) attempt a trajectory-tested
+cyan jump, then continue exploring after landing. If no valid landing is found,
+the pet crawls instead. Fast dragging carries the complete rendered pose and
+constrains dangling limbs, so feet cannot be left behind at an old cursor position.
+
+### Cyan charge, smoke and voice
+
+The preview now sets the original `PrepareToJump` animation, enabling the game's
+JumpRings charge drawing, and adapts its alternating tail vibration. Launch smoke
+grows and fades toward dark room colors; trailing smoke uses the smaller original
+radius and remaining-flight lifetime. The shader is still a host approximation.
+
+With movement enabled, **Pet sounds** enables original cyan charge, layered launch,
+and voice clips loaded directly from the installed game's sound asset bundle.
+**Vocalize** previews a call; exploration and prolonged idle also trigger calls.
+Voice amplitude drives the original mouth visualization and free-floating head
+bubbles adapted from LizardBubble. Voice choice is deterministic by ID, but not yet
+the game's complete personality/voice generator. Audio playback is per pet; clips
+are shared by the reference context. No game audio is copied into the repository.

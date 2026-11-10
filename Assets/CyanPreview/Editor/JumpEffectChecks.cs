@@ -7,6 +7,11 @@ namespace CyanPreview.Editor
     {
         public static void Run(ReferenceContext context)
         {
+            foreach (var name in new[] { "CyanChargeSm", "CyanChargeM", "CyanChargeL", "Flip3C", "Clang2A", "Clang1H", "Clang1G", "CoralBreakA_7", "LizardVoiceCyanA", "LizardVoiceCyanB", "LizardVoiceCyanC" })
+            {
+                var clip = context.LoadSound(name);
+                if (clip.samples <= 0 || clip.length <= 0) throw new Exception("Empty game sound: " + name);
+            }
             var frame = new FrameSurfaces(new Rect(-360, -180, 720, 360));
             var behavior = new PetBehavior(17);
             var position = new Vector2(0, -166);
@@ -34,6 +39,11 @@ namespace CyanPreview.Editor
                         var random = UnityEngine.Random.state;
                         for (int i = 0; i < 40; i++) motion.Advance(.025f);
                         if (!motion.JumpTo(new Vector2(150, 80))) throw new Exception("Large arena jump rejected");
+                        motion.Advance(.025f);
+                        if (!ReferenceContext.Get(pet.Lizard, "animation").Equals(context.Static("Lizard+Animation", "PrepareToJump"))) throw new Exception("Charge animation not connected");
+                        pet.Draw();
+                        effects.HeadBubble(.8f);
+                        if (effects.ParticleCount != 1) throw new Exception("Head bubble missing");
                         if (effects.BurstCount != 0) throw new Exception("Particles emitted before launch");
                         bool visible = false;
                         for (int i = 0; i < 400; i++)

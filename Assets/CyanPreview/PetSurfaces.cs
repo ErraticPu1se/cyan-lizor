@@ -6,6 +6,7 @@ namespace CyanPreview
     // Geometry is supplied by the host; simulation never enumerates OS windows.
     public interface IPetSurfaces
     {
+        bool SupportsFreeClimbing { get; }
         Vector2 Nearest(Vector2 point, out Vector2 inward);
         Vector2 Constrain(Vector2 point, float radius, out Vector2 normal);
         Vector2 Advance(Vector2 point, float distance);
@@ -14,6 +15,7 @@ namespace CyanPreview
 
     public sealed class FrameSurfaces : IPetSurfaces
     {
+        public bool SupportsFreeClimbing => false;
         public Rect Bounds { get; }
         public FrameSurfaces(Rect bounds) { Bounds = bounds; }
         public Vector2 Nearest(Vector2 p, out Vector2 inward)

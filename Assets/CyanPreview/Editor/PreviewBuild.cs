@@ -121,6 +121,7 @@ namespace CyanPreview.Editor
                 if (reference.Summary != first || reference.EffectColor != color)
                     throw new Exception("Prior generations changed the result");
                 VerifyIndependentPets(context, reference);
+                TargetingChecks.Run(context);
                 JumpEffectChecks.Run(context);
                 PetInteractionChecks.Run(context);
                 VerifyAutonomousRoaming(context);

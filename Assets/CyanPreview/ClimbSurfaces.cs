@@ -5,6 +5,7 @@ namespace CyanPreview
     // A climbable background has support everywhere inside the host bounds.
     public sealed class BackgroundSurfaces : IPetSurfaces
     {
+        public bool SupportsFreeClimbing => true;
         readonly FrameSurfaces frame;
         public BackgroundSurfaces(Rect bounds) { frame = new FrameSurfaces(bounds); }
         public Vector2 Nearest(Vector2 point, out Vector2 inward)
@@ -22,6 +23,7 @@ namespace CyanPreview
     // shortcut: rail transfers and moving windows need a connected surface graph.
     public sealed class PoleSurfaces : IPetSurfaces
     {
+        public bool SupportsFreeClimbing => false;
         readonly FrameSurfaces frame;
         readonly float x;
         public PoleSurfaces(Rect bounds, float x) { frame = new FrameSurfaces(bounds); this.x = x; }

@@ -13,7 +13,7 @@ namespace CyanPreview
         {
             public Vector2 Position, Velocity;
             public float Age, Life, Radius;
-            public bool Ring, Flash;
+            public bool Ring, Flash, Small;
         }
         readonly PetMotion motion;
         readonly Color color;
@@ -38,10 +38,10 @@ namespace CyanPreview
         float Next() => (float)random.NextDouble();
         Vector2 Direction() { float a = Next() * Mathf.PI * 2; return new Vector2(Mathf.Cos(a), Mathf.Sin(a)); }
         public void SetScale(float scale) => root.transform.localScale = Vector3.one * scale;
-        void Add(Vector2 p, Vector2 v, float life, float radius, bool ring = false, bool flash = false)
+        void Add(Vector2 p, Vector2 v, float life, float radius, bool ring = false, bool flash = false, bool small = false)
         {
             if (particles.Count >= 128) particles.RemoveAt(0);
-            particles.Add(new Particle { Position = p, Velocity = v, Life = life, Radius = radius, Ring = ring, Flash = flash });
+            particles.Add(new Particle { Position = p, Velocity = v, Life = life, Radius = radius, Ring = ring, Flash = flash, Small = small });
         }
         void Burst(Vector2 p, Vector2 velocity, float power)
         {
@@ -55,7 +55,15 @@ namespace CyanPreview
             Add(p - velocity.normalized * 15, Vector2.zero, (6 + power * 4) / 40, Mathf.Lerp(40, 120, power), true);
         }
         void Trail(Vector2 p, Vector2 velocity, float power)
-        { Add(p, velocity + Direction() * 2, .25f + power, 12 + power * 20); }
+        { Add(p, velocity + Direction() * 2, motion.SmokeLifeTicks * Mathf.Lerp(.3f, 1, Next()) / 40, Mathf.Lerp(28, 46, Next()), small: true); }
+        public void HeadBubble(float intensity)
+        {
+            // LizardBubble's nested lifetime distribution and free-floating emission.
+            int ticks = 10 + random.Next(random.Next(random.Next(random.Next(200) + 1) + 1) + 1);
+            Add(Vector2.Lerp(motion.Position, motion.HeadPosition, Next()) + Direction() * Next() * 5,
+                Direction() * (Next() * Next() * 12 * Mathf.Pow(intensity, 1.5f) + intensity * intensity * 20),
+                ticks / 40f, 2 + Next() * 2, true);
+        }
         public void Advance(float seconds)
         {
             if (disposed) return;
@@ -72,9 +80,14 @@ namespace CyanPreview
             foreach (var p in particles)
             {
                 float age = p.Age / p.Life;
-                float radius = p.Radius * (p.Flash ? 1 - age * .4f : Mathf.Lerp(.12f, 1, Mathf.Pow(age, .3f)));
-                var tint = p.Flash ? Color.Lerp(color, Color.white, .5f) : color;
-                tint.a = (1 - age) * (p.Ring ? .65f : p.Flash ? .7f : .3f);
+                float life = 1 - age;
+                float radius = p.Flash ? p.Radius * (1 - age * .4f)
+                    : p.Ring ? p.Radius * Mathf.Lerp(.12f, 1, Mathf.Pow(age, .3f))
+                    : Mathf.Lerp(p.Small ? 2 : 4, p.Radius, Mathf.Pow(age, .2f))
+                        * (p.Small ? .2f : 1 + Mathf.Clamp01(p.Age * 4));
+                var tint = p.Flash ? Color.Lerp(color, Color.white, .5f)
+                    : p.Ring ? color : Color.Lerp(color, new Color(.07f, .10f, .12f), Mathf.InverseLerp(1, .25f, life) * (p.Small ? .5f : 1));
+                tint.a = p.Ring ? life * .8f : p.Flash ? life * .7f : Mathf.Pow(life, .25f) * .8f;
                 int first = vertices.Count;
                 for (int corner = 0; corner < 4; corner++)
                 {
