@@ -27,7 +27,7 @@ Preparation reads your game installation without modifying it. Game graphics and
 ## What you can do
 
 - Choose a cyan's appearance by ID and adjust its desktop size.
-- Watch it roam, rest, crawl, and propel itself, with personality-influenced decisions.
+- Watch it roam, rest, crawl, and propel itself, with personality-influenced decisions. Landings briefly absorb impact and regain footing before normal movement resumes.
 - Enable **Climb backgrounds and window edges** to let it grip and follow visible window edges and interiors as they move or resize. Closing or minimizing its supporting window releases it.
 - Move the cursor nearby for head attention; hold the pet for **0.1 seconds** to grab it, then release to drop. The body and tail react to dragging, with bounded momentum on release.
 - Hover or gently move over a resting lizard for about **one second** for a cyan affection call. Continued petting has a **3-second cooldown** during continued contact; grabbing and menus do not count as petting. Affection has its own cooldown, so an ordinary call does not block petting after that call ends. Calls respect mute and never overlap.
