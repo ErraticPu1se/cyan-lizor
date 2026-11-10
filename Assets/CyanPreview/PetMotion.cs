@@ -97,8 +97,8 @@ namespace CyanPreview
         public void LookAt(Vector2? point) { lookTarget = point; }
         public void ObserveCursor(Vector2? point)
         {
-            // Hover has sustained attention; ordinary pointer use gets only brief glances.
-            LookAt(point.HasValue && (Contains(point.Value) || poseTicks % 200 < 20) ? point : null);
+            // Nearby pointer attention changes the pose without creating a movement goal.
+            LookAt(point.HasValue && (Vector2.Distance(HeadPosition, point.Value) <= 180 || poseTicks % 200 < 20) ? point : null);
         }
         public void MoveTo(Vector2 point) { clickInvestigation = false; Behavior.Target(surfaces.Nearest(point, out _)); }
         public void ExploreClick(Vector2 point)
@@ -106,10 +106,11 @@ namespace CyanPreview
             if (float.IsNaN(point.x) || float.IsNaN(point.y) || float.IsInfinity(point.x) || float.IsInfinity(point.y))
                 throw new ArgumentOutOfRangeException(nameof(point));
             // World-space reach scales with the rendered pet, not the monitor resolution.
-            const float reach = 90;
+            const float nearbyReach = 140;
             var origin = surfaces.Nearest(Position, out _);
             var target = surfaces.Nearest(point, out _);
-            if (Vector2.Distance(origin, target) > reach) target = surfaces.Approach(origin, target, reach);
+            float distance = Vector2.Distance(origin, target);
+            if (distance > nearbyReach) target = surfaces.Approach(origin, target, Mathf.Min(distance * .5f, 240));
             Behavior.Target(target);
             clickInvestigation = true;
         }
@@ -248,7 +249,7 @@ namespace CyanPreview
             }
             if (cooldown > 0) cooldown--;
             var exploration = Behavior.ExplorationTarget;
-            if (!clickInvestigation && State == PetMotionState.Crawling && cooldown == 0 && GripCount > 0 && exploration.HasValue
+            if ((!clickInvestigation || AutonomousJumps) && State == PetMotionState.Crawling && cooldown == 0 && GripCount > 0 && exploration.HasValue
                 && Vector2.Distance(Position, exploration.Value) > Mathf.Lerp(190, 120, pet.Personality.Bravery)
                 && PetJumpPlanner.TryPlanToTarget(Position, exploration.Value, surfaces, capabilities, out var targetedJump))
             {
@@ -350,7 +351,14 @@ namespace CyanPreview
                         // arrival pose, rather than continuously driving the body.
                         float amplitude = Behavior.Intent == PetIntent.Inspecting ? 1.4f : Behavior.Intent == PetIntent.Settling ? .8f : .45f;
                         var offset = new Vector2(Mathf.Sin(poseTicks * .035f + i), Mathf.Sin(poseTicks * .06f + i * .7f)) * amplitude;
-                        v += Vector2.ClampMagnitude(restingPose[i] + offset - p, 12) * .12f;
+                        var restTarget = restingPose[i];
+                        if (lookTarget.HasValue && Vector2.Distance(HeadPosition, lookTarget.Value) <= 180)
+                        {
+                            var forward = restingPose[0] - restingPose[1];
+                            float turn = Mathf.Clamp(Vector2.SignedAngle(forward, lookTarget.Value - restingPose[1]), -25, 25);
+                            restTarget = restingPose[1] + (Vector2)(Quaternion.Euler(0, 0, turn) * (restTarget - restingPose[1]));
+                        }
+                        v += Vector2.ClampMagnitude(restTarget + offset - p, 12) * .12f;
                     }
                     if (State == PetMotionState.Charging)
                     {
@@ -423,7 +431,7 @@ namespace CyanPreview
             var forward = (draw[0, 0] - draw[1, 0]).normalized;
             var target = draw[0, 0] + forward * 100;
             if (State == PetMotionState.Charging || (State == PetMotionState.Airborne && propelled)) target = jumpTarget;
-            else if (lookTarget.HasValue && Contains(lookTarget.Value)) target = lookTarget.Value;
+            else if (lookTarget.HasValue && Vector2.Distance(HeadPosition, lookTarget.Value) <= 180) target = lookTarget.Value;
             else if (Behavior.InterestPoint.HasValue && lookTarget.HasValue) target = lookTarget.Value;
             else if (Behavior.ExplorationTarget.HasValue) target = Behavior.ExplorationTarget.Value;
             else if (Behavior.InterestPoint.HasValue) target = Behavior.InterestPoint.Value + new Vector2(Mathf.Sin(poseTicks * .035f) * 35, 18 + Mathf.Sin(poseTicks * .06f) * 12);

@@ -19,15 +19,17 @@ namespace CyanPreview.Editor
                 var far = new Vector2(490, 200);
                 input.Press(far); input.Release(far, true);
                 var interest = motion.Behavior.InterestPoint.Value;
-                Require(Vector2.Distance(interest, motion.Position) <= 90.01f && Vector2.Distance(interest, far) > 100,
+                Require(Vector2.Distance(interest, motion.Position) <= 240.01f && Vector2.Distance(interest, far) > 100,
                     "Distant click did not select a local investigation area");
+                bool clickLaunched = false;
                 for (int i = 0; i < 500; i++)
                 {
                     if (i < 80) { input.Press(far); input.Release(far, true); }
                     motion.ObserveCursor(far); motion.Advance(.025f);
-                    Require(motion.State == PetMotionState.Crawling, "Click investigation triggered propulsion");
+                    clickLaunched |= motion.State == PetMotionState.Airborne;
                     Require(motion.Behavior.Intent != PetIntent.FollowingOwner, "Cursor caused owner chasing");
                 }
+                Require(clickLaunched, "Distant click never propelled toward its local exploration area");
                 motion.Behavior.Rest();
                 for (int i = 0; i < 250; i++)
                 {
@@ -35,6 +37,15 @@ namespace CyanPreview.Editor
                     motion.ObserveCursor(hover); motion.Advance(.025f);
                     Require((Vector2)ReferenceContext.Get(pet.Graphics, "lookPos") == hover, "Hover did not hold head attention");
                     Require(motion.Behavior.Intent == PetIntent.Idle, "Hover created a movement goal");
+                }
+                var attentionOrigin = motion.Position;
+                var nearbyCursor = attentionOrigin + new Vector2(65, 65);
+                for (int i = 0; i < 250; i++)
+                {
+                    motion.ObserveCursor(nearbyCursor); motion.Advance(.025f);
+                    Require((Vector2)ReferenceContext.Get(pet.Graphics, "lookPos") == nearbyCursor, "Nearby cursor lost sustained attention");
+                    Require(motion.Behavior.Intent == PetIntent.Idle && Vector2.Distance(motion.Position, attentionOrigin) < 25,
+                        "Nearby attention became body chasing");
                 }
                 input.ClickToExplore = false; input.Press(far); input.Release(far, true);
                 Require(!motion.Behavior.InterestPoint.HasValue, "Disabled exploration created an interest");
