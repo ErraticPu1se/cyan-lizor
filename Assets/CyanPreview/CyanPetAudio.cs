@@ -14,7 +14,9 @@ namespace CyanPreview
         readonly AudioSource[] launch = new AudioSource[3];
         readonly AudioClip[] charges = new AudioClip[3], clangs = new AudioClip[3];
         readonly float[] samples = new float[128];
-        float idleVoice = 18, bubbleTime;
+        readonly System.Random voiceRandom;
+        float idleVoice, bubbleTime, vocalCooldown;
+        public const float VocalCooldownSeconds = 10;
         PetIntent lastIntent;
         bool enabled = true, disposed;
         public bool Enabled
@@ -30,6 +32,8 @@ namespace CyanPreview
         public CyanPetAudio(Transform parent, ReferenceContext context, PetMotion motion, CyanJumpEffects effects, int seed)
         {
             this.motion = motion; this.effects = effects;
+            voiceRandom = new System.Random(seed ^ 9319);
+            idleVoice = NextIdleDelay();
             root = new GameObject("Cyan pet audio"); root.transform.SetParent(parent, false);
             try
             {
@@ -70,15 +74,19 @@ namespace CyanPreview
             launch[2].pitch = pitch * (2 + tier * .5f); launch[2].volume = volume * (.3f + tier * .1f);
             foreach (var source in launch) source.Play();
         }
-        public void Vocalize()
+        float NextIdleDelay() => 30 + (float)voiceRandom.NextDouble() * 30;
+        public bool Vocalize()
         {
-            if (!enabled || disposed || voice.isPlaying) return;
-            voice.Play(); idleVoice = 18;
+            // Drop repeat requests; never queue calls or extend the cooldown.
+            if (!enabled || disposed || vocalCooldown > 0 || voice.isPlaying) return false;
+            voice.Play(); vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay();
+            return true;
         }
         public void Advance(float seconds)
         {
             if (disposed) return;
             seconds = float.IsNaN(seconds) || float.IsInfinity(seconds) ? 0 : Mathf.Clamp(seconds, 0, .25f);
+            vocalCooldown = Mathf.Max(0, vocalCooldown - seconds);
             var intent = motion.Behavior.Intent;
             if (intent == PetIntent.Investigating && lastIntent != intent) Vocalize();
             lastIntent = intent;

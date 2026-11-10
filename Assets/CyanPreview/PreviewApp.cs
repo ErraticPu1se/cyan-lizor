@@ -225,7 +225,7 @@ namespace CyanPreview
             if (Section("Interaction", ref interactionOpen))
             {
                 desktopClicks = GUILayout.Toggle(desktopClicks, " Explore where I click");
-                GUILayout.Label("Nearby clicks invite crawling. Distant clicks may trigger propulsion to a closer exploration spot, not your cursor.", small);
+                GUILayout.Label("Clicks within about three body lengths invite a direct hop. Farther clicks invite longer hops that stop short of your cursor.", small);
                 GUILayout.Label("Hold the pet for 0.1 seconds to grab it, then release to drop. Move nearby to get its attention. Clicks still reach your apps.", small);
             }
             if (Section("Sound", ref soundOpen))

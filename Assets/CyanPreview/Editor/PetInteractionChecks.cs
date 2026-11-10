@@ -7,6 +7,32 @@ namespace CyanPreview.Editor
     {
         public static void Run(ReferenceContext context)
         {
+            float previousReach = 0;
+            foreach (float distance in new[] { 100f, 150f, 151f, 300f, 600f, 900f })
+            using (var pet = context.CreatePet())
+            {
+                pet.Generate("12345");
+                var surface = new BackgroundSurfaces(new Rect(-1200, -600, 2400, 1200));
+                var motion = new PetMotion(pet, surface, 73) { Roam = false, AutonomousJumps = true };
+                for (int i = 0; i < 40; i++) motion.Advance(.025f);
+                var start = motion.Position;
+                var cursor = start + Vector2.right * distance;
+                motion.ExploreClick(cursor);
+                var goal = motion.Behavior.InterestPoint.Value;
+                float reach = Vector2.Distance(start, goal);
+                Require(reach > previousReach, "Further clicks did not increase hop distance");
+                Require(distance <= 150 ? Vector2.Distance(goal, cursor) < .01f : reach < distance,
+                    "Click target did not respect direct-near / short-of-far policy");
+                previousReach = reach;
+                bool launched = false;
+                for (int i = 0; i < 100; i++)
+                {
+                    motion.Advance(.025f);
+                    launched |= motion.State == PetMotionState.Airborne;
+                }
+                Require(launched, "Click hop failed at distance " + distance);
+            }
+            Debug.Log("CLICK_HOP_DISTANCE_SCALING_CHECK_PASSED");
             using (var pet = context.CreatePet())
             {
                 pet.Generate("12345");
@@ -19,7 +45,7 @@ namespace CyanPreview.Editor
                 var far = new Vector2(490, 200);
                 input.Press(far); input.Release(far, true);
                 var interest = motion.Behavior.InterestPoint.Value;
-                Require(Vector2.Distance(interest, motion.Position) <= 240.01f && Vector2.Distance(interest, far) > 100,
+                Require(Vector2.Distance(interest, motion.Position) < Vector2.Distance(far, motion.Position) && Vector2.Distance(interest, far) > 50,
                     "Distant click did not select a local investigation area");
                 bool clickLaunched = false;
                 for (int i = 0; i < 500; i++)

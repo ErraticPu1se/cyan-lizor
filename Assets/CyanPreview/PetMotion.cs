@@ -106,11 +106,11 @@ namespace CyanPreview
             if (float.IsNaN(point.x) || float.IsNaN(point.y) || float.IsInfinity(point.x) || float.IsInfinity(point.y))
                 throw new ArgumentOutOfRangeException(nameof(point));
             // World-space reach scales with the rendered pet, not the monitor resolution.
-            const float nearbyReach = 140;
+            const float nearbyReach = 150; // Roughly three cyan body lengths, excluding the tail.
             var origin = surfaces.Nearest(Position, out _);
             var target = surfaces.Nearest(point, out _);
             float distance = Vector2.Distance(origin, target);
-            if (distance > nearbyReach) target = surfaces.Approach(origin, target, Mathf.Min(distance * .5f, 240));
+            if (distance > nearbyReach) target = surfaces.Approach(origin, target, nearbyReach + (distance - nearbyReach) * .65f);
             Behavior.Target(target);
             clickInvestigation = true;
         }
@@ -250,7 +250,7 @@ namespace CyanPreview
             if (cooldown > 0) cooldown--;
             var exploration = Behavior.ExplorationTarget;
             if ((!clickInvestigation || AutonomousJumps) && State == PetMotionState.Crawling && cooldown == 0 && GripCount > 0 && exploration.HasValue
-                && Vector2.Distance(Position, exploration.Value) > Mathf.Lerp(190, 120, pet.Personality.Bravery)
+                && Vector2.Distance(Position, exploration.Value) > (clickInvestigation ? 35 : Mathf.Lerp(190, 120, pet.Personality.Bravery))
                 && PetJumpPlanner.TryPlanToTarget(Position, exploration.Value, surfaces, capabilities, out var targetedJump))
             {
                 launchVelocity = targetedJump.Velocity;

@@ -86,7 +86,7 @@ namespace CyanPreview.Editor
                 Require(motion.Position == initial, "Click directly moved body instead of changing intent");
                 input.Release(target, true);
                 var local = motion.Behavior.InterestPoint.Value;
-                Require(Vector2.Distance(local, initial) <= 245 && Vector2.Distance(local, target) > 60,
+                Require(Vector2.Distance(local, initial) <= 245 && Vector2.Distance(local, target) > 20,
                     "Distant click retained a remote target");
                 bool inspected = false, settled = false;
                 for (int step = 0; step < 900; step++)
