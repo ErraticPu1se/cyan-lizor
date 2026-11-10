@@ -121,6 +121,7 @@ namespace CyanPreview.Editor
                 if (reference.Summary != first || reference.EffectColor != color)
                     throw new Exception("Prior generations changed the result");
                 VerifyIndependentPets(context, reference);
+                CompanionChecks.Run(context);
                 TargetingChecks.Run(context);
                 JumpEffectChecks.Run(context);
                 PetInteractionChecks.Run(context);
@@ -262,7 +263,7 @@ namespace CyanPreview.Editor
                 if (first.Behavior.Intent != PetIntent.Idle) throw new Exception("Disabled roaming did not settle to idle");
                 first.MoveTo(surfaces.Advance(first.Position, 70));
                 first.Advance(.025f);
-                if (first.Behavior.Intent != PetIntent.Pursuing) throw new Exception("Clicked target did not start pursuit");
+                if (first.Behavior.Intent != PetIntent.Investigating) throw new Exception("Clicked target did not start pursuit");
                 Debug.Log("HEAD_TRACKING_IDLE_TARGET_CHECK_PASSED");
                 Debug.Log("CRAWL_GRIP_PROPULSION_CHECK_PASSED");
             }

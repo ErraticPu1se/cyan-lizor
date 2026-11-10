@@ -78,7 +78,7 @@ namespace CyanPreview
         {
             if (disposed) return;
             var intent = motion.Behavior.Intent;
-            if (intent == PetIntent.Pursuing && lastIntent != intent) Vocalize();
+            if (intent == PetIntent.Investigating && lastIntent != intent) Vocalize();
             lastIntent = intent;
             if (intent == PetIntent.Idle && motion.State == PetMotionState.Crawling && (idleVoice -= seconds) <= 0) Vocalize();
             float intensity = 0;

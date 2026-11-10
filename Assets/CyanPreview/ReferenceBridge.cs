@@ -29,6 +29,7 @@ namespace CyanPreview
         public object Leaser { get; private set; }
         public object Container { get; private set; }
         public int Seed { get; private set; }
+        public PetPersonality Personality { get; private set; }
         public string Identity { get; private set; }
         public Color EffectColor { get; private set; }
         public string Summary { get; private set; }
@@ -66,6 +67,7 @@ namespace CyanPreview
                 Seed = seed;
                 Identity = "ID." + spawner + "." + seed;
                 Lizard = Species.CreateLizard(context, spawner, seed);
+                Personality = new PetPersonality(Get(Get(Lizard, "abstractPhysicalObject"), "personality"));
                 EffectColor = (Color)Get(Lizard, "effectColor");
                 Graphics = context.New("LizardGraphics", Lizard);
                 Set(Lizard, "graphicsModule", Graphics);

@@ -193,3 +193,31 @@ The boundary test initially failed and revealed a between-tick corner-drag escap
 the final implementation fixes it and the full suite passes. Build log:
 `research/unity-hold-build.log`. Local player: `Builds/GripPreview/CyanLizor.exe`.
 These checks establish behavior invariants, not exact Rain World motion parity.
+
+## Tamed companion inspection and idle pose (2026-11-10)
+
+Research: local `AbstractCreature.Personality(EntityID)`, `LizardAI` idle and
+FollowFriend branches, `FriendTracker.RunSpeed` and friendship utility. Personality
+now runs the original installed-game constructor and is exposed as an immutable
+per-pet snapshot of all six traits. The original values are also assigned to the
+abstract creature. LizardAI uses dominance for taming difficulty and energy for
+some other species' lurking; inspected cyan movement does not directly map these
+traits to speed. Since this companion is already friendly, no invented aggression,
+nervousness or dominance movement multiplier is applied. Full social memory,
+feeding/taming progression and game creature friendship trackers are not simulated.
+
+Clicks are friendly investigation destinations, not prey. FriendTracker-inspired
+distance easing is scaled for desktop geometry. On arrival after landing, the pet
+inspects for 2-4 seconds, settles for 1.5-2.5 seconds, then rests. Repeated clicks
+replace interest; grabbing clears it. Inspection works with roaming disabled.
+Bounded resting weight shifts and intermittent head attention are explicit desktop
+adaptations, not claims of original personality-dependent cyan behavior.
+
+`PreviewBuild.Verify` passed (`research/unity-companion-verify.log`) including
+arrival, no inspection before landing, repeated clicks during inspection/settling,
+roaming toggles, grab cancellation, bounded nonzero idle movement, original
+personality values, ID repeatability, ownership and preserved global randomness.
+All existing movement, grab boundaries, propulsion, rendering and audio checks pass.
+Windows build succeeded (`research/unity-companion-build.log`). Native player UI
+showed personality values and Investigating, Inspecting and Settling states with
+no runtime exceptions. Build: `Builds/CompanionPreview/CyanLizor.exe` (ignored).

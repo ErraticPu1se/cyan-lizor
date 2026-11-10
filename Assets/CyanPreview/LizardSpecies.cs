@@ -34,6 +34,7 @@ namespace CyanPreview
             var abstractCreature = context.Blank("AbstractCreature");
             Set(abstractCreature, "creatureTemplate", template);
             Set(abstractCreature, "ID", context.New("EntityID", spawner, seed));
+            Set(abstractCreature, "personality", context.New("AbstractCreature+Personality", Get(abstractCreature, "ID")));
             var lizard = context.Blank("Lizard");
             Set(lizard, "abstractPhysicalObject", abstractCreature);
             Set(lizard, "grasps", Array.CreateInstance(context.Type("Creature+Grasp"), 1));

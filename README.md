@@ -142,3 +142,12 @@ Voice amplitude drives the original mouth visualization and free-floating head
 bubbles adapted from LizardBubble. Voice choice is deterministic by ID, but not yet
 the game's complete personality/voice generator. Audio playback is per pet; clips
 are shared by the reference context. No game audio is copied into the repository.
+
+### Friendly inspection and resting
+
+Clicks now invite investigation rather than pursuit: approach, inspect the area,
+settle, then rest with small body shifts and intermittent cursor attention. A new
+click replaces the current interest; grabbing cancels it. This works when roaming
+is disabled. The panel displays all six original ID-generated personality values.
+Traits remain faithful to the installed game; unsupported trait-to-speed mappings
+are not invented. Inspection timing and resting pose are desktop adaptations.

@@ -82,7 +82,7 @@ namespace CyanPreview.Editor
                 var target = surfaces.SupportsFreeClimbing ? new Vector2(250, 80) : new Vector2(250, -180);
                 var initial = motion.Position;
                 input.Press(target);
-                Require(motion.Behavior.Intent == PetIntent.Pursuing, "Click did not interrupt idle on press");
+                Require(motion.Behavior.Intent == PetIntent.Investigating, "Click did not interrupt idle on press");
                 Require(motion.Position == initial, "Click directly moved body instead of changing intent");
                 input.Release(target, true);
                 bool charge = false, flight = false, land = false;

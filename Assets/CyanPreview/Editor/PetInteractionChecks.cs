@@ -18,7 +18,7 @@ namespace CyanPreview.Editor
                 Require(motion.Behavior.Intent == PetIntent.Idle, "Disabled exploration accepted a click");
                 input.ClickToExplore = true;
                 input.Press(target); input.Release(target, true); motion.Advance(.025f);
-                Require(motion.Behavior.Intent == PetIntent.Pursuing, "Enabled exploration ignored a click");
+                Require(motion.Behavior.Intent == PetIntent.Investigating, "Enabled exploration ignored a click");
                 var origin = motion.Position;
                 input.Press(origin); input.Hold(origin, .05f);
                 Require(motion.State != PetMotionState.Grabbed, "Short press grabbed the pet");

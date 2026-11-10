@@ -25,7 +25,9 @@ namespace CyanPreview
         readonly object graphics;
         readonly MovementCapabilities capabilities;
         readonly System.Random jumpRandom;
-        int jumpWait = 320;
+        int jumpWait = 320, poseTicks;
+        readonly Vector2[] restingPose = new Vector2[3];
+        bool resting;
         Vector2 grabOffset, grabAnchor;
         int grabbedChunk, heldTicks;
         float turnDirection = 1;
@@ -247,11 +249,15 @@ namespace CyanPreview
                 ChangeState(PetMotionState.Airborne);
                 JumpLaunched?.Invoke((Vector2)Get(chunks[1], "pos"), launchVelocity, jumpPower);
             }
-            var goal = Behavior.Update(Position, surfaces);
+            var goal = Behavior.Update(Position, surfaces, State == PetMotionState.Crawling);
             hasDestination = goal.HasValue;
             if (goal.HasValue) destination = goal.Value;
             Set(Get(pet.Lizard, "AI"), "runSpeed", Behavior.RunSpeed);
             bool airborne = State == PetMotionState.Airborne;
+            poseTicks++;
+            bool atRest = State == PetMotionState.Crawling && !hasDestination;
+            if (atRest && !resting) for (int i = 0; i < 3; i++) restingPose[i] = (Vector2)Get(chunks[i], "pos");
+            resting = atRest;
             if (airborne)
             {
                 flightTicks++;
@@ -310,10 +316,18 @@ namespace CyanPreview
                         {
                             var leadTarget = target;
                             target += (Position - target).normalized * 17;
-                            if (Behavior.Intent == PetIntent.Pursuing)
+                            if (Behavior.Intent == PetIntent.Investigating)
                                 alignment = Mathf.Lerp(.5f, 1, (Vector2.Dot((leadTarget - p).normalized, (target - p).normalized) + 1) * .5f);
                         }
                         if (i < 2) v += (target - p).normalized * capabilities.CrawlSpeed * (Behavior.RunSpeed / .5f) * (i == 0 ? .55f : .35f) * alignment * Mathf.InverseLerp(.3f, .9f, facing);
+                    }
+                    if (resting)
+                    {
+                        // Desktop resting pose: bounded weight shifts around the
+                        // arrival pose, rather than continuously driving the body.
+                        float amplitude = Behavior.Intent == PetIntent.Inspecting ? 1.4f : Behavior.Intent == PetIntent.Settling ? .8f : .45f;
+                        var offset = new Vector2(Mathf.Sin(poseTicks * .035f + i), Mathf.Sin(poseTicks * .06f + i * .7f)) * amplitude;
+                        v += Vector2.ClampMagnitude(restingPose[i] + offset - p, 12) * .12f;
                     }
                     if (State == PetMotionState.Charging)
                     {
@@ -387,7 +401,8 @@ namespace CyanPreview
             var target = draw[0, 0] + forward * 100;
             if (State == PetMotionState.Charging || (State == PetMotionState.Airborne && propelled)) target = jumpTarget;
             else if (Behavior.ExplorationTarget.HasValue) target = Behavior.ExplorationTarget.Value;
-            else if (Behavior.Intent == PetIntent.Idle && State == PetMotionState.Crawling && lookTarget.HasValue) target = lookTarget.Value;
+            else if (Behavior.InterestPoint.HasValue) target = Behavior.InterestPoint.Value + new Vector2(Mathf.Sin(poseTicks * .035f) * 35, 18 + Mathf.Sin(poseTicks * .06f) * 12);
+            else if (Behavior.Intent == PetIntent.Idle && State == PetMotionState.Crawling && lookTarget.HasValue && poseTicks % 200 < 150) target = lookTarget.Value;
             Set(graphics, "lookPos", target);
             var aim = (target - draw[0, 0]).normalized;
             float bodyAngle = Mathf.Atan2(forward.y, forward.x) * Mathf.Rad2Deg;

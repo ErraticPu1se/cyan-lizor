@@ -244,7 +244,7 @@ namespace CyanPreview
                 cache = GUILayout.TextField(cache ?? "");
                 if (GUILayout.Button("Load prepared reference")) LoadReference();
             }
-            else GUILayout.Label(reference.Summary ?? "", small);
+            else { GUILayout.Label(reference.Summary ?? "", small); GUILayout.Label("Tamed companion / personality from ID", small); GUILayout.Label(reference.Personality.ToString(), small); }
             GUILayout.Space(12);
             if (GUILayout.Button("Save comparison image")) StartCoroutine(Capture());
             GUILayout.EndScrollView();
