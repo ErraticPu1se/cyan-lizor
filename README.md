@@ -33,10 +33,9 @@ Preparation reads your game installation without modifying it. Game graphics and
 - Enable **Explore where I click** and **Allow cyan propulsion**: nearby clicks invite direct hops; farther clicks invite longer hops that stop short of the cursor. Very short distances use crawling, and jumps require a valid trajectory.
 - Hear cyan calls and jump sounds, with head glow and propulsion particles. Calls have a **10-second cooldown**; idle calls wait **30–60 seconds of idle time**. Sound can be muted.
 
-## Preview limitations
+## planned update
 
-One cyan on the primary monitor. No macOS version, den, feeding, multiple pets, installer, or automatic updates. Other laptops and mixed-DPI setups remain unverified. This is an unsigned preview; movement is adapted for the desktop rather than a complete Rain World simulation.
-
+feeding, multiple pets, more lizard species
 ## Help and source
 
 [Report a problem](https://github.com/ErraticPu1se/cyan-lizor/issues) with your Windows version, display scaling, lizard ID, and reproduction steps. The desktop log is at `%USERPROFILE%\AppData\LocalLow\ErraticPu1se\Cyan Lizor Preview\desktop-player.log`.
