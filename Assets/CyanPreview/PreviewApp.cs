@@ -131,7 +131,17 @@ namespace CyanPreview
         {
             if (desktop.Active)
             {
-                try { desktop.UpdateSettings(DesktopConfiguration()); }
+                try
+                {
+                    while (desktop.TryReadMenu(out var action))
+                    {
+                        if (action == DesktopMenuAction.Stop) { desktop.Stop(); break; }
+                        var updated = DesktopConfiguration(); updated.ApplyMenu(action);
+                        desktopScale = updated.scale; desktopRoam = updated.roam;
+                        desktopClicks = updated.clickToExplore; desktopSounds = updated.sound;
+                    }
+                    desktop.UpdateSettings(DesktopConfiguration());
+                }
                 catch (Exception e) { error = "Desktop settings: " + e.Message; }
             }
             if (importer != null && importer.HasExited && importerOutput.IsCompleted && importerError.IsCompleted)

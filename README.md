@@ -13,6 +13,10 @@ An unofficial **Windows desktop pet** featuring one cyan lizard from Rain World.
 - **Expandable controls:** Your lizard, Movement, Interaction, Sound, and Advanced preview tools. Desktop size has a live slider and Reset button; pet status and Start/Stop remain visible outside the scrolling settings.
 - **Preview tools:** separate preview size, view angle, pose animation, frame/background/pole movement tests, decision scores, and comparison screenshots.
 
+## Right-click controls
+
+Right-click the desktop pet to open Settings, choose Small (1.0×), Medium (1.5×), or Large (2.0×), toggle roaming, click exploration or sound, or stop the pet. The pet pauses while its menu is open. Menu changes are reflected in the control panel. Left-click holding still grabs the pet; right-clicks outside the pet remain available to other apps.
+
 ## Requirements
 
 - Windows x64; desktop integration currently uses the **primary monitor only**.
