@@ -1,0 +1,5 @@
+{
+  "name": "CyanPreview.Editor",
+  "references": ["CyanPreview.Runtime"],
+  "includePlatforms": ["Editor"]
+}
