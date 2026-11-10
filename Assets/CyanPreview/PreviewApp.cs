@@ -23,7 +23,8 @@ namespace CyanPreview
         bool soundEnabled = true, showDecisions;
         readonly DesktopLauncher desktop = new DesktopLauncher();
         bool desktopWindowEdges, desktopClicks;
-        bool desktopSounds = true;
+        bool desktopSounds = true, desktopRoam = true;
+        bool lizardOpen = true, movementOpen, interactionOpen, soundOpen, advancedOpen;
         int desktopVocalizeRequest;
         float desktopScale = .75f;
         string audioError;
@@ -125,7 +126,7 @@ namespace CyanPreview
             Debug.LogException(e);
         }
         DesktopSettings DesktopConfiguration() => new DesktopSettings { id = reference.Identity, cache = cache, scale = desktopScale,
-            windowEdges = desktopWindowEdges, clickToExplore = desktopClicks, sound = desktopSounds, vocalizeRequest = desktopVocalizeRequest, roam = motion?.Roam ?? true, jumps = autonomousJumps };
+            windowEdges = desktopWindowEdges, clickToExplore = desktopClicks, sound = desktopSounds, vocalizeRequest = desktopVocalizeRequest, roam = desktopRoam, jumps = autonomousJumps };
         void Update()
         {
             if (desktop.Active)
@@ -144,7 +145,8 @@ namespace CyanPreview
             }
             if (previewCamera != null)
             {
-                previewCamera.rect = new Rect(.29f, .12f, .71f, .75f);
+                float left = (Mathf.Clamp(Screen.width * .26f, 260, 360) + 40) / Screen.width;
+                previewCamera.rect = new Rect(left, .12f, 1 - left, .75f);
                 previewCamera.orthographicSize = locomotion ? Mathf.Max(205, 390 / previewCamera.aspect) * zoom : 130;
                 previewCamera.transform.position = new Vector3(locomotion ? 0 : -40, 0, -10);
             }
@@ -189,87 +191,114 @@ namespace CyanPreview
                 title.normal.textColor = new Color(.35f, .95f, .88f);
             }
             GUI.Label(new Rect(24, 18, Screen.width - 48, 40), "CYAN LIZOR", title);
-            GUI.Label(new Rect(25, 59, Screen.width - 50, 28), "Cyan lab / original ID generation / movement playground", subtitle);
-            float panelWidth = Mathf.Max(235, Screen.width * .26f);
-            GUILayout.BeginArea(new Rect(24, 111, panelWidth, Screen.height - 140), GUI.skin.box);
+            GUI.Label(new Rect(25, 59, Screen.width - 50, 28), "Your cyan companion · desktop settings & preview", subtitle);
+            float panelWidth = Mathf.Clamp(Screen.width * .26f, 260, 360);
+            GUILayout.BeginArea(new Rect(24, 111, panelWidth, Mathf.Max(180, Screen.height - 250)), GUI.skin.box);
             panelScroll = GUILayout.BeginScrollView(panelScroll);
-            GUILayout.Space(12);
-            GUILayout.Label("CREATURE ID", subtitle);
-            GUI.SetNextControlName("CreatureId");
-            id = GUILayout.TextField(id, 64, GUILayout.Height(32));
-            GUILayout.Label("Seed number or ID.spawner.number", small);
-            GUI.enabled = reference != null;
-            if (GUILayout.Button("Generate cyan lizard", GUILayout.Height(34))) Generate();
-            GUI.enabled = true;
-            GUILayout.Space(20);
-            GUILayout.Label("SIZE  " + zoom.ToString("0.0") + "×", subtitle);
-            float nextZoom = GUILayout.HorizontalSlider(zoom, .75f, 4f);
-            if (nextZoom != zoom) { zoom = nextZoom; view?.SetScale(zoom); jumpEffects?.SetScale(zoom); }
-            GUILayout.Space(15);
-            GUI.enabled = !locomotion;
-            GUILayout.Label("VIEW ANGLE", subtitle);
-            float nextDepth = GUILayout.HorizontalSlider(depth, -.95f, .95f);
-            if (nextDepth != depth && reference != null && error == null)
+            if (reference == null)
+                GUILayout.Label("Prepare your game assets below to unlock your lizard.", small);
+            if (Section("Your lizard", ref lizardOpen))
             {
-                depth = nextDepth;
-                try { reference.Pose(phase, depth); reference.Draw(); view.Refresh(reference); }
-                catch (Exception e) { Fail(e); }
+                GUILayout.Space(12);
+                GUILayout.Label("Appearance ID", subtitle);
+                GUI.SetNextControlName("CreatureId");
+                id = GUILayout.TextField(id, 64, GUILayout.Height(32));
+                GUILayout.Label("Seed number or ID.spawner.number", small);
+                GUI.enabled = reference != null;
+                if (GUILayout.Button("Apply ID", GUILayout.Height(34))) Generate();
+                GUI.enabled = true;
+
+                GUILayout.Space(10);
+                GUILayout.Label("Desktop size  " + desktopScale.ToString("0.00") + "×", subtitle);
+                desktopScale = GUILayout.HorizontalSlider(desktopScale, .5f, 2f);
+                if (GUILayout.Button("Reset size")) desktopScale = .75f;
+                GUILayout.Label("Changes the small pet on your desktop.", small);
             }
-            animate = GUILayout.Toggle(animate, " Gentle pose motion");
-            GUI.enabled = reference != null && error == null;
-            bool nextMotion = GUILayout.Toggle(locomotion, " Crawling / gripping / propulsion");
-            if (nextMotion != locomotion)
+            if (Section("Movement", ref movementOpen))
             {
-                locomotion = nextMotion;
-                try
+                desktopRoam = GUILayout.Toggle(desktopRoam, " Roam independently");
+                autonomousJumps = GUILayout.Toggle(autonomousJumps, " Allow cyan propulsion");
+                if (motion != null) motion.AutonomousJumps = autonomousJumps && surfaceMode != 2;
+                desktopWindowEdges = GUILayout.Toggle(desktopWindowEdges, " Climb backgrounds and window edges");
+                GUILayout.Label(desktopWindowEdges ? "Climbs freely and grips visible window edges." : "Stays on the monitor frame and avoids windows.", small);
+            }
+            if (Section("Interaction", ref interactionOpen))
+            {
+                desktopClicks = GUILayout.Toggle(desktopClicks, " Explore where I click");
+                GUILayout.Label("Investigates your clicks as a tamed companion. Clicks still reach your apps.", small);
+                GUILayout.Label("Hold the pet for 0.1 seconds to grab it, then release to drop. It watches the cursor naturally.", small);
+            }
+            if (Section("Sound", ref soundOpen))
+            {
+                desktopSounds = GUILayout.Toggle(desktopSounds, " Desktop sounds");
+                GUI.enabled = desktop.Active && desktopSounds;
+                if (GUILayout.Button("Play sample call", GUILayout.Height(28))) desktopVocalizeRequest++;
+                GUI.enabled = true;
+                if (!desktop.Active) GUILayout.Label("Start your desktop pet to hear a sample call.", small);
+                else if (!desktopSounds) GUILayout.Label("Enable sounds to hear a sample call.", small);
+                GUILayout.Label("Head glow and propulsion effects stay active when sound is muted.", small);
+            }
+            if (Section("Advanced preview tools", ref advancedOpen))
+            {
+                GUILayout.Label("These controls adjust the large preview, unless stated otherwise.", small);
+                GUILayout.Space(20);
+                GUILayout.Label("Preview size  " + zoom.ToString("0.0") + "×", subtitle);
+                float nextZoom = GUILayout.HorizontalSlider(zoom, .75f, 4f);
+                if (nextZoom != zoom) { zoom = nextZoom; view?.SetScale(zoom); jumpEffects?.SetScale(zoom); }
+                GUILayout.Space(15);
+                GUI.enabled = !locomotion;
+                GUILayout.Label("VIEW ANGLE", subtitle);
+                float nextDepth = GUILayout.HorizontalSlider(depth, -.95f, .95f);
+                if (nextDepth != depth && reference != null && error == null)
                 {
-                    if (locomotion) BeginMotion();
-                    else { petAudio?.Dispose(); petAudio = null; jumpEffects?.Dispose(); jumpEffects = null; reference.Pose(phase, depth); reference.Draw(); view.Refresh(reference); }
+                    depth = nextDepth;
+                    try { reference.Pose(phase, depth); reference.Draw(); view.Refresh(reference); }
+                    catch (Exception e) { Fail(e); }
                 }
-                catch (Exception e) { locomotion = false; Fail(e); }
+                animate = GUILayout.Toggle(animate, " Gentle pose motion");
+                GUI.enabled = reference != null && error == null;
+                bool nextMotion = GUILayout.Toggle(locomotion, " Crawling / gripping / propulsion");
+                if (nextMotion != locomotion)
+                {
+                    locomotion = nextMotion;
+                    try
+                    {
+                        if (locomotion) BeginMotion();
+                        else { petAudio?.Dispose(); petAudio = null; jumpEffects?.Dispose(); jumpEffects = null; reference.Pose(phase, depth); reference.Draw(); view.Refresh(reference); }
+                    }
+                    catch (Exception e) { locomotion = false; Fail(e); }
+                }
+                if (locomotion)
+                {
+                    soundEnabled = GUILayout.Toggle(soundEnabled, " Pet sounds");
+                    if (petAudio != null) petAudio.Enabled = soundEnabled && !desktop.Active;
+                    if (GUILayout.Button("Vocalize")) petAudio?.Vocalize();
+                    if (audioError != null) GUILayout.Label("Sound unavailable: " + audioError, small);
+                    motion.Roam = GUILayout.Toggle(motion.Roam, " Roam after resting");
+                    clickToExplore = GUILayout.Toggle(clickToExplore, " Click to explore");
+                    interaction.ClickToExplore = clickToExplore;
+                    motion.AutonomousJumps = autonomousJumps && surfaceMode != 2;
+                    GUILayout.Label("MOVEMENT TEST SURFACE", small);
+                    int nextSurface = GUILayout.SelectionGrid(surfaceMode, new[] { "Frame", "Background", "Pole" }, 3);
+                    if (nextSurface != surfaceMode) { surfaceMode = nextSurface; BeginMotion(); }
+                    if (surfaceMode == 2) GUILayout.Label("Pole crawling test; jumping between poles comes later.", small);
+                    if (GUILayout.Button("Propel toward centre")) motion.JumpTo(new Vector2(-40, 15));
+                    showDecisions = GUILayout.Toggle(showDecisions, " Show decision scores");
+                    if (showDecisions) GUILayout.Label(motion.Behavior.DecisionSummary, small);
+                    GUILayout.Label(motion.Behavior.Intent + " / " + motion.State + " · " + motion.GripCount + " feet gripping", small);
+                    GUILayout.Label("Idle: watches cursor. Hold on pet for 0.1s to drag. Release to drop. Click elsewhere to explore. Right click to jump.", small);
+                }
+
+                GUI.enabled = true;
+                if (reference != null)
+                {
+                    GUILayout.Label(reference.Summary ?? "", small);
+                    GUILayout.Label("Tamed companion / personality from ID", small);
+                    GUILayout.Label(reference.Personality.ToString(), small);
+                }
+                if (GUILayout.Button("Save comparison image")) StartCoroutine(Capture());
             }
-            if (locomotion)
-            {
-                soundEnabled = GUILayout.Toggle(soundEnabled, " Pet sounds");
-                if (petAudio != null) petAudio.Enabled = soundEnabled && !desktop.Active;
-                if (GUILayout.Button("Vocalize")) petAudio?.Vocalize();
-                if (audioError != null) GUILayout.Label("Sound unavailable: " + audioError, small);
-                motion.Roam = GUILayout.Toggle(motion.Roam, " Roam after resting");
-                clickToExplore = GUILayout.Toggle(clickToExplore, " Click to explore");
-                interaction.ClickToExplore = clickToExplore;
-                autonomousJumps = GUILayout.Toggle(autonomousJumps, " Autonomous cyan jumps");
-                motion.AutonomousJumps = autonomousJumps && surfaceMode != 2;
-                GUILayout.Label("MOVEMENT TEST SURFACE", small);
-                int nextSurface = GUILayout.SelectionGrid(surfaceMode, new[] { "Frame", "Background", "Pole" }, 3);
-                if (nextSurface != surfaceMode) { surfaceMode = nextSurface; BeginMotion(); }
-                if (surfaceMode == 2) GUILayout.Label("Pole crawling test; jumping between poles comes later.", small);
-                if (GUILayout.Button("Propel toward centre")) motion.JumpTo(new Vector2(-40, 15));
-                showDecisions = GUILayout.Toggle(showDecisions, " Show decision scores");
-                if (showDecisions) GUILayout.Label(motion.Behavior.DecisionSummary, small);
-                GUILayout.Label(motion.Behavior.Intent + " / " + motion.State + " · " + motion.GripCount + " feet gripping", small);
-                GUILayout.Label("Idle: watches cursor. Hold on pet for 0.1s to drag. Release to drop. Click elsewhere to explore. Right click to jump.", small);
-            }
             GUI.enabled = true;
-            GUILayout.Space(18);
-            GUILayout.Label("DESKTOP PET / PRIMARY MONITOR", subtitle);
-            desktopWindowEdges = GUILayout.Toggle(desktopWindowEdges, " Free climbing + visible window edges");
-            GUILayout.Label(desktopWindowEdges ? "Uses window edges and background." : "Monitor frame only.", small);
-            desktopClicks = GUILayout.Toggle(desktopClicks, " React to desktop clicks");
-            if (desktopClicks) GUILayout.Label("Clicks outside the pet also reach your apps.", small);
-            desktopSounds = GUILayout.Toggle(desktopSounds, " Desktop sounds");
-            GUI.enabled = desktop.Active && desktopSounds;
-            if (GUILayout.Button("Vocalize desktop pet")) desktopVocalizeRequest++;
-            GUI.enabled = true;
-            GUILayout.Label("Desktop size " + desktopScale.ToString("0.00") + "×", small);
-            desktopScale = GUILayout.HorizontalSlider(desktopScale, .5f, 2f);
-            GUI.enabled = reference != null && !Application.isEditor;
-            if (!desktop.Active && GUILayout.Button("Start desktop pet"))
-            { try { desktop.Start(DesktopConfiguration()); } catch (Exception e) { Fail(e); } }
-            if (desktop.Active && GUILayout.Button("Stop desktop pet")) desktop.Stop();
-            GUI.enabled = true;
-            if (Application.isEditor) GUILayout.Label("Desktop mode runs in the Windows build.", small);
-            GUILayout.Label("Keep this panel open. Closing it stops the desktop pet.", small);
-            GUILayout.Space(18);
             if (reference == null)
             {
                 GUILayout.Label("RAIN WORLD INSTALLATION", small);
@@ -282,10 +311,19 @@ namespace CyanPreview
                 cache = GUILayout.TextField(cache ?? "");
                 if (GUILayout.Button("Load prepared reference")) LoadReference();
             }
-            else { GUILayout.Label(reference.Summary ?? "", small); GUILayout.Label("Tamed companion / personality from ID", small); GUILayout.Label(reference.Personality.ToString(), small); }
-            GUILayout.Space(12);
-            if (GUILayout.Button("Save comparison image")) StartCoroutine(Capture());
             GUILayout.EndScrollView();
+            GUILayout.EndArea();
+            GUILayout.BeginArea(new Rect(24, Screen.height - 125, panelWidth, 110), GUI.skin.box);
+            GUILayout.Label(desktop.Active ? "Desktop pet is running" : "Desktop pet is stopped", subtitle);
+            GUI.enabled = desktop.Active || (reference != null && reference.Graphics != null && !Application.isEditor);
+            if (GUILayout.Button(desktop.Active ? "Stop desktop pet" : "Start desktop pet", GUILayout.Height(32)))
+            {
+                if (desktop.Active) desktop.Stop();
+                else try { desktop.Start(DesktopConfiguration()); } catch (Exception e) { Fail(e); }
+            }
+            GUI.enabled = true;
+            GUILayout.Label(Application.isEditor ? "Desktop mode needs the Windows build." : reference == null
+                ? "Prepare your game assets to start." : "Keep this panel open while your pet is running.", small);
             GUILayout.EndArea();
             if (locomotion && previewCamera != null)
             {
@@ -298,11 +336,17 @@ namespace CyanPreview
                 if (surfaceMode == 2) GUI.DrawTexture(new Rect(frame.center.x - 1, frame.y, 2, frame.height), Texture2D.whiteTexture);
                 GUI.color = oldColor;
             }
-            GUI.Label(new Rect(Screen.width * .31f, Screen.height - 85, Screen.width * .66f, 25), status, subtitle);
-            GUI.Label(new Rect(Screen.width * .31f, Screen.height - 58, Screen.width * .66f, 45),
+            GUI.Label(new Rect(panelWidth + 40, Screen.height - 85, Screen.width - panelWidth - 60, 25), status, subtitle);
+            GUI.Label(new Rect(panelWidth + 40, Screen.height - 58, Screen.width - panelWidth - 60, 45),
                 "Local game appearance · desktop overlay prototype available · movement is a host adaptation", small);
             if (!string.IsNullOrEmpty(error))
-                GUI.Box(new Rect(Screen.width * .31f, 115, Screen.width * .66f, 220), error);
+                GUI.Box(new Rect(panelWidth + 40, 115, Screen.width - panelWidth - 60, 220), error);
+        }
+        bool Section(string label, ref bool expanded)
+        {
+            GUILayout.Space(8);
+            if (GUILayout.Button((expanded ? "−  " : "+  ") + label, GUILayout.Height(32))) expanded = !expanded;
+            return expanded;
         }
         void ImportReference()
         {

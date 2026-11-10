@@ -260,3 +260,7 @@ reproduce a problem. The app's desktop log is under
 `%USERPROFILE%/AppData/LocalLow/ErraticPu1se/Cyan Lizor Preview/desktop-player.log`.
 Primary-monitor support is the current limit; another laptop has not yet been
 verified. This is an unsigned test build, not an installed or auto-updating release.
+
+### Expandable desktop controls
+
+The control panel groups existing options into Your lizard, Movement, Interaction, Sound, and Advanced preview tools. Start/Stop and pet status remain visible below the scrolling settings. Appearance changes require Apply ID; desktop size applies live and has a reset button. Desktop roaming is independent of preview animation. Background climbing and window edges currently share one toggle. Volume and glow-strength sliders are not yet implemented.
