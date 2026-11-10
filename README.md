@@ -4,7 +4,7 @@ An unofficial Windows desktop pet featuring a cyan lizard from Rain World.
 
 ## Download
 
-**[Download the Windows preview ZIP](https://github.com/ErraticPu1se/cyan-lizor/releases/download/v0.1.0-preview.1/CyanLizor-0.1.0-vocal-hops-win-x64.zip)** · [Release notes](https://github.com/ErraticPu1se/cyan-lizor/releases/tag/v0.1.0-preview.1)
+**[Download the Windows preview ZIP](https://github.com/ErraticPu1se/cyan-lizor/releases/download/v0.1.0-preview.2/CyanLizor-0.1.0-pet-menu-win-x64.zip)** · [Release notes](https://github.com/ErraticPu1se/cyan-lizor/releases/tag/v0.1.0-preview.2)
 
 Download the named **CyanLizor** ZIP, not GitHub's **Source code** archives or **Code → Download ZIP**.
 
@@ -51,6 +51,6 @@ feeding, multiple pets, more lizard species
 
 [Report a problem](https://github.com/ErraticPu1se/cyan-lizor/issues) with your Windows version, display scaling, lizard ID, and reproduction steps. The desktop log is at `%USERPROFILE%\AppData\LocalLow\ErraticPu1se\Cyan Lizor Preview\desktop-player.log`.
 
-[Developer build instructions](docs/development.md) · [Source for this release](https://github.com/ErraticPu1se/cyan-lizor/tree/v0.1.0-preview.1)
+[Developer build instructions](docs/development.md) · [Source for this release](https://github.com/ErraticPu1se/cyan-lizor/tree/v0.1.0-preview.2)
 
 Rain World belongs to its respective creators and rights holders. This unofficial project does not distribute game assemblies, extracted graphics, audio, or decompiled sources. Third-party dependency notices accompany the download.
