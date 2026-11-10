@@ -14,8 +14,33 @@ namespace CyanPreview
         SpriteMeshView view;
         Camera previewCamera;
         string id = "12345", cache, status = "Choose your prepared local reference folder.", error;
-        float zoom = 2.5f, depth = .7f, phase;
-        bool animate;
+        float zoom = 1f, depth = .7f, phase;
+        bool animate, locomotion;
+        PetMotion motion;
+        PetInteraction interaction;
+        CyanJumpEffects jumpEffects;
+        bool clickToExplore = true, autonomousJumps = true;
+        Vector2 panelScroll;
+        int surfaceMode;
+        readonly FrameSurfaces movementFrame = new FrameSurfaces(new Rect(-360, -180, 720, 360));
+        Rect MovementScreenRect()
+        {
+            var a = previewCamera.WorldToScreenPoint(new Vector3(movementFrame.Bounds.xMin * zoom, movementFrame.Bounds.yMin * zoom, 0));
+            var b = previewCamera.WorldToScreenPoint(new Vector3(movementFrame.Bounds.xMax * zoom, movementFrame.Bounds.yMax * zoom, 0));
+            return new Rect(a.x, Screen.height - b.y, b.x - a.x, b.y - a.y);
+        }
+        void BeginMotion()
+        {
+            reference.Pose(0, surfaceMode == 1 ? 0 : .7f);
+            interaction?.Cancel();
+            jumpEffects?.Dispose();
+            IPetSurfaces surfaces = surfaceMode == 1 ? (IPetSurfaces)new BackgroundSurfaces(movementFrame.Bounds)
+                : surfaceMode == 2 ? (IPetSurfaces)new PoleSurfaces(movementFrame.Bounds, 0) : movementFrame;
+            motion = new PetMotion(reference, surfaces) { AutonomousJumps = autonomousJumps && surfaceMode != 2 };
+            jumpEffects = new CyanJumpEffects(transform, motion, reference.EffectColor, reference.Seed);
+            jumpEffects.SetScale(zoom);
+            interaction = new PetInteraction(motion) { ClickToExplore = clickToExplore };
+        }
         string gameFolder = @"C:\Program Files (x86)\Steam\steamapps\common\Rain World";
         Process importer;
         Task<string> importerOutput, importerError;
@@ -28,7 +53,7 @@ namespace CyanPreview
         }
         void Start()
         {
-            Application.targetFrameRate = 30;
+            Application.targetFrameRate = 60;
             var backgroundCamera = new GameObject("Background camera").AddComponent<Camera>();
             backgroundCamera.depth = -10;
             backgroundCamera.cullingMask = 0;
@@ -66,6 +91,7 @@ namespace CyanPreview
                 reference.Generate(id);
                 phase = 0;
                 reference.Pose(phase, depth);
+                if (locomotion) BeginMotion();
                 reference.Draw();
                 view.Refresh(reference);
                 view.SetScale(zoom);
@@ -93,17 +119,38 @@ namespace CyanPreview
                 }
             }
             if (previewCamera != null)
+            {
                 previewCamera.rect = new Rect(.29f, .12f, .71f, .75f);
-            if (reference == null || reference.Graphics == null || error != null || !animate) return;
+                previewCamera.orthographicSize = locomotion ? Mathf.Max(205, 390 / previewCamera.aspect) * zoom : 130;
+                previewCamera.transform.position = new Vector3(locomotion ? 0 : -40, 0, -10);
+            }
+            if (reference == null || reference.Graphics == null || error != null || (!animate && !locomotion)) return;
             try
             {
-                phase += Time.deltaTime * 1.5f;
-                reference.Pose(phase, depth);
-                reference.Draw();
+                if (locomotion)
+                {
+                    var mouse = Input.mousePosition;
+                    var point = (Vector2)previewCamera.ScreenToWorldPoint(mouse) / zoom;
+                    motion.LookAt(point);
+                    bool inside = previewCamera.pixelRect.Contains(mouse);
+                    if (inside && Input.GetMouseButtonDown(0)) interaction.Press(point);
+                    if (Input.GetMouseButton(0)) interaction.Hold(point, Time.deltaTime);
+                    if (Input.GetMouseButtonUp(0)) interaction.Release(point, inside);
+                    if (inside && Input.GetMouseButtonDown(1)) motion.JumpTo(point);
+                    motion.Advance(Time.deltaTime);
+                    jumpEffects.Advance(Time.deltaTime);
+                }
+                else
+                {
+                    phase += Time.deltaTime * 1.5f;
+                    reference.Pose(phase, depth);
+                }
+                reference.Draw(locomotion ? motion.Interpolation : 1f);
                 view.Refresh(reference);
             }
-            catch (Exception e) { animate = false; Fail(e); }
+            catch (Exception e) { animate = locomotion = false; Fail(e); }
         }
+        void OnApplicationFocus(bool focused) { if (!focused) interaction?.Cancel(); }
         void OnGUI()
         {
             if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Return && GUI.GetNameOfFocusedControl() == "CreatureId" && reference != null)
@@ -116,9 +163,10 @@ namespace CyanPreview
                 title.normal.textColor = new Color(.35f, .95f, .88f);
             }
             GUI.Label(new Rect(24, 18, Screen.width - 48, 40), "CYAN LIZOR", title);
-            GUI.Label(new Rect(25, 59, Screen.width - 50, 28), "Appearance lab / original ID generation / controlled preview pose", subtitle);
+            GUI.Label(new Rect(25, 59, Screen.width - 50, 28), "Cyan lab / original ID generation / movement playground", subtitle);
             float panelWidth = Mathf.Max(235, Screen.width * .26f);
             GUILayout.BeginArea(new Rect(24, 111, panelWidth, Screen.height - 140), GUI.skin.box);
+            panelScroll = GUILayout.BeginScrollView(panelScroll);
             GUILayout.Space(12);
             GUILayout.Label("CREATURE ID", subtitle);
             GUI.SetNextControlName("CreatureId");
@@ -130,8 +178,9 @@ namespace CyanPreview
             GUILayout.Space(20);
             GUILayout.Label("SIZE  " + zoom.ToString("0.0") + "×", subtitle);
             float nextZoom = GUILayout.HorizontalSlider(zoom, .75f, 4f);
-            if (nextZoom != zoom) { zoom = nextZoom; view?.SetScale(zoom); }
+            if (nextZoom != zoom) { zoom = nextZoom; view?.SetScale(zoom); jumpEffects?.SetScale(zoom); }
             GUILayout.Space(15);
+            GUI.enabled = !locomotion;
             GUILayout.Label("VIEW ANGLE", subtitle);
             float nextDepth = GUILayout.HorizontalSlider(depth, -.95f, .95f);
             if (nextDepth != depth && reference != null && error == null)
@@ -141,7 +190,34 @@ namespace CyanPreview
                 catch (Exception e) { Fail(e); }
             }
             animate = GUILayout.Toggle(animate, " Gentle pose motion");
-            GUILayout.Label("Motion is a preview pose, not game locomotion.", small);
+            GUI.enabled = reference != null && error == null;
+            bool nextMotion = GUILayout.Toggle(locomotion, " Crawling / gripping / propulsion");
+            if (nextMotion != locomotion)
+            {
+                locomotion = nextMotion;
+                try
+                {
+                    if (locomotion) BeginMotion();
+                    else { jumpEffects?.Dispose(); jumpEffects = null; reference.Pose(phase, depth); reference.Draw(); view.Refresh(reference); }
+                }
+                catch (Exception e) { locomotion = false; Fail(e); }
+            }
+            if (locomotion)
+            {
+                motion.Roam = GUILayout.Toggle(motion.Roam, " Roam after resting");
+                clickToExplore = GUILayout.Toggle(clickToExplore, " Click to explore");
+                interaction.ClickToExplore = clickToExplore;
+                autonomousJumps = GUILayout.Toggle(autonomousJumps, " Autonomous cyan jumps");
+                motion.AutonomousJumps = autonomousJumps && surfaceMode != 2;
+                GUILayout.Label("MOVEMENT TEST SURFACE", small);
+                int nextSurface = GUILayout.SelectionGrid(surfaceMode, new[] { "Frame", "Background", "Pole" }, 3);
+                if (nextSurface != surfaceMode) { surfaceMode = nextSurface; BeginMotion(); }
+                if (surfaceMode == 2) GUILayout.Label("Pole crawling test; jumping between poles comes later.", small);
+                if (GUILayout.Button("Propel toward centre")) motion.JumpTo(new Vector2(-40, 15));
+                GUILayout.Label(motion.Behavior.Intent + " / " + motion.State + " · " + motion.GripCount + " feet gripping", small);
+                GUILayout.Label("Idle: watches cursor. Hold on pet for 0.1s to drag. Release to drop. Click elsewhere to explore. Right click to jump.", small);
+            }
+            GUI.enabled = true;
             GUILayout.Space(18);
             if (reference == null)
             {
@@ -158,10 +234,22 @@ namespace CyanPreview
             else GUILayout.Label(reference.Summary ?? "", small);
             GUILayout.Space(12);
             if (GUILayout.Button("Save comparison image")) StartCoroutine(Capture());
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
+            if (locomotion && previewCamera != null)
+            {
+                var frame = MovementScreenRect();
+                var oldColor = GUI.color; GUI.color = new Color(.2f, .8f, .75f, .5f);
+                GUI.DrawTexture(new Rect(frame.x, frame.y, frame.width, 2), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(frame.x, frame.yMax - 2, frame.width, 2), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(frame.x, frame.y, 2, frame.height), Texture2D.whiteTexture);
+                GUI.DrawTexture(new Rect(frame.xMax - 2, frame.y, 2, frame.height), Texture2D.whiteTexture);
+                if (surfaceMode == 2) GUI.DrawTexture(new Rect(frame.center.x - 1, frame.y, 2, frame.height), Texture2D.whiteTexture);
+                GUI.color = oldColor;
+            }
             GUI.Label(new Rect(Screen.width * .31f, Screen.height - 85, Screen.width * .66f, 25), status, subtitle);
             GUI.Label(new Rect(Screen.width * .31f, Screen.height - 58, Screen.width * .66f, 45),
-                "Neutral preview palette · no mods · visual parity awaiting in-game comparison", small);
+                "Local game appearance · desktop window integration pending · movement is a host adaptation", small);
             if (!string.IsNullOrEmpty(error))
                 GUI.Box(new Rect(Screen.width * .31f, 115, Screen.width * .66f, 220), error);
         }
@@ -199,6 +287,6 @@ namespace CyanPreview
             Destroy(image);
             status = "Saved: " + file;
         }
-        void OnDestroy() { view?.Dispose(); reference?.Dispose(); context?.Dispose(); }
+        void OnDestroy() { jumpEffects?.Dispose(); view?.Dispose(); reference?.Dispose(); context?.Dispose(); }
     }
 }

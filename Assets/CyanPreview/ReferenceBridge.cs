@@ -17,6 +17,7 @@ namespace CyanPreview
     public sealed class ReferenceBridge : IDisposable
     {
         readonly ReferenceContext context;
+        internal ReferenceContext Context => context;
         bool disposed;
         public Guid PetId { get; } = Guid.NewGuid();
         public LizardSpecies Species { get; }
@@ -193,11 +194,11 @@ namespace CyanPreview
             }
             finally { UnityEngine.Random.state = random; }
         }
-        public void Draw()
+        public void Draw(float interpolation = 1f)
         {
             EnsureAlive();
             var state = UnityEngine.Random.state;
-            try { Call(Graphics, "DrawSprites", Leaser, Camera, 1f, Vector2.zero); }
+            try { Call(Graphics, "DrawSprites", Leaser, Camera, Mathf.Clamp01(interpolation), Vector2.zero); }
             finally { UnityEngine.Random.state = state; }
         }
         public IEnumerable<object> OrderedSprites => ((IEnumerable)Get(Container, "_childNodes")).Cast<object>()

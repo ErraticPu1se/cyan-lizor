@@ -10,6 +10,7 @@ namespace CyanPreview
         public abstract string Id { get; }
         public abstract string DisplayName { get; }
         public virtual float HeadLightRadius => 0;
+        public abstract MovementCapabilities Movement { get; }
         internal abstract object CreateLizard(ReferenceContext context, int spawner, int seed);
         static readonly LizardSpecies cyan = new CyanSpecies();
         public static LizardSpecies Find(string id)
@@ -24,6 +25,7 @@ namespace CyanPreview
         public override string Id => "cyan";
         public override string DisplayName => "Cyan lizard";
         public override float HeadLightRadius => 100f;
+        public override MovementCapabilities Movement { get; } = new MovementCapabilities(true, 2.4f, 14f, 50f);
         internal override object CreateLizard(ReferenceContext context, int spawner, int seed)
         {
             var cyan = context.Static("CreatureTemplate+Type", "CyanLizard");

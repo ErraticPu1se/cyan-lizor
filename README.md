@@ -93,3 +93,31 @@ the game implementation, textures, audio, or decompiled reference sources.
 
 Third-party importer dependencies and their licenses accompany packaged builds.
 No public release or installer publication happens automatically from a commit.
+
+## Pet behavior and interaction preview
+
+Movement mode starts idle, watches the cursor while idle, and selects a new
+roaming destination after a 8–15 second rest. Behavior (idle/roam/pursuit) is
+separate from physical state (crawl/charge/airborne/grabbed). Both belong to one
+pet; neither shares its timers, destinations or random generator with another.
+
+- **Click to explore** controls short clicks away from the pet.
+- Hold on the pet for **0.1 seconds** to grab, move the cursor to drag, release
+  to drop. Losing focus cancels a grab safely. Dragging never becomes a click
+  destination.
+- **Autonomous cyan jumps** samples ballistic candidates and predicted surface
+  landings. This follows JumpFinder's candidate-selection approach but is a
+  desktop adapter, not the original game's complete tile/path search.
+- The movement lab offers **Frame**, **Background**, and **Pole** surfaces. Pole
+  mode tests crawling on a single vertical rail; autonomous jumps are disabled
+  there until rail-to-rail landing support is implemented.
+
+These are preview surfaces, not real desktop windows. Moving-window tracking,
+transparent overlay, transfers between poles/windows, and exact game AI parity
+remain unimplemented.
+
+Roaming bouts last 15–25 seconds, choosing additional destinations within each
+bout. The default test arena is 720 × 360 world units (previously 180 × 84),
+with a 1× default pet scale and a 1440 × 900 default player window.
+Cyan jumps include a smoke burst/trail, bubbles, flash and expanding shockwave,
+adapted from the locally inspected game behavior to preview shaders.

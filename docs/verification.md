@@ -74,3 +74,54 @@ Tail constraints run over a bounded settling interval, not a complete room
 simulation. Cyan propulsion, jumping, gripping and collision navigation remain
 unimplemented. Screenshot lighting/poses are not standardized, so exact visual
 parity is still unproven; no seed parameters were tuned to fit a screenshot.
+
+## Autonomous roaming regression (2026-11-10)
+
+`PreviewBuild.Verify` now simulates roaming without cursor clicks for behavior
+seeds 0, 1, 42 and 73. Each must move at least 25 units, enter idle, then move at
+least 25 units again after resuming. The initial test reproduced a stall.
+
+Corrections: use perimeter routes instead of comparing straight-line distances
+across the frame, let behavior own arrival detection using the projected surface
+position, steer around corners using the upcoming surface normal, and bend the
+leading body chunk when reversing direction. These are desktop adapter rules,
+not execution of the complete Rain World AI.
+
+The four roaming cases and existing head-target, idle/pursuit, jump/landing,
+pet-independence and appearance checks pass in an isolated Unity project copy.
+Logs are in the workspace research folder (`unity-roaming-before.log`,
+`unity-roaming-after.log`, `unity-roaming-build.log`). No interactive visual
+verification of this final fix has been performed.
+
+## Behavior / interaction verification (2026-11-10)
+
+`PetInteractionChecks.Run` is included in `PreviewBuild.Verify`. It checks
+initial idle, optional click exploration, short press versus hold, drag offset,
+autonomy suppression while held, release without accidental exploration,
+drop/landing, focus-loss cancellation, autonomous charging/jumping/landing,
+and climbing/gripping on background and pole test surfaces. These pass together
+with the four autonomous roaming sequences and the existing graphics/motion
+checks. Full output: workspace `research/unity-interaction-verify.log`.
+
+Jump landing predictions use host boundary geometry and do not guarantee the
+full body's exact landing point; body steering and tail constraints remain
+active during the actual jump. Pole-to-pole jump planning is not implemented.
+
+
+## Timing, arena and effects update (2026-11-10)
+
+Grab threshold: 0.1s; idle: 8–15s; roaming bout: 15–25s. A timed roaming bout
+returns to idle even if its current destination has not been reached. Autonomous
+jumps wait for roaming rather than interrupting idle. The arena is 720 × 360
+world units with a 1× default scale; default window is 1440 × 900.
+
+`JumpEffectChecks.Run` verifies timing bounds, launch-event timing, a burst with
+at least nine particles, eventual expiration, and preservation of global random
+state in the larger arena. All prior motion/interaction checks also passed.
+Logs: `research/unity-effects-verify.log` and `research/unity-effects-build.log`
+in the parent workspace (not shipped).
+
+Effects research: local `LizardJumpModule.Jump`, `JumpingUpdate`, `JumpLight`, and
+`Smoke.CyanLizardSmoke`. The preview maps their burst/trail, power-dependent
+lifetimes, flash, bubbles and shockwave into bounded per-pet particle meshes.
+It does not load game room shaders or reproduce underwater/terrain lighting.
