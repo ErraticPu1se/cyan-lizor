@@ -12,7 +12,7 @@ namespace CyanPreview
         readonly System.Random random;
         Vector2? destination;
         bool explicitTarget;
-        int restTicks, roamTicks, interestTicks;
+        int restTicks, roamTicks, interestTicks, inspectionStepTicks;
         Vector2? interest;
         public Vector2? InterestPoint => interest;
         public const int IdleMinTicks = 320, IdleMaxTicks = 601;
@@ -36,13 +36,28 @@ namespace CyanPreview
         {
             if (Intent == PetIntent.Inspecting || Intent == PetIntent.Settling)
             {
-                RunSpeed = Mathf.Lerp(RunSpeed, 0, .08f);
+                bool inspecting = Intent == PetIntent.Inspecting;
                 if (--interestTicks <= 0)
                 {
-                    if (Intent == PetIntent.Inspecting) { Intent = PetIntent.Settling; interestTicks = random.Next(60, 101); }
+                    destination = null;
+                    if (inspecting) { Intent = PetIntent.Settling; interestTicks = random.Next(60, 101); }
                     else Rest();
+                    RunSpeed = Mathf.Lerp(RunSpeed, 0, .08f);
+                    return null;
                 }
-                return null;
+                if (inspecting && interest.HasValue)
+                {
+                    if (--inspectionStepTicks <= 0)
+                    {
+                        // Explore a small, surface-valid neighbourhood of the click.
+                        // Live cursor motion changes attention, not this body's goal.
+                        destination = surfaces.Advance(interest.Value, random.Next(24, 41) * (random.Next(2) == 0 ? -1 : 1));
+                        inspectionStepTicks = random.Next(35, 56);
+                    }
+                    if (destination.HasValue && Vector2.Distance(surfaces.Nearest(position, out _), destination.Value) < 8) destination = null;
+                }
+                RunSpeed = Mathf.Lerp(RunSpeed, inspecting && destination.HasValue ? .18f : 0, .08f);
+                return inspecting ? destination : null;
             }
             if (roamTicks > 0 && --roamTicks == 0 && !explicitTarget) Rest();
             if (!Roam && !explicitTarget) destination = null;
@@ -51,7 +66,7 @@ namespace CyanPreview
                 destination = null;
                 if (explicitTarget)
                 {
-                    explicitTarget = false; Intent = PetIntent.Inspecting; interestTicks = random.Next(80, 161);
+                    explicitTarget = false; inspectionStepTicks = 0; Intent = PetIntent.Inspecting; interestTicks = random.Next(80, 161);
                     RunSpeed = Mathf.Lerp(RunSpeed, 0, .08f); return null;
                 }
                 if (roamTicks == 0) Rest();

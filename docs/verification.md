@@ -221,3 +221,21 @@ All existing movement, grab boundaries, propulsion, rendering and audio checks p
 Windows build succeeded (`research/unity-companion-build.log`). Native player UI
 showed personality values and Investigating, Inspecting and Settling states with
 no runtime exceptions. Build: `Builds/CompanionPreview/CyanLizor.exe` (ignored).
+
+## Cursor attention and nearby exploration (2026-11-10)
+
+After a click, live cursor position drives head attention during investigation,
+inspection and settling. Charge/flight retain landing-target attention for posture.
+The exploration centre stays at the clicked location, so cursor movement alone
+cannot drag the body around. Inspection selects small surface-valid destinations
+24-40 units around the click, walks at a lower speed, and then settles. No extra
+propulsion is requested for these local inspection steps. Voice particles unchanged.
+
+Full verification passed (`research/unity-cursor-verify.log`): live cursor attention,
+body movement during inspection, click-centre stability, no local jump, and bounded
+surface-valid destinations at centre/corners on background, frame and pole. Existing
+inspection interruption and settling, personality, grab, autonomy and rendering
+checks pass. The pole climb check now verifies that it climbed with gripping feet
+before inspection can legitimately walk back down. Windows build succeeded
+(`research/unity-cursor-build.log`). Local build: `Builds/CursorPreview/CyanLizor.exe`.
+Exact naturalness remains a visual comparison task; this is desktop exploration.

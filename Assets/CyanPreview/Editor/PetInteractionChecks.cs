@@ -62,8 +62,14 @@ namespace CyanPreview.Editor
                 var motion = new PetMotion(pet, surfaces, 1) { Roam = false };
                 var initial = motion.Position;
                 motion.MoveTo(new Vector2(-40, 35));
-                for (int i = 0; i < 300; i++) motion.Advance(.025f);
-                Require(motion.Position.y > initial.y + 8 && motion.GripCount > 0, surfaces.GetType().Name + " did not climb and grip");
+                bool climbedWithGrip = false;
+                for (int i = 0; i < 300; i++)
+                {
+                    motion.Advance(.025f);
+                    climbedWithGrip |= motion.Position.y > initial.y + 8 && motion.GripCount > 0;
+                }
+                // Inspection may walk back down after reaching the destination.
+                Require(climbedWithGrip, surfaces.GetType().Name + " did not climb and grip");
                 pet.Draw();
                 Debug.Log("CLIMB_SURFACE_CHECK_PASSED " + surfaces.GetType().Name);
             }

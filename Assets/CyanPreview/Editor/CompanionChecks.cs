@@ -36,6 +36,44 @@ namespace CyanPreview.Editor
                 for (int i = 0; i < 700; i++) behavior.Update(Vector2.zero, surface);
                 Require(behavior.Intent != PetIntent.Inspecting && behavior.Intent != PetIntent.Settling, "Autonomy stuck in inspection");
             }
+            foreach (IPetSurfaces geometry in new IPetSurfaces[] { surface, new FrameSurfaces(new Rect(-360, -180, 720, 360)), new PoleSurfaces(new Rect(-360, -180, 720, 360), 0) })
+            foreach (Vector2 point in new[] { Vector2.zero, new Vector2(352, 172), new Vector2(-352, -172) })
+            {
+                var clicked = geometry.Nearest(point, out _);
+                var behavior = new PetBehavior(42) { Roam = false };
+                behavior.Target(clicked); behavior.Update(clicked, geometry);
+                int goals = 0;
+                for (int i = 0; i < 160; i++)
+                {
+                    var goal = behavior.Update(clicked, geometry);
+                    if (!goal.HasValue) continue;
+                    goals++;
+                    Require(Vector2.Distance(clicked, goal.Value) <= 41, "Inspection wandered outside clicked neighbourhood");
+                    Require(Vector2.Distance(goal.Value, geometry.Nearest(goal.Value, out _)) < .01f, "Inspection selected an unsupported position");
+                    Require(!behavior.ExplorationTarget.HasValue, "Inspection became a propulsion target");
+                }
+                Require(goals > 0, "Inspection never explored around click");
+            }
+            using (var pet = context.CreatePet())
+            {
+                pet.Generate("42");
+                var motion = new PetMotion(pet, surface, 42) { Roam = false };
+                var clicked = motion.Position;
+                motion.MoveTo(clicked); motion.Advance(.025f);
+                float moved = 0;
+                for (int i = 0; i < 75; i++)
+                {
+                    var cursor = new Vector2(i % 2 == 0 ? -200 : 200, 100);
+                    motion.LookAt(cursor);
+                    var before = motion.Position; motion.Advance(.025f);
+                    moved += Vector2.Distance(before, motion.Position);
+                    Require((Vector2)Get(pet.Graphics, "lookPos") == cursor, "Inspection ignored live cursor attention");
+                    Require(motion.Behavior.InterestPoint == clicked, "Cursor motion moved the clicked exploration centre");
+                    Require(motion.State == PetMotionState.Crawling, "Local exploration launched unnecessarily");
+                }
+                Require(moved > 5, "Local inspection did not move body");
+            }
+            Debug.Log("CURSOR_ATTENTION_LOCAL_EXPLORATION_CHECK_PASSED");
             using (var first = context.CreatePet())
             using (var second = context.CreatePet())
             {
