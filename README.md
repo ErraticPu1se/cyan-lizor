@@ -1,6 +1,7 @@
 # Cyan Lizor
 
 An unofficial **Windows desktop pet** featuring one cyan lizard from Rain World. Built with Unity, it generates appearance from a creature ID using your own local game installation.
+current only support the current rain world version and need rain world installed in your local computer.
 
 ## Current functionality
 
