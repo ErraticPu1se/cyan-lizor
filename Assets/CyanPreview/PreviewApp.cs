@@ -21,6 +21,9 @@ namespace CyanPreview
         CyanJumpEffects jumpEffects;
         CyanPetAudio petAudio;
         bool soundEnabled = true, showDecisions;
+        readonly DesktopLauncher desktop = new DesktopLauncher();
+        bool desktopWindowEdges, desktopClicks;
+        float desktopScale = .75f;
         string audioError;
         bool clickToExplore = true, autonomousJumps = true;
         Vector2 panelScroll;
@@ -56,6 +59,7 @@ namespace CyanPreview
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Bootstrap()
         {
+            if (DesktopApp.Requested) { new GameObject("Desktop pet").AddComponent<DesktopApp>(); return; }
             if (FindObjectOfType<PreviewApp>() == null) new GameObject("Cyan Lizor Preview").AddComponent<PreviewApp>();
         }
         void Start()
@@ -115,8 +119,15 @@ namespace CyanPreview
             error = e.Message;
             Debug.LogException(e);
         }
+        DesktopSettings DesktopConfiguration() => new DesktopSettings { id = reference.Identity, cache = cache, scale = desktopScale,
+            windowEdges = desktopWindowEdges, clickToExplore = desktopClicks, roam = motion?.Roam ?? true, jumps = autonomousJumps };
         void Update()
         {
+            if (desktop.Active)
+            {
+                try { desktop.UpdateSettings(DesktopConfiguration()); }
+                catch (Exception e) { error = "Desktop settings: " + e.Message; }
+            }
             if (importer != null && importer.HasExited && importerOutput.IsCompleted && importerError.IsCompleted)
             {
                 if (importer.ExitCode == 0) { importer.Dispose(); importer = null; LoadReference(); }
@@ -234,6 +245,21 @@ namespace CyanPreview
             }
             GUI.enabled = true;
             GUILayout.Space(18);
+            GUILayout.Label("DESKTOP PET / PRIMARY MONITOR", subtitle);
+            desktopWindowEdges = GUILayout.Toggle(desktopWindowEdges, " Free climbing + visible window edges");
+            GUILayout.Label(desktopWindowEdges ? "Uses window edges and background." : "Monitor frame only.", small);
+            desktopClicks = GUILayout.Toggle(desktopClicks, " React to desktop clicks");
+            if (desktopClicks) GUILayout.Label("Clicks outside the pet also reach your apps.", small);
+            GUILayout.Label("Desktop size " + desktopScale.ToString("0.00") + "×", small);
+            desktopScale = GUILayout.HorizontalSlider(desktopScale, .5f, 2f);
+            GUI.enabled = reference != null && !Application.isEditor;
+            if (!desktop.Active && GUILayout.Button("Start desktop pet"))
+            { try { desktop.Start(DesktopConfiguration()); } catch (Exception e) { Fail(e); } }
+            if (desktop.Active && GUILayout.Button("Stop desktop pet")) desktop.Stop();
+            GUI.enabled = true;
+            if (Application.isEditor) GUILayout.Label("Desktop mode runs in the Windows build.", small);
+            GUILayout.Label("Keep this panel open. Closing it stops the desktop pet.", small);
+            GUILayout.Space(18);
             if (reference == null)
             {
                 GUILayout.Label("RAIN WORLD INSTALLATION", small);
@@ -264,7 +290,7 @@ namespace CyanPreview
             }
             GUI.Label(new Rect(Screen.width * .31f, Screen.height - 85, Screen.width * .66f, 25), status, subtitle);
             GUI.Label(new Rect(Screen.width * .31f, Screen.height - 58, Screen.width * .66f, 45),
-                "Local game appearance · desktop window integration pending · movement is a host adaptation", small);
+                "Local game appearance · desktop overlay prototype available · movement is a host adaptation", small);
             if (!string.IsNullOrEmpty(error))
                 GUI.Box(new Rect(Screen.width * .31f, 115, Screen.width * .66f, 220), error);
         }
@@ -302,6 +328,6 @@ namespace CyanPreview
             Destroy(image);
             status = "Saved: " + file;
         }
-        void OnDestroy() { petAudio?.Dispose(); jumpEffects?.Dispose(); view?.Dispose(); reference?.Dispose(); context?.Dispose(); }
+        void OnDestroy() { desktop.Dispose(); petAudio?.Dispose(); jumpEffects?.Dispose(); view?.Dispose(); reference?.Dispose(); context?.Dispose(); }
     }
 }

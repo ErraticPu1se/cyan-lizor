@@ -25,6 +25,7 @@ namespace CyanPreview.Editor
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
             PlayerSettings.resizableWindow = true;
             PlayerSettings.runInBackground = true;
+            PlayerSettings.useFlipModelSwapchain = false;
             PlayerSettings.SetScriptingBackend(BuildTargetGroup.Standalone, ScriptingImplementation.Mono2x);
             PlayerSettings.SetManagedStrippingLevel(BuildTargetGroup.Standalone, ManagedStrippingLevel.Disabled);
             AssetDatabase.SaveAssets();
@@ -121,6 +122,7 @@ namespace CyanPreview.Editor
                 if (reference.Summary != first || reference.EffectColor != color)
                     throw new Exception("Prior generations changed the result");
                 VerifyIndependentPets(context, reference);
+                DesktopChecks.Run(context);
                 UtilityChecks.Run(context);
                 CompanionChecks.Run(context);
                 TargetingChecks.Run(context);

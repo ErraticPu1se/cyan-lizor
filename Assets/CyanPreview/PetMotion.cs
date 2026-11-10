@@ -119,6 +119,12 @@ namespace CyanPreview
             if (State != PetMotionState.Grabbed) return;
             grabAnchor = surfaces.Constrain(point + grabOffset, 8, out _);
             var delta = grabAnchor - (Vector2)Get(chunks[grabbedChunk], "pos");
+            ShiftWithSurface(delta);
+        }
+        public void ShiftWithSurface(Vector2 delta)
+        {
+            if (float.IsNaN(delta.x) || float.IsNaN(delta.y) || float.IsInfinity(delta.x) || float.IsInfinity(delta.y)) throw new ArgumentOutOfRangeException(nameof(delta));
+            for (int i = 0; i < restingPose.Length; i++) restingPose[i] += delta;
             foreach (var chunk in chunks) { TranslatePart(chunk, delta); Set(chunk, "vel", Vector2.zero); }
             // Carry the complete pose, including interpolation history. Feet must
             // not chase an externally moved body at their normal crawling speed.

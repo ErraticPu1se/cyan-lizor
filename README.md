@@ -176,3 +176,43 @@ must remain distinct from prey targets. A carried meal should make den return th
 preferred task; missing/moved dens or removed prey must invalidate only that task.
 These additions belong in decisions and target ownership, with the current movement
 controller executing routes. No placeholder prey or den objects are created now.
+
+
+### Desktop integration prototype
+
+The den experiment is preserved separately on `prototype/movable-den` (commit
+`8ab4843`). This branch, `feature/desktop-integration`, starts from the den-free
+cyan preview. Den and feeding behavior are not enabled here.
+
+In the Windows player, generate a cyan and choose **Start desktop pet**. Keep the
+control panel open; **Stop desktop pet** or closing the panel stops its companion
+process. The Unity Editor keeps the preview but does not launch the overlay.
+
+The overlay covers the primary monitor's work area, renders the pet against a
+transparent background, and passes mouse input through outside the pet. Existing
+movement, utility decisions, cursor attention and 0.1-second grabbing are reused.
+The desktop size slider is separate from the large preview's size.
+
+- Default movement follows the monitor work-area frame.
+- **Free climbing + visible window edges** allows background movement and uses
+  nearby visible application edges as grips. Windows are sampled four times a
+  second; translating a gripped window carries the body and feet together.
+- **React to desktop clicks** is off by default. When enabled, clicks outside the
+  pet still reach the underlying application while inviting exploration. Control
+  panel clicks are excluded.
+- The host reads window rectangles and visibility, not titles or application
+  contents. It only changes the styles of its own overlay window.
+
+This is a first Windows integration milestone: primary monitor only, one cyan,
+no tray controls or installer yet. Desktop audio, jump smoke and soft head glow
+are not connected; those remain available in the preview. Color-key transparency
+is used, so soft translucent effects need a later rendering pass. Window-edge
+navigation is local, not a complete pathfinder around overlapping applications.
+Fast resizing, mixed-DPI monitors and native dragging need more hands-on testing.
+
+Validation: full `PreviewBuild.Verify` suite and Windows player build passed.
+New checks cover coordinate scaling and negative screen origins, covered/removed
+window edges, frame-only behavior, and moving the body and feet together.
+Live Windows checks confirmed a visible transparent overlay, usable underlying
+controls and Start/Stop shutdown. These checks do not establish full native drag
+or moving-window behavior across different desktop configurations.

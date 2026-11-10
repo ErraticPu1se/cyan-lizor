@@ -32,12 +32,13 @@ namespace CyanPreview
             glowRenderer.sortingOrder = -1;
             headGlow.SetActive(false);
         }
+        public bool HeadGlowEnabled { get; set; } = true;
         public void SetScale(float scale) => root.localScale = Vector3.one * scale;
 
         public void Refresh(ReferenceBridge reference)
         {
             // shortcut: local light spill only; match room lighting once a desktop surface model exists.
-            headGlow.SetActive(reference.Species.HeadLightRadius > 0);
+            headGlow.SetActive(HeadGlowEnabled && reference.Species.HeadLightRadius > 0);
             headGlow.transform.localPosition = reference.HeadPosition;
             headGlow.transform.localScale = Vector3.one * reference.Species.HeadLightRadius;
             var lightColor = reference.EffectColor;
