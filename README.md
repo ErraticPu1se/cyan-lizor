@@ -1,85 +1,46 @@
 # Cyan Lizor
 
-An unofficial **Windows desktop pet** featuring one cyan lizard from Rain World. Built with Unity, it generates appearance from a creature ID using your own local game installation.
-current only support the current rain world version and need rain world installed in your local computer.
+An unofficial Windows desktop pet featuring a cyan lizard from Rain World.
 
-## Current functionality
+## Download
 
-- **ID-based appearance:** enter a seed number or full `ID.spawner.number`, then select **Apply ID**. Graphics and personality values come from the supported local game build.
-- **Desktop movement:** independent roaming, crawling, gripping, and cyan propulsion. The default surface is the primary monitor's work-area frame. An optional mode combines background climbing with visible window-edge attachment; attached pets follow window movement and resizing.
-- **Friendly interaction:** cursor attention and optional **Explore where I click** behavior. The pet approaches, investigates, and settles with idle body movement. The cursor is not treated as prey.
-- **Grabbing:** hold the pet for **0.1 seconds**, drag, and release to drop. Clicks outside the pet pass through to your applications; click exploration is off by default.
-- **Personality-influenced decisions:** utility-based resting, exploration, and invited cursor-following. Energy, sympathy, and bravery influence the desktop adaptation's decisions.
-- **Sound and effects:** cyan charge/launch sounds, calls, head bubbles, propulsion particles, and smoothly fading head lighting. Desktop sound can be muted independently of visual effects.
-- **Expandable controls:** Your lizard, Movement, Interaction, Sound, and Advanced preview tools. Desktop size has a live slider and Reset button; pet status and Start/Stop remain visible outside the scrolling settings.
-- **Preview tools:** separate preview size, view angle, pose animation, frame/background/pole movement tests, decision scores, and comparison screenshots.
+**[Download the Windows preview ZIP](https://github.com/ErraticPu1se/cyan-lizor/releases/download/v0.1.0-preview.1/CyanLizor-0.1.0-vocal-hops-win-x64.zip)** · [Release notes](https://github.com/ErraticPu1se/cyan-lizor/releases/tag/v0.1.0-preview.1)
+
+Download the named **CyanLizor** ZIP, not GitHub's **Source code** archives or **Code → Download ZIP**.
 
 ## Requirements
 
-- Windows x64; desktop integration currently uses the **primary monitor only**.
-- Your own **Rain World v1.11.8** installation. Compatibility is checked against the supported game assembly fingerprint; another build with a similar version label may be rejected.
-- Packaged builds do **not** require Unity Hub, Python, or Docker.
+- **Windows x64** and your own installed copy of **Rain World v1.11.8**.
+- The game does not need to be running, but its installation must remain available. The app checks the game build's fingerprint; unsupported builds are rejected.
+- No Unity Hub, Python, or Docker needed to run the download.
 
-## Run a packaged build
+## Get started
 
-1. Extract the **entire ZIP** into a writable folder and open `CyanLizor.exe`.
-2. On first launch, enter your Rain World installation folder (the folder containing `RainWorld_Data`) and select **Prepare local game assets**.
-3. Enter an appearance ID under **Your lizard** and select **Apply ID**.
-4. Select **Start desktop pet**. Keep the control panel open; stopping the pet or closing the panel ends its desktop process.
-5. Expand the settings sections to adjust size, roaming, propulsion, window climbing, click exploration, and sound. **Play sample call** is available while the desktop pet is running with sound enabled.
+1. Extract the **entire ZIP** to a writable folder. Keep all included files and folders together.
+2. Run **CyanLizor.exe**.
+3. Enter your Rain World installation folder—the folder containing `RainWorld_Data`—and click **Prepare local game assets**. Wait for preparation to finish.
+4. Under **Your lizard**, enter an ID and click **Apply ID**, then **Start desktop pet**.
+5. Keep the control panel open. **Stop desktop pet**, or close the panel, to stop the pet.
 
-Asset preparation reads your installation without modifying it and stores a local cache under your Windows user profile. Keep all packaged support folders beside the executable. Builds and local game caches are not included in a source checkout; downloading the repository is not the same as downloading a runnable build.
+Preparation reads your game installation without modifying it. Game graphics and sounds are not included in the download.
 
-## Current limitations
+## What you can do
 
-- One cyan lizard; no multiple-pet or other-species controls.
-- No den, feeding/hunting, cursor-petting/purring interaction, tray controls, installer, or automatic updates in this build.
-- Background climbing and window-edge climbing share one toggle. Sound has an on/off control; volume and glow-strength sliders are not available.
-- Movement and utility decisions are desktop adaptations, not a complete Rain World room simulation or exact AI reproduction. Window-edge navigation is local rather than a full route planner around overlapping applications.
-- The preview uses a neutral palette; in-game lighting, mod hooks, and special creature variants are not reproduced. Original graphics calls do not guarantee pixel-identical in-game presentation.
-- Secondary monitors, mixed-DPI setups, and performance on other laptops are not verified. Desktop rendering currently uses synchronous GPU-to-CPU readback.
-- Desktop mode runs in the Windows player, not inside the Unity Editor.
+- Choose a cyan's appearance by ID and adjust its desktop size.
+- Watch it roam, rest, crawl, and propel itself, with personality-influenced decisions.
+- Enable **Climb backgrounds and window edges** to let it grip and follow visible windows.
+- Move the cursor nearby for head attention; hold the pet for **0.1 seconds** to grab it, then release to drop.
+- Enable **Explore where I click** and **Allow cyan propulsion**: nearby clicks invite direct hops; farther clicks invite longer hops that stop short of the cursor. Very short distances use crawling, and jumps require a valid trajectory.
+- Hear cyan calls and jump sounds, with head glow and propulsion particles. Calls have a **10-second cooldown**; idle calls wait **30–60 seconds of idle time**. Sound can be muted.
 
-## Build from source
+## Preview limitations
 
-Use **Unity 2020.3.45f1** with Windows build support and the Mono backend.
+One cyan on the primary monitor. No macOS version, den, feeding, multiple pets, installer, or automatic updates. Other laptops and mixed-DPI setups remain unverified. This is an unsigned preview; movement is adapted for the desktop rather than a complete Rain World simulation.
 
-1. Clone the repository and add its root folder to Unity Hub.
-2. Install the Python dependencies and prepare your local reference:
+## Help and source
 
-   ```powershell
-   pip install -r tools/requirements.txt
-   python tools/prepare_reference.py --game "C:\Program Files (x86)\Steam\steamapps\common\Rain World"
-   ```
+[Report a problem](https://github.com/ErraticPu1se/cyan-lizor/issues) with your Windows version, display scaling, lizard ID, and reproduction steps. The desktop log is at `%USERPROFILE%\AppData\LocalLow\ErraticPu1se\Cyan Lizor Preview\desktop-player.log`.
 
-3. Open the project, select **Cyan Lizor → Create preview scene**, then press Play.
-4. Use **Cyan Lizor → Build Windows preview** to produce `Builds/Windows/CyanLizor.exe`.
+[Developer build instructions](docs/development.md) · [Source for this release](https://github.com/ErraticPu1se/cyan-lizor/tree/v0.1.0-preview.1)
 
-Run the automated verification suite with `$UnityEditor` set to your Unity editor executable:
-
-```powershell
-& $UnityEditor -batchmode -projectPath $PWD -executeMethod CyanPreview.Editor.PreviewBuild.Verify -quit -logFile verify.log
-```
-
-To include the self-contained asset importer in a shareable ZIP:
-
-```powershell
-pip install pyinstaller==6.22.3
-python -m PyInstaller --noconfirm --onefile --name CyanReferenceImporter --collect-all UnityPy --collect-all archspec --collect-all astc_encoder --exclude-module fmod_toolkit --exclude-module pyfmodex --distpath Builds/Importer --workpath Builds/ImporterWork --specpath Builds tools/prepare_reference.py
-python tools/collect_notices.py
-.\tools\package.ps1
-```
-
-The packaging script includes the player, importer, and dependency notices and rejects game assemblies or reference caches. Send the resulting ZIP, not just the executable or your `local-data` folder.
-
-## Troubleshooting
-
-For desktop issues, include your Windows version, screen resolution and scaling, lizard ID, and steps to reproduce the problem. The desktop log is at:
-
-```text
-%USERPROFILE%\AppData\LocalLow\ErraticPu1se\Cyan Lizor Preview\desktop-player.log
-```
-
-## Credits
-
-Rain World belongs to its respective creators and rights holders. This is an unofficial companion project. Game assemblies, extracted graphics, audio, and decompiled game sources are not committed or distributed with the app. Game resources are read from each user's own supported installation. Packaged importer dependencies include their third-party license notices.
+Rain World belongs to its respective creators and rights holders. This unofficial project does not distribute game assemblies, extracted graphics, audio, or decompiled sources. Third-party dependency notices accompany the download.
