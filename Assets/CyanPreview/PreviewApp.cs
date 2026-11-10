@@ -157,8 +157,8 @@ namespace CyanPreview
                 {
                     var mouse = Input.mousePosition;
                     var point = (Vector2)previewCamera.ScreenToWorldPoint(mouse) / zoom;
-                    motion.LookAt(point);
                     bool inside = previewCamera.pixelRect.Contains(mouse);
+                    motion.ObserveCursor(inside ? (Vector2?)point : null);
                     if (inside && Input.GetMouseButtonDown(0)) interaction.Press(point);
                     if (Input.GetMouseButton(0)) interaction.Hold(point, Time.deltaTime);
                     if (Input.GetMouseButtonUp(0)) interaction.Release(point, inside);
@@ -225,8 +225,8 @@ namespace CyanPreview
             if (Section("Interaction", ref interactionOpen))
             {
                 desktopClicks = GUILayout.Toggle(desktopClicks, " Explore where I click");
-                GUILayout.Label("Investigates your clicks as a tamed companion. Clicks still reach your apps.", small);
-                GUILayout.Label("Hold the pet for 0.1 seconds to grab it, then release to drop. It watches the cursor naturally.", small);
+                GUILayout.Label("Nearby clicks invite crawling. Distant clicks invite local exploration in that direction, without a direct jump.", small);
+                GUILayout.Label("Hold the pet for 0.1 seconds to grab it, then release to drop. Hover to get its attention. Clicks still reach your apps.", small);
             }
             if (Section("Sound", ref soundOpen))
             {

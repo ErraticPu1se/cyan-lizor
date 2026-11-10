@@ -7,6 +7,48 @@ namespace CyanPreview.Editor
     {
         public static void Run(ReferenceContext context)
         {
+            using (var pet = context.CreatePet())
+            {
+                pet.Generate("12345");
+                var area = new BackgroundSurfaces(new Rect(-500, -300, 1000, 600));
+                var motion = new PetMotion(pet, area, 73) { Roam = false, AutonomousJumps = true };
+                var input = new PetInteraction(motion);
+                var near = motion.Position + Vector2.right * 60;
+                input.Press(near); input.Release(near, true);
+                Require(Vector2.Distance(motion.Behavior.InterestPoint.Value, near) < .01f, "Nearby click was not investigated directly");
+                var far = new Vector2(490, 200);
+                input.Press(far); input.Release(far, true);
+                var interest = motion.Behavior.InterestPoint.Value;
+                Require(Vector2.Distance(interest, motion.Position) <= 90.01f && Vector2.Distance(interest, far) > 100,
+                    "Distant click did not select a local investigation area");
+                for (int i = 0; i < 500; i++)
+                {
+                    if (i < 80) { input.Press(far); input.Release(far, true); }
+                    motion.ObserveCursor(far); motion.Advance(.025f);
+                    Require(motion.State == PetMotionState.Crawling, "Click investigation triggered propulsion");
+                    Require(motion.Behavior.Intent != PetIntent.FollowingOwner, "Cursor caused owner chasing");
+                }
+                motion.Behavior.Rest();
+                for (int i = 0; i < 250; i++)
+                {
+                    var hover = motion.Position;
+                    motion.ObserveCursor(hover); motion.Advance(.025f);
+                    Require((Vector2)ReferenceContext.Get(pet.Graphics, "lookPos") == hover, "Hover did not hold head attention");
+                    Require(motion.Behavior.Intent == PetIntent.Idle, "Hover created a movement goal");
+                }
+                input.ClickToExplore = false; input.Press(far); input.Release(far, true);
+                Require(!motion.Behavior.InterestPoint.HasValue, "Disabled exploration created an interest");
+                motion.Roam = true;
+                for (int i = 0; i < 1200; i++)
+                {
+                    motion.ObserveCursor(far); motion.Advance(.025f);
+                    Require(motion.Behavior.Intent != PetIntent.FollowingOwner, "Roaming pet chased stationary cursor after a click");
+                }
+                bool invalid = false;
+                try { motion.ExploreClick(new Vector2(float.NaN, 0)); } catch (ArgumentOutOfRangeException) { invalid = true; }
+                Require(invalid, "Invalid click coordinate accepted");
+                Debug.Log("PROXIMITY_CLICK_HOVER_NO_CHASE_CHECK_PASSED");
+            }
             var bounds = new Rect(-130, -42, 180, 84);
             using (var pet = context.CreatePet())
             {

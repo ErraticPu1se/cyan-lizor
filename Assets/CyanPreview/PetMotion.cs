@@ -44,7 +44,7 @@ namespace CyanPreview
         public float VoiceIntensity { get; set; }
         Vector2 destination, launchVelocity, jumpTarget;
         Vector2? lookTarget;
-        bool hasDestination;
+        bool hasDestination, clickInvestigation;
         public PetBehavior Behavior { get; }
         public bool Roam { get => Behavior.Roam; set => Behavior.Roam = value; }
         public PetMotionState State { get; private set; }
@@ -94,8 +94,25 @@ namespace CyanPreview
             try { return pet.Context.New("Limb", graphics, chunks[index < 2 ? 0 : 2], index, 2.5f, .7f, .99f, 6f, .6f); }
             finally { UnityEngine.Random.state = state; }
         }
-        public void LookAt(Vector2? point) { lookTarget = point; Behavior.ObserveOwner(point); }
-        public void MoveTo(Vector2 point) { Behavior.Target(surfaces.Nearest(point, out _)); }
+        public void LookAt(Vector2? point) { lookTarget = point; }
+        public void ObserveCursor(Vector2? point)
+        {
+            // Hover has sustained attention; ordinary pointer use gets only brief glances.
+            LookAt(point.HasValue && (Contains(point.Value) || poseTicks % 200 < 20) ? point : null);
+        }
+        public void MoveTo(Vector2 point) { clickInvestigation = false; Behavior.Target(surfaces.Nearest(point, out _)); }
+        public void ExploreClick(Vector2 point)
+        {
+            if (float.IsNaN(point.x) || float.IsNaN(point.y) || float.IsInfinity(point.x) || float.IsInfinity(point.y))
+                throw new ArgumentOutOfRangeException(nameof(point));
+            // World-space reach scales with the rendered pet, not the monitor resolution.
+            const float reach = 90;
+            var origin = surfaces.Nearest(Position, out _);
+            var target = surfaces.Nearest(point, out _);
+            if (Vector2.Distance(origin, target) > reach) target = surfaces.Approach(origin, target, reach);
+            Behavior.Target(target);
+            clickInvestigation = true;
+        }
         public bool Contains(Vector2 point)
         {
             foreach (var chunk in chunks)
@@ -231,7 +248,7 @@ namespace CyanPreview
             }
             if (cooldown > 0) cooldown--;
             var exploration = Behavior.ExplorationTarget;
-            if (State == PetMotionState.Crawling && cooldown == 0 && GripCount > 0 && exploration.HasValue
+            if (!clickInvestigation && State == PetMotionState.Crawling && cooldown == 0 && GripCount > 0 && exploration.HasValue
                 && Vector2.Distance(Position, exploration.Value) > Mathf.Lerp(190, 120, pet.Personality.Bravery)
                 && PetJumpPlanner.TryPlanToTarget(Position, exploration.Value, surfaces, capabilities, out var targetedJump))
             {
@@ -406,6 +423,7 @@ namespace CyanPreview
             var forward = (draw[0, 0] - draw[1, 0]).normalized;
             var target = draw[0, 0] + forward * 100;
             if (State == PetMotionState.Charging || (State == PetMotionState.Airborne && propelled)) target = jumpTarget;
+            else if (lookTarget.HasValue && Contains(lookTarget.Value)) target = lookTarget.Value;
             else if (Behavior.InterestPoint.HasValue && lookTarget.HasValue) target = lookTarget.Value;
             else if (Behavior.ExplorationTarget.HasValue) target = Behavior.ExplorationTarget.Value;
             else if (Behavior.InterestPoint.HasValue) target = Behavior.InterestPoint.Value + new Vector2(Mathf.Sin(poseTicks * .035f) * 35, 18 + Mathf.Sin(poseTicks * .06f) * 12);

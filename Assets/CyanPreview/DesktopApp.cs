@@ -173,7 +173,7 @@ namespace CyanPreview
                 }
                 var cursor = native.Cursor;
                 var point = DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale);
-                motion.LookAt(point);
+                motion.ObserveCursor(point);
                 while (native.TryReadButton(out var button))
                 {
                     var eventPoint = DesktopCoordinates.ToWorld(button.Position, native.WorkArea, settings.scale);
