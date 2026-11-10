@@ -18,7 +18,7 @@ namespace CyanPreview
             pressed = true; heldSeconds = 0; dragging = false;
             startedOnPet = pet.Contains(point);
             pressOffset = point - pet.Position;
-            if (!startedOnPet && ClickToExplore) pet.MoveTo(point);
+            if (!startedOnPet && ClickToExplore) pet.ExploreClick(point);
         }
         public void Hold(Vector2 point, float seconds)
         {

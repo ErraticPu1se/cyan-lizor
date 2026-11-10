@@ -33,6 +33,65 @@ namespace CyanPreview
         [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hook);
         [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr message, IntPtr data);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr GetModuleHandle(string name);
+        [DllImport("user32.dll")] static extern IntPtr CreatePopupMenu();
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool AppendMenu(IntPtr menu, uint flags, UIntPtr id, string text);
+        [DllImport("user32.dll")] static extern bool DestroyMenu(IntPtr menu);
+        [DllImport("user32.dll")] static extern uint TrackPopupMenu(IntPtr menu, uint flags, int x, int y, int reserved, IntPtr owner, IntPtr rect);
+        [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
+        [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr window, int command);
+        [DllImport("user32.dll")] static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+        bool capturedRight, showingMenu;
+        Vector2? menuRequest;
+        public bool TryReadMenuRequest(out Vector2 point)
+        { point = menuRequest ?? Vector2.zero; bool found = menuRequest.HasValue; menuRequest = null; return found; }
+        public void ClearButtonEvents() { buttons.Clear(); capturedButton = capturedRight = false; menuRequest = null; }
+        public DesktopMenuAction ShowPetMenu(Vector2 point, DesktopSettings settings)
+        {
+            IntPtr menu = CreatePopupMenu();
+            if (menu == IntPtr.Zero) throw new InvalidOperationException("Cannot create pet menu.");
+            int style = GetWindowLong(handle, -20);
+            var previousWindow = GetForegroundWindow();
+            showingMenu = true;
+            try
+            {
+                AddMenu(menu, DesktopMenuAction.Settings, "Settings...");
+                AppendMenu(menu, 0x800, UIntPtr.Zero, null);
+                AddMenu(menu, DesktopMenuAction.Small, "Small (1.0x)", Mathf.Approximately(settings.scale, 1));
+                AddMenu(menu, DesktopMenuAction.Medium, "Medium (1.5x)", Mathf.Approximately(settings.scale, 1.5f));
+                AddMenu(menu, DesktopMenuAction.Large, "Large (2.0x)", Mathf.Approximately(settings.scale, 2));
+                AppendMenu(menu, 0x800, UIntPtr.Zero, null);
+                AddMenu(menu, DesktopMenuAction.Roaming, "Roaming", settings.roam);
+                AddMenu(menu, DesktopMenuAction.ExploreClicks, "Explore clicks", settings.clickToExplore);
+                AddMenu(menu, DesktopMenuAction.Sound, "Sound", settings.sound);
+                AppendMenu(menu, 0x800, UIntPtr.Zero, null);
+                AddMenu(menu, DesktopMenuAction.Stop, "Stop desktop pet");
+                SetWindowLong(handle, -20, style & ~(ExNoActivate | ExTransparent));
+                SetForegroundWindow(handle);
+                return (DesktopMenuAction)TrackPopupMenu(menu, 0x100 | 0x80 | 0x2, (int)point.x, (int)point.y, 0, handle, IntPtr.Zero);
+            }
+            finally
+            {
+                PostMessage(handle, 0, IntPtr.Zero, IntPtr.Zero);
+                SetWindowLong(handle, -20, style); DestroyMenu(menu); showingMenu = false;
+                if (GetForegroundWindow() == handle && previousWindow != IntPtr.Zero) SetForegroundWindow(previousWindow);
+            }
+        }
+        static void AddMenu(IntPtr menu, DesktopMenuAction action, string text, bool check = false)
+        {
+            if (!AppendMenu(menu, check ? 8u : 0u, new UIntPtr((uint)action), text))
+                throw new InvalidOperationException("Cannot populate pet menu.");
+        }
+        public void ShowController()
+        {
+            EnumWindows((window, unused) =>
+            {
+                GetWindowThreadProcessId(window, out var pid);
+                if (pid != controllerPid) return true;
+                var name = new StringBuilder(64); GetClassName(window, name, name.Capacity);
+                if (name.ToString() != "UnityWndClass") return true;
+                ShowWindow(window, IsIconic(window) ? 9 : 5); SetForegroundWindow(window); return false;
+            }, IntPtr.Zero);
+        }
         public struct MouseButtonEvent { public Vector2 Position; public bool Down, ControllerFocused; public uint Time; }
         readonly Queue<MouseButtonEvent> buttons = new Queue<MouseButtonEvent>();
         MouseProc mouseCallback;
@@ -47,6 +106,22 @@ namespace CyanPreview
         // Keep this callback short: queue button events only; simulate in Update.
         IntPtr MouseMessage(int code, IntPtr message, IntPtr data)
         {
+            if (showingMenu) return CallNextHookEx(mouseHook, code, message, data);
+            if (code >= 0 && (message.ToInt64() == 0x204 || message.ToInt64() == 0x205))
+            {
+                var mouse = Marshal.PtrToStructure<MouseData>(data);
+                var point = new Vector2(mouse.Position.X, mouse.Position.Y);
+                bool down = message.ToInt64() == 0x204;
+                bool consume = capturedRight;
+                try
+                {
+                    if (down) consume = capturedRight = !capturedButton && WorkArea.Contains(point) && (HitTest?.Invoke(point) ?? false);
+                    else if (capturedRight) menuRequest = point;
+                }
+                catch { capturedRight = false; consume = false; }
+                if (!down) capturedRight = false;
+                if (consume) return new IntPtr(1);
+            }
             if (code >= 0 && (message.ToInt64() == 0x201 || message.ToInt64() == 0x202))
             {
                 var mouse = Marshal.PtrToStructure<MouseData>(data);

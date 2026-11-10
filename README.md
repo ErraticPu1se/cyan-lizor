@@ -33,6 +33,17 @@ Preparation reads your game installation without modifying it. Game graphics and
 - Enable **Explore where I click** and **Allow cyan propulsion**: nearby clicks invite direct hops; farther clicks invite longer hops that stop short of the cursor. Very short distances use crawling, and jumps require a valid trajectory.
 - Hear cyan calls and jump sounds, with head glow and propulsion particles. Calls have a **10-second cooldown**; idle calls wait **30–60 seconds of idle time**. Sound can be muted.
 
+## Right-click controls
+
+Right-click the desktop lizard to open its menu:
+
+- Open **Settings**.
+- Choose **Small (1.0×)**, **Medium (1.5×)**, or **Large (2.0×)**.
+- Toggle roaming, click exploration, or sound.
+- Stop the desktop pet.
+
+The pet pauses while the menu is open, and changes also appear in the control panel. Right-clicks outside the pet still work normally in other apps.
+
 ## planned update
 
 feeding, multiple pets, more lizard species

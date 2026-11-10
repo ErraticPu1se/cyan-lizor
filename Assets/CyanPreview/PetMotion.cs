@@ -44,7 +44,7 @@ namespace CyanPreview
         public float VoiceIntensity { get; set; }
         Vector2 destination, launchVelocity, jumpTarget;
         Vector2? lookTarget;
-        bool hasDestination;
+        bool hasDestination, clickInvestigation;
         public PetBehavior Behavior { get; }
         public bool Roam { get => Behavior.Roam; set => Behavior.Roam = value; }
         public PetMotionState State { get; private set; }
@@ -94,8 +94,26 @@ namespace CyanPreview
             try { return pet.Context.New("Limb", graphics, chunks[index < 2 ? 0 : 2], index, 2.5f, .7f, .99f, 6f, .6f); }
             finally { UnityEngine.Random.state = state; }
         }
-        public void LookAt(Vector2? point) { lookTarget = point; Behavior.ObserveOwner(point); }
-        public void MoveTo(Vector2 point) { Behavior.Target(surfaces.Nearest(point, out _)); }
+        public void LookAt(Vector2? point) { lookTarget = point; }
+        public void ObserveCursor(Vector2? point)
+        {
+            // Nearby pointer attention changes the pose without creating a movement goal.
+            LookAt(point.HasValue && (Vector2.Distance(HeadPosition, point.Value) <= 180 || poseTicks % 200 < 20) ? point : null);
+        }
+        public void MoveTo(Vector2 point) { clickInvestigation = false; Behavior.Target(surfaces.Nearest(point, out _)); }
+        public void ExploreClick(Vector2 point)
+        {
+            if (float.IsNaN(point.x) || float.IsNaN(point.y) || float.IsInfinity(point.x) || float.IsInfinity(point.y))
+                throw new ArgumentOutOfRangeException(nameof(point));
+            // World-space reach scales with the rendered pet, not the monitor resolution.
+            const float nearbyReach = 150; // Roughly three cyan body lengths, excluding the tail.
+            var origin = surfaces.Nearest(Position, out _);
+            var target = surfaces.Nearest(point, out _);
+            float distance = Vector2.Distance(origin, target);
+            if (distance > nearbyReach) target = surfaces.Approach(origin, target, nearbyReach + (distance - nearbyReach) * .65f);
+            Behavior.Target(target);
+            clickInvestigation = true;
+        }
         public bool Contains(Vector2 point)
         {
             foreach (var chunk in chunks)
@@ -231,8 +249,8 @@ namespace CyanPreview
             }
             if (cooldown > 0) cooldown--;
             var exploration = Behavior.ExplorationTarget;
-            if (State == PetMotionState.Crawling && cooldown == 0 && GripCount > 0 && exploration.HasValue
-                && Vector2.Distance(Position, exploration.Value) > Mathf.Lerp(190, 120, pet.Personality.Bravery)
+            if ((!clickInvestigation || AutonomousJumps) && State == PetMotionState.Crawling && cooldown == 0 && GripCount > 0 && exploration.HasValue
+                && Vector2.Distance(Position, exploration.Value) > (clickInvestigation ? 35 : Mathf.Lerp(190, 120, pet.Personality.Bravery))
                 && PetJumpPlanner.TryPlanToTarget(Position, exploration.Value, surfaces, capabilities, out var targetedJump))
             {
                 launchVelocity = targetedJump.Velocity;
@@ -333,7 +351,14 @@ namespace CyanPreview
                         // arrival pose, rather than continuously driving the body.
                         float amplitude = Behavior.Intent == PetIntent.Inspecting ? 1.4f : Behavior.Intent == PetIntent.Settling ? .8f : .45f;
                         var offset = new Vector2(Mathf.Sin(poseTicks * .035f + i), Mathf.Sin(poseTicks * .06f + i * .7f)) * amplitude;
-                        v += Vector2.ClampMagnitude(restingPose[i] + offset - p, 12) * .12f;
+                        var restTarget = restingPose[i];
+                        if (lookTarget.HasValue && Vector2.Distance(HeadPosition, lookTarget.Value) <= 180)
+                        {
+                            var forward = restingPose[0] - restingPose[1];
+                            float turn = Mathf.Clamp(Vector2.SignedAngle(forward, lookTarget.Value - restingPose[1]), -25, 25);
+                            restTarget = restingPose[1] + (Vector2)(Quaternion.Euler(0, 0, turn) * (restTarget - restingPose[1]));
+                        }
+                        v += Vector2.ClampMagnitude(restTarget + offset - p, 12) * .12f;
                     }
                     if (State == PetMotionState.Charging)
                     {
@@ -406,6 +431,7 @@ namespace CyanPreview
             var forward = (draw[0, 0] - draw[1, 0]).normalized;
             var target = draw[0, 0] + forward * 100;
             if (State == PetMotionState.Charging || (State == PetMotionState.Airborne && propelled)) target = jumpTarget;
+            else if (lookTarget.HasValue && Vector2.Distance(HeadPosition, lookTarget.Value) <= 180) target = lookTarget.Value;
             else if (Behavior.InterestPoint.HasValue && lookTarget.HasValue) target = lookTarget.Value;
             else if (Behavior.ExplorationTarget.HasValue) target = Behavior.ExplorationTarget.Value;
             else if (Behavior.InterestPoint.HasValue) target = Behavior.InterestPoint.Value + new Vector2(Mathf.Sin(poseTicks * .035f) * 35, 18 + Mathf.Sin(poseTicks * .06f) * 12);

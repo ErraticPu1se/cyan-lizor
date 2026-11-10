@@ -85,17 +85,19 @@ namespace CyanPreview.Editor
                 Require(motion.Behavior.Intent == PetIntent.Investigating, "Click did not interrupt idle on press");
                 Require(motion.Position == initial, "Click directly moved body instead of changing intent");
                 input.Release(target, true);
-                bool charge = false, flight = false, land = false;
+                var local = motion.Behavior.InterestPoint.Value;
+                Require(Vector2.Distance(local, initial) <= 245 && Vector2.Distance(local, target) > 20,
+                    "Distant click retained a remote target");
+                bool inspected = false, settled = false;
                 for (int step = 0; step < 900; step++)
                 {
                     motion.Advance(.025f);
-                    charge |= motion.State == PetMotionState.Charging;
-                    flight |= motion.State == PetMotionState.Airborne;
-                    land |= flight && motion.State == PetMotionState.Crawling;
+                    Require(motion.State == PetMotionState.Crawling, "Distant click launched instead of investigating locally");
+                    inspected |= motion.Behavior.Intent == PetIntent.Inspecting;
+                    settled |= inspected && motion.Behavior.Intent == PetIntent.Idle;
                 }
-                Require(charge && flight && land, "Distant target did not use propulsion: " + surfaces.GetType().Name);
-                Require(Vector2.Distance(motion.Position, target) < 55, "Exploration lost target after landing: " + motion.Position);
-                Debug.Log("DISTANT_CLICK_PROPULSION_CHECK_PASSED " + surfaces.GetType().Name);
+                Require(inspected && settled, "Distant click did not inspect and settle: " + surfaces.GetType().Name);
+                Debug.Log("DISTANT_CLICK_LOCAL_INSPECTION_CHECK_PASSED " + surfaces.GetType().Name);
             }
             using (var pet = context.CreatePet())
             {

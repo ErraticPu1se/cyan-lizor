@@ -131,7 +131,17 @@ namespace CyanPreview
         {
             if (desktop.Active)
             {
-                try { desktop.UpdateSettings(DesktopConfiguration()); }
+                try
+                {
+                    while (desktop.TryReadMenu(out var action))
+                    {
+                        if (action == DesktopMenuAction.Stop) { desktop.Stop(); break; }
+                        var updated = DesktopConfiguration(); updated.ApplyMenu(action);
+                        desktopScale = updated.scale; desktopRoam = updated.roam;
+                        desktopClicks = updated.clickToExplore; desktopSounds = updated.sound;
+                    }
+                    desktop.UpdateSettings(DesktopConfiguration());
+                }
                 catch (Exception e) { error = "Desktop settings: " + e.Message; }
             }
             if (importer != null && importer.HasExited && importerOutput.IsCompleted && importerError.IsCompleted)
@@ -157,8 +167,8 @@ namespace CyanPreview
                 {
                     var mouse = Input.mousePosition;
                     var point = (Vector2)previewCamera.ScreenToWorldPoint(mouse) / zoom;
-                    motion.LookAt(point);
                     bool inside = previewCamera.pixelRect.Contains(mouse);
+                    motion.ObserveCursor(inside ? (Vector2?)point : null);
                     if (inside && Input.GetMouseButtonDown(0)) interaction.Press(point);
                     if (Input.GetMouseButton(0)) interaction.Hold(point, Time.deltaTime);
                     if (Input.GetMouseButtonUp(0)) interaction.Release(point, inside);
@@ -225,8 +235,8 @@ namespace CyanPreview
             if (Section("Interaction", ref interactionOpen))
             {
                 desktopClicks = GUILayout.Toggle(desktopClicks, " Explore where I click");
-                GUILayout.Label("Investigates your clicks as a tamed companion. Clicks still reach your apps.", small);
-                GUILayout.Label("Hold the pet for 0.1 seconds to grab it, then release to drop. It watches the cursor naturally.", small);
+                GUILayout.Label("Clicks within about three body lengths invite a direct hop. Farther clicks invite longer hops that stop short of your cursor.", small);
+                GUILayout.Label("Hold the pet for 0.1 seconds to grab it, then release to drop. Move nearby to get its attention. Clicks still reach your apps.", small);
             }
             if (Section("Sound", ref soundOpen))
             {

@@ -7,6 +7,8 @@ using Debug = UnityEngine.Debug;
 
 namespace CyanPreview
 {
+    public enum DesktopMenuAction { None, Settings, Small, Medium, Large, Roaming, ExploreClicks, Sound, Stop }
+
     [Serializable]
     public sealed class DesktopSettings
     {
@@ -16,6 +18,19 @@ namespace CyanPreview
         public bool sound = true;
         public int vocalizeRequest;
         public bool running = true, windowEdges, clickToExplore, roam = true, jumps = true;
+        public void ApplyMenu(DesktopMenuAction action)
+        {
+            switch (action)
+            {
+                case DesktopMenuAction.Small: scale = 1; break;
+                case DesktopMenuAction.Medium: scale = 1.5f; break;
+                case DesktopMenuAction.Large: scale = 2; break;
+                case DesktopMenuAction.Roaming: roam = !roam; break;
+                case DesktopMenuAction.ExploreClicks: clickToExplore = !clickToExplore; break;
+                case DesktopMenuAction.Sound: sound = !sound; break;
+                default: throw new ArgumentOutOfRangeException(nameof(action));
+            }
+        }
         public void Validate()
         {
             if (schema != 1 || controllerPid <= 0 || !ReferenceBridge.TryParseId(id, out _, out _)
@@ -40,6 +55,20 @@ namespace CyanPreview
             string temp = file + ".tmp"; File.WriteAllText(temp, json);
             if (File.Exists(file)) File.Replace(temp, file, null); else File.Move(temp, file);
             previous = json;
+        }
+        public bool TryReadMenu(out DesktopMenuAction action)
+        {
+            action = DesktopMenuAction.None;
+            var directory = Path.GetDirectoryName(file);
+            if (!Directory.Exists(directory)) return false;
+            var requests = Directory.GetFiles(directory, Path.GetFileName(file) + ".menu-*");
+            requests = Array.FindAll(requests, path => !path.EndsWith(".tmp", StringComparison.Ordinal));
+            Array.Sort(requests, StringComparer.Ordinal);
+            if (requests.Length == 0) return false;
+            string request = requests[0];
+            string value = File.ReadAllText(request); File.Delete(request);
+            if (!int.TryParse(value, out int number) || !Enum.IsDefined(typeof(DesktopMenuAction), number)) return false;
+            action = (DesktopMenuAction)number; return true;
         }
         public void Start(DesktopSettings settings)
         {
@@ -79,7 +108,7 @@ namespace CyanPreview
         Camera cameraView;
         DesktopAlphaRenderer desktopRenderer;
         float refresh;
-        bool ready, buttonHeld;
+        bool ready, buttonHeld, menuOpen;
         uint pressTime;
         float holdElapsed;
         IEnumerator Start()
@@ -148,7 +177,7 @@ namespace CyanPreview
 
         void Update()
         {
-            if (!ready) return;
+            if (!ready || menuOpen) return;
             try
             {
                 refresh -= Time.unscaledDeltaTime;
@@ -173,7 +202,26 @@ namespace CyanPreview
                 }
                 var cursor = native.Cursor;
                 var point = DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale);
-                motion.LookAt(point);
+                motion.ObserveCursor(point);
+                if (native.TryReadMenuRequest(out var menuPoint))
+                {
+                    // A native modal menu pauses this pet only; discard its input on dismissal.
+                    menuOpen = true;
+                    try
+                    {
+                        input.Cancel(); buttonHeld = false;
+                        var action = native.ShowPetMenu(menuPoint, settings);
+                        if (action == DesktopMenuAction.Settings) native.ShowController();
+                        else if (action != DesktopMenuAction.None)
+                        {
+                            string request = settingsFile + ".menu-" + DateTime.UtcNow.Ticks + "-" + Guid.NewGuid().ToString("N");
+                            string temp = request + ".tmp";
+                            File.WriteAllText(temp, ((int)action).ToString()); File.Move(temp, request);
+                        }
+                    }
+                    finally { menuOpen = false; native.ClearButtonEvents(); }
+                    return;
+                }
                 while (native.TryReadButton(out var button))
                 {
                     var eventPoint = DesktopCoordinates.ToWorld(button.Position, native.WorkArea, settings.scale);

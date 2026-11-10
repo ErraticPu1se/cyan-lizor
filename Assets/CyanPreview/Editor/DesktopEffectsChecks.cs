@@ -46,6 +46,23 @@ namespace CyanPreview.Editor
                         Require(rejected && root.GetComponentsInChildren<AudioSource>().Length == 0, "Missing audio leaked playback objects");
                         using (var audio = new CyanPetAudio(root.transform, context, motion, effects, pet.Seed))
                         {
+                            Require(audio.Vocalize(), "First vocal call was rejected");
+                            foreach (var source in root.GetComponentsInChildren<AudioSource>()) source.Stop();
+                            for (int i = 0; i < 39; i++)
+                            {
+                                audio.Advance(.25f);
+                                Require(!audio.Vocalize(), "Repeated request bypassed vocal cooldown");
+                            }
+                            audio.Advance(float.NaN); audio.Advance(float.PositiveInfinity); audio.Advance(-1);
+                            Require(!audio.Vocalize(), "Invalid elapsed time bypassed vocal cooldown");
+                            audio.Enabled = false; audio.Enabled = true;
+                            Require(!audio.Vocalize(), "Mute toggle reset vocal cooldown");
+                            audio.Advance(.25f);
+                            Require(audio.Vocalize(), "Suppressed calls extended cooldown beyond ten seconds");
+                            foreach (var source in root.GetComponentsInChildren<AudioSource>()) source.Stop();
+                            for (int i = 0; i < 40; i++) audio.Advance(.25f);
+                            foreach (var source in root.GetComponentsInChildren<AudioSource>()) Require(!source.isPlaying, "Suppressed calls were queued");
+                            Require(audio.Vocalize(), "Cooldown never became ready again");
                             audio.Enabled = false; audio.Vocalize(); audio.Advance(float.PositiveInfinity);
                             Require(motion.VoiceIntensity == 0, "Muted voice intensity persisted");
                             foreach (var source in root.GetComponentsInChildren<AudioSource>()) Require(!source.isPlaying, "Mute left a sound playing");
