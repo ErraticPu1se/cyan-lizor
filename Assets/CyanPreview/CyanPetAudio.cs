@@ -93,7 +93,7 @@ namespace CyanPreview
         {
             if (!CanPettingCall) return false;
             voice.clip = affectionVoice; voice.volume = .55f; voice.Play();
-            affectionCooldown = VocalCooldownSeconds; vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay();
+            affectionCooldown = PettingContact.CooldownSeconds; vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay();
             Debug.Log("PETTING_AFFECTION_PLAYED " + affectionVoice.name);
             return true;
         }

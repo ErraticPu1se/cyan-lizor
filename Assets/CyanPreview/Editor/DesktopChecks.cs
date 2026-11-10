@@ -20,6 +20,12 @@ namespace CyanPreview.Editor
             { menuSettings.ApplyMenu(action); menuSettings.ApplyMenu(action); }
             Require(menuSettings.roam == initialRoam && menuSettings.sound == initialSound && menuSettings.clickToExplore == initialClicks,
                 "Repeated menu toggles lost settings");
+            var beforeClimb = JsonUtility.ToJson(menuSettings);
+            menuSettings.ApplyMenu(DesktopMenuAction.Climbing);
+            Require(menuSettings.windowEdges, "Menu did not enable climbing");
+            menuSettings.ApplyMenu(DesktopMenuAction.Climbing);
+            Require(JsonUtility.ToJson(menuSettings) == beforeClimb, "Climbing toggle changed unrelated settings");
+            Require((int)DesktopMenuAction.Stop == 8, "New action changed existing menu wire IDs");
             bool invalidMenu = false;
             try { menuSettings.ApplyMenu((DesktopMenuAction)999); } catch (ArgumentOutOfRangeException) { invalidMenu = true; }
             Require(invalidMenu && menuSettings.scale == 2, "Invalid menu action changed settings");

@@ -7,7 +7,7 @@ using Debug = UnityEngine.Debug;
 
 namespace CyanPreview
 {
-    public enum DesktopMenuAction { None, Settings, Small, Medium, Large, Roaming, ExploreClicks, Sound, Stop }
+    public enum DesktopMenuAction { None, Settings, Small, Medium, Large, Roaming, ExploreClicks, Sound, Stop, Climbing }
 
     [Serializable]
     public sealed class DesktopSettings
@@ -28,6 +28,7 @@ namespace CyanPreview
                 case DesktopMenuAction.Roaming: roam = !roam; break;
                 case DesktopMenuAction.ExploreClicks: clickToExplore = !clickToExplore; break;
                 case DesktopMenuAction.Sound: sound = !sound; break;
+                case DesktopMenuAction.Climbing: windowEdges = !windowEdges; break;
                 default: throw new ArgumentOutOfRangeException(nameof(action));
             }
         }

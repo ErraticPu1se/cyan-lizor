@@ -138,7 +138,7 @@ namespace CyanPreview
                         if (action == DesktopMenuAction.Stop) { desktop.Stop(); break; }
                         var updated = DesktopConfiguration(); updated.ApplyMenu(action);
                         desktopScale = updated.scale; desktopRoam = updated.roam;
-                        desktopClicks = updated.clickToExplore; desktopSounds = updated.sound;
+                        desktopClicks = updated.clickToExplore; desktopSounds = updated.sound; desktopWindowEdges = updated.windowEdges;
                     }
                     desktop.UpdateSettings(DesktopConfiguration());
                 }

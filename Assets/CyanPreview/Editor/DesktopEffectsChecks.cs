@@ -75,6 +75,11 @@ namespace CyanPreview.Editor
                                 loveClip |= source.clip != null && source.clip.name.StartsWith("LizardLoveVoiceCyan");
                             Require(loveClip, "Petting used the ordinary vocal clip");
                             Require(!audio.PettingCall(), "Petting overlapped its own call");
+                            foreach (var source in root.GetComponentsInChildren<AudioSource>()) source.Stop();
+                            for (int i=0;i<11;i++) { audio.Advance(.25f); Require(!audio.PettingCall(), "Affection fired before three seconds"); }
+                            audio.Advance(.25f);
+                            Require(audio.PettingCall(), "Affection was still blocked at three seconds");
+                            Require(!audio.Vocalize(), "Short affection cooldown shortened normal vocal cooldown");
                             Require(!audio.Impact(1.5f) && !audio.Impact(float.NaN) && !audio.Impact(float.PositiveInfinity), "Invalid or soft contact made impact sound");
                             Require(audio.Impact(12), "Hard landing did not produce sound");
                             Require(!audio.Impact(12), "Repeated collision bypassed impact cooldown");

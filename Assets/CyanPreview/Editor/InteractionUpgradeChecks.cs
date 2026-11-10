@@ -11,9 +11,11 @@ namespace CyanPreview.Editor
             var contact = new PettingContact(); var other = new PettingContact();
             for (int i = 0; i < 3; i++) Check(!contact.Advance(.25f, true), "Petting fired early");
             Check(contact.Advance(.25f, true), "One second petting failed");
-            for (int i = 0; i < 40; i++) Check(!contact.Advance(.25f, true), "Continuous petting bypassed cooldown");
-            for (int i = 0; i < 3; i++) Check(!contact.Advance(.25f, true), "Cooldown queued a call");
-            Check(contact.Advance(.25f, true), "Sustained petting did not resume");
+            for (int i = 0; i < 11; i++) Check(!contact.Advance(.25f, true), "Continuous petting bypassed three second cooldown");
+            Check(contact.Advance(.25f, true), "Sustained petting did not resume at three seconds");
+            for (int i = 0; i < 12; i++) Check(!contact.Advance(.25f, false), "Leaving queued a petting call");
+            for (int i = 0; i < 3; i++) Check(!contact.Advance(.25f, true), "New contact skipped the one second trigger");
+            Check(contact.Advance(.25f, true), "Fresh petting failed after leaving");
             for (int i = 0; i < 3; i++) Check(!other.Advance(.25f, true), "Other pet fired early");
             other.Advance(.25f, false);
             Check(!other.Advance(.25f, true), "Leaving sprite retained contact");
@@ -23,8 +25,7 @@ namespace CyanPreview.Editor
             Check(rejected, "Invalid contact time accepted");
             var waiting = new PettingContact();
             for (int i=0;i<8;i++) Check(!waiting.Advance(.25f,true,false), "Unavailable response spent contact");
-            for (int i=0;i<3;i++) Check(!waiting.Advance(.25f,true), "Readiness skipped contact duration");
-            Check(waiting.Advance(.25f,true), "Unavailable sound silently spent petting cooldown");
+            Check(waiting.Advance(0,true), "Continuing contact did not respond when audio became available");
             var jitter = new PettingContact();
             for(int i=0;i<3;i++) jitter.Advance(.25f,true);
             Check(!jitter.Advance(.1f,false), "Outside sprite triggered petting");
