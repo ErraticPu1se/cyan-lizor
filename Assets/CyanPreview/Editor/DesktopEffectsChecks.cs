@@ -9,6 +9,21 @@ namespace CyanPreview.Editor
         static void Require(bool condition, string message) { if (!condition) throw new Exception(message); }
         public static void Run(ReferenceContext context)
         {
+            var packed = new byte[8];
+            DesktopAlphaRenderer.PackPixels(new[] { new Color32(10,20,30,40), new Color32(0,0,0,0) }, packed, 1, 2);
+            Require(packed[3] == 0 && packed[4] == 30 && packed[5] == 20 && packed[6] == 10 && packed[7] == 40, "Alpha bitmap orientation/channel mapping failed");
+            var work = new Rect(-1920,40,1920,1040);
+            foreach (float scale in new[] { .5f, 1f, 2f })
+            {
+                var rect = DesktopAlphaRenderer.CaptureRect(new Bounds(Vector3.zero, new Vector3(100,100,0)), work, scale);
+                Require(rect.width >= 100 * scale && rect.height >= 100 * scale && work.Contains(rect.min) && rect.xMax <= work.xMax && rect.yMax <= work.yMax, "Alpha crop mapping failed");
+            }
+            var outside = DesktopAlphaRenderer.CaptureRect(new Bounds(new Vector3(100000,100000,0), Vector3.one), work, 1);
+            Require(outside.width == 1 && outside.height == 1, "Off-screen effects did not clear their surface");
+            bool invalid = false;
+            try { DesktopAlphaRenderer.PackPixels(new Color32[1], new byte[4], 2, 2); }
+            catch (ArgumentException) { invalid = true; }
+            Require(invalid, "Invalid alpha buffer was accepted");
             VerifyCoverage("CyanPreview/HeadGlow"); VerifyCoverage("CyanPreview/JumpParticle");
             var root = new GameObject("Desktop effects checks");
             try
@@ -17,7 +32,7 @@ namespace CyanPreview.Editor
                 {
                     pet.Generate("12345");
                     var motion = new PetMotion(pet, new FrameSurfaces(new Rect(-360, -180, 720, 360)), 42) { Roam = false };
-                    using (var effects = new CyanJumpEffects(root.transform, motion, pet.EffectColor, pet.Seed, true))
+                    using (var effects = new CyanJumpEffects(root.transform, motion, pet.EffectColor, pet.Seed))
                     {
                         string gamePath = context.Manifest.gamePath;
                         bool rejected = false;
@@ -67,26 +82,29 @@ namespace CyanPreview.Editor
             var mesh = new Mesh { vertices = new[] { new Vector3(-1,-1), new Vector3(1,-1), new Vector3(1,1), new Vector3(-1,1) },
                 uv = new[] { Vector2.zero, Vector2.right, Vector2.one, Vector2.up },
                 colors = new[] { Color.cyan, Color.cyan, Color.cyan, Color.cyan }, triangles = new[] { 0,1,2,0,2,3 } };
-            var material = new Material(Shader.Find(shaderName)); material.SetFloat("_DesktopCutout", 1);
-            if (material.HasProperty("_DstBlend")) material.SetInt("_DstBlend", 0);
+            var material = new Material(Shader.Find(shaderName));
+            if (material.HasProperty("_DstBlend")) material.SetInt("_DstBlend", 10);
             if (material.HasProperty("_Tint")) material.SetColor("_Tint", new Color(0,1,1,.6f));
             root.AddComponent<MeshFilter>().sharedMesh = mesh; root.AddComponent<MeshRenderer>().sharedMaterial = material;
             var cameraObject = new GameObject("Coverage camera"); var camera = cameraObject.AddComponent<Camera>();
             camera.orthographic = true; camera.orthographicSize = 1; camera.transform.position = new Vector3(0,0,-10);
-            camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = Color.magenta; camera.cullingMask = 1 << 31;
-            var target = new RenderTexture(64,64,24) { antiAliasing = 1 }; var capture = new Texture2D(64,64,TextureFormat.RGB24,false);
+            camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = Color.clear; camera.cullingMask = 1 << 31;
+            var target = new RenderTexture(64,64,24,RenderTextureFormat.ARGB32,RenderTextureReadWrite.Linear) { antiAliasing = 1 }; var capture = new Texture2D(64,64,TextureFormat.RGBA32,false,true);
             var previous = RenderTexture.active;
             try
             {
                 camera.targetTexture = target; camera.Render(); RenderTexture.active = target;
                 capture.ReadPixels(new Rect(0,0,64,64),0,0); capture.Apply();
                 int clear = 0, drawn = 0;
-                foreach (var pixel in capture.GetPixels())
+                var levels = new System.Collections.Generic.HashSet<byte>();
+                foreach (var pixel in capture.GetPixels32())
                 {
-                    if (pixel.r > .98f && pixel.g < .02f && pixel.b > .98f) clear++;
-                    else { drawn++; Require(pixel.r < .02f, shaderName + " blended magenta into effect pixels"); }
+                    levels.Add(pixel.a);
+                    if (pixel.a == 0) clear++; else drawn++;
+                    Require(pixel.r <= pixel.a + 1 && pixel.g <= pixel.a + 1 && pixel.b <= pixel.a + 1, shaderName + " is not premultiplied");
                 }
-                Require(clear > 0 && drawn > 0, shaderName + " has no transparent or visible pixels");
+                Require(clear > 0 && drawn > 0 && levels.Count > 8, shaderName + " lacks smooth alpha falloff");
+
             }
             finally
             {

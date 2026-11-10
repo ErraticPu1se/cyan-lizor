@@ -24,7 +24,6 @@ namespace CyanPreview
         [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hwnd, int index);
         [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hwnd, int index, int value);
         [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
-        [DllImport("user32.dll")] static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint color, byte alpha, uint flags);
         [DllImport("user32.dll")] static extern bool GetCursorPos(out Point point);
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint action, uint param, out NativeRect rect, uint flags);
@@ -72,6 +71,7 @@ namespace CyanPreview
         int originalStyle, originalExStyle;
         bool clickThrough = true;
         public Rect WorkArea { get; private set; }
+        public IntPtr WindowHandle => handle;
         static Rect Convert(NativeRect r) => Rect.MinMaxRect(r.Left, r.Top, r.Right, r.Bottom);
         public WindowsDesktop(int controllerPid)
         {
@@ -92,7 +92,6 @@ namespace CyanPreview
             originalStyle = GetWindowLong(handle, -16); originalExStyle = GetWindowLong(handle, -20);
             SetWindowLong(handle, -16, unchecked((int)0x80000000));
             SetWindowLong(handle, -20, originalExStyle | ExLayered | ExTransparent | ExNoActivate | ExToolWindow);
-            if (!SetLayeredWindowAttributes(handle, 0x00FF00FF, 255, 1)) throw new InvalidOperationException("Cannot make the desktop pet window transparent.");
             Resize();
             mouseCallback = MouseMessage;
             mouseHook = SetWindowsHookEx(14, mouseCallback, GetModuleHandle(null), 0);

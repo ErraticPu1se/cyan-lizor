@@ -67,6 +67,9 @@ namespace CyanPreview
         void Start()
         {
             Application.targetFrameRate = 60;
+            // A child overlay can leave Unity's saved window size smaller than this control panel.
+            if (!Application.isEditor && (Screen.width < 900 || Screen.height < 650))
+                Screen.SetResolution(Mathf.Min(1440, Display.main.systemWidth), Mathf.Min(900, Display.main.systemHeight - 48), FullScreenMode.Windowed);
             var backgroundCamera = new GameObject("Background camera").AddComponent<Camera>();
             backgroundCamera.depth = -10;
             backgroundCamera.cullingMask = 0;

@@ -77,6 +77,7 @@ namespace CyanPreview
         PetInteraction input;
         DesktopSurfaces surfaces;
         Camera cameraView;
+        DesktopAlphaRenderer desktopRenderer;
         float refresh;
         bool ready, buttonHeld;
         uint pressTime;
@@ -93,7 +94,7 @@ namespace CyanPreview
                 cameraView = new GameObject("Desktop camera").AddComponent<Camera>();
                 cameraView.gameObject.AddComponent<AudioListener>();
                 cameraView.orthographic = true; cameraView.clearFlags = CameraClearFlags.SolidColor;
-                cameraView.backgroundColor = new Color(1, 0, 1, 1); cameraView.transform.position = new Vector3(0, 0, -10);
+                cameraView.enabled = false; cameraView.backgroundColor = Color.clear; cameraView.transform.position = new Vector3(0, 0, -10);
                 Screen.SetResolution((int)native.WorkArea.width, (int)native.WorkArea.height, FullScreenMode.Windowed);
                 context = new ReferenceContext(settings.cache); pet = context.CreatePet();
                 view = new SpriteMeshView(transform) { DesktopTransparency = true };
@@ -104,6 +105,7 @@ namespace CyanPreview
             try
             {
                 if (!native.Initialize()) throw new InvalidOperationException("Owned overlay window not found.");
+                desktopRenderer = new DesktopAlphaRenderer(native.WindowHandle, cameraView, transform);
                 native.HitTest = cursor => motion.Contains(DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale));
                 ready = true; RefreshWindows();
                 Debug.Log("DESKTOP_OVERLAY_READY " + native.WorkArea);
@@ -131,7 +133,7 @@ namespace CyanPreview
                 motion.ShiftWithSurface(restingPoint - motion.Position);
             }
             motion.StateChanged += state => Debug.Log("DESKTOP_STATE " + state + " " + motion.Position);
-            jumpEffects = new CyanJumpEffects(transform, motion, pet.EffectColor, pet.Seed, desktopTransparency: true);
+            jumpEffects = new CyanJumpEffects(transform, motion, pet.EffectColor, pet.Seed);
             try { petAudio = new CyanPetAudio(transform, context, motion, jumpEffects, pet.Seed) { Enabled = settings.sound }; }
             catch (Exception e) { Debug.LogWarning("Desktop pet audio unavailable: " + e.Message); }
             input = new PetInteraction(motion) { ClickToExplore = settings.clickToExplore };
@@ -195,6 +197,7 @@ namespace CyanPreview
                 motion.Advance(Time.unscaledDeltaTime);
                 jumpEffects.Advance(Time.unscaledDeltaTime);
                 pet.Draw(motion.Interpolation); view.Refresh(pet);
+                desktopRenderer.Render(native.WorkArea, settings.scale);
             }
             catch (Exception e) { Debug.LogException(e); Application.Quit(); }
         }
@@ -206,7 +209,7 @@ namespace CyanPreview
         }
         void OnDestroy()
         {
-            native?.Dispose(); input?.Cancel(); petAudio?.Dispose(); jumpEffects?.Dispose(); view?.Dispose(); pet?.Dispose(); context?.Dispose();
+            desktopRenderer?.Dispose(); native?.Dispose(); input?.Cancel(); petAudio?.Dispose(); jumpEffects?.Dispose(); view?.Dispose(); pet?.Dispose(); context?.Dispose();
         }
     }
 }

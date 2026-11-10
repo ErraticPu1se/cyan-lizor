@@ -211,9 +211,12 @@ bubbles, propulsion smoke and head lighting reuse the preview components. The
 a call. Preview audio is muted while a desktop pet runs to avoid doubled sounds.
 Missing local audio leaves movement and visual effects working.
 
-Color-key transparency uses ordered pixel coverage for fades on the desktop, so
-particles and head lighting have a stippled appearance instead of soft alpha
-blending. The preview retains its original soft/additive rendering. Window-edge
+The desktop renders a cropped transparent surface around the pet and effects,
+then presents premultiplied alpha through Windows' layered-window compositor.
+Head lighting and smoke now fade smoothly without dithering or color-key fringes.
+The preview retains its original additive head lighting. Desktop composition uses
+normal alpha blending against other applications. GPU-to-CPU readback is currently
+synchronous; performance on lower-powered laptops remains to be measured. Window-edge
 navigation is local, not a complete pathfinder around overlapping applications.
 Mixed-DPI and secondary monitors remain unverified. A native left-button listener
 retains press/release positions between rendered frames and is removed on exit.

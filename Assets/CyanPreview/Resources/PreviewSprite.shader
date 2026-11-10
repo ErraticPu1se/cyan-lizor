@@ -5,7 +5,7 @@ Shader "CyanPreview/Sprite"
     {
         Tags { "Queue"="Transparent" "RenderType"="Transparent" }
         Cull Off ZWrite Off ZTest Always
-        Blend SrcAlpha OneMinusSrcAlpha
+        Blend SrcAlpha OneMinusSrcAlpha, One OneMinusSrcAlpha
         Pass
         {
             CGPROGRAM

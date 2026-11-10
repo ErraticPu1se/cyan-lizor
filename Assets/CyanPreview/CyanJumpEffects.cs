@@ -25,14 +25,13 @@ namespace CyanPreview
         bool disposed;
         public int ParticleCount => particles.Count;
         public int BurstCount { get; private set; }
-        public CyanJumpEffects(Transform parent, PetMotion motion, Color color, int seed, bool desktopTransparency = false)
+        public CyanJumpEffects(Transform parent, PetMotion motion, Color color, int seed)
         {
             this.motion = motion; this.color = color; random = new System.Random(seed ^ 68431);
             root = new GameObject("Cyan jump effects"); root.transform.SetParent(parent, false);
             mesh = new Mesh { name = "Cyan jump particles" }; mesh.MarkDynamic();
             root.AddComponent<MeshFilter>().sharedMesh = mesh;
             material = new Material(Shader.Find("CyanPreview/JumpParticle"));
-            material.SetFloat("_DesktopCutout", desktopTransparency ? 1 : 0);
             var renderer = root.AddComponent<MeshRenderer>(); renderer.sharedMaterial = material; renderer.sortingOrder = 1000;
             motion.JumpLaunched += Burst; motion.JumpSmoke += Trail;
         }
