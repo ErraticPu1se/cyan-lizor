@@ -62,13 +62,23 @@ namespace CyanPreview.Editor
                             foreach (var source in root.GetComponentsInChildren<AudioSource>()) source.Stop();
                             for (int i = 0; i < 40; i++) audio.Advance(.25f);
                             foreach (var source in root.GetComponentsInChildren<AudioSource>()) Require(!source.isPlaying, "Suppressed calls were queued");
-                            Require(audio.PettingCall(), "Affection call was unavailable after cooldown");
+                            // An ordinary call must not spend the separate affection cooldown.
+                            Require(audio.Vocalize(), "Ordinary call before petting rejected");
+                            foreach (var source in root.GetComponentsInChildren<AudioSource>()) source.Stop();
+                            var pettingInput = new PetInteraction(motion);
+                            bool responded = false;
+                            for (int i = 0; i < 4; i++)
+                                if (pettingInput.Hover(motion.Position, .25f, false, audio.CanPettingCall)) responded = audio.PettingCall();
+                            Require(responded, "Ordinary vocal cooldown swallowed the petting response");
                             bool loveClip = false;
                             foreach (var source in root.GetComponentsInChildren<AudioSource>())
                                 loveClip |= source.clip != null && source.clip.name.StartsWith("LizardLoveVoiceCyan");
                             Require(loveClip, "Petting used the ordinary vocal clip");
                             Require(!audio.PettingCall(), "Petting overlapped its own call");
-                            audio.Enabled = false; Require(!audio.PettingCall(), "Muted petting played audio"); audio.Vocalize(); audio.Advance(float.PositiveInfinity);
+                            Require(!audio.Impact(1.5f) && !audio.Impact(float.NaN) && !audio.Impact(float.PositiveInfinity), "Invalid or soft contact made impact sound");
+                            Require(audio.Impact(12), "Hard landing did not produce sound");
+                            Require(!audio.Impact(12), "Repeated collision bypassed impact cooldown");
+                            audio.Enabled = false; Require(!audio.Impact(20), "Muted impact played"); Require(!audio.PettingCall(), "Muted petting played audio"); audio.Vocalize(); audio.Advance(float.PositiveInfinity);
                             Require(motion.VoiceIntensity == 0, "Muted voice intensity persisted");
                             foreach (var source in root.GetComponentsInChildren<AudioSource>()) Require(!source.isPlaying, "Mute left a sound playing");
                             for (int i = 0; i < 40; i++) motion.Advance(.025f);

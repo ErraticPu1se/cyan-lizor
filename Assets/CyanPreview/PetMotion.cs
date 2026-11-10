@@ -34,6 +34,7 @@ namespace CyanPreview
         bool propelled;
         float jumpPower;
         public event Action<Vector2, Vector2, float> JumpLaunched;
+        public event Action<float> Landed;
         public event Action<Vector2, Vector2, float> JumpSmoke;
         public bool AutonomousJumps { get; set; }
         float accumulator;
@@ -309,6 +310,7 @@ namespace CyanPreview
             var tangent = (ahead - edge).normalized;
             if (!capabilities.ClimbWalls && normal.y < .5f) tangent = Vector2.down;
             bool landed = false;
+            float impactSpeed = 0;
             for (int i = 0; i < 3; i++)
             {
                 var p = (Vector2)Get(chunks[i], "pos");
@@ -386,6 +388,7 @@ namespace CyanPreview
                 p = surfaces.Constrain(p, 8, out var hit);
                 if (hit != Vector2.zero)
                 {
+                    impactSpeed = Mathf.Max(impactSpeed, -Vector2.Dot(v, hit));
                     v -= hit * Mathf.Min(0, Vector2.Dot(v, hit));
                     if (cooldown < 15 && (capabilities.ClimbWalls || hit.y > .5f)) landed = true;
                 }
@@ -397,6 +400,7 @@ namespace CyanPreview
                 landed = true;
             if (airborne && landed)
             {
+                if (impactSpeed > 1.5f) Landed?.Invoke(impactSpeed);
                 ChangeState(PetMotionState.Crawling);
                 if (!Behavior.ExplorationTarget.HasValue) Behavior.Rest();
                 foreach (var chunk in chunks) Set(chunk, "vel", (Vector2)Get(chunk, "vel") * .35f);

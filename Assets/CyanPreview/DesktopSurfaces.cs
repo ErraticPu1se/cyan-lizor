@@ -31,7 +31,7 @@ namespace CyanPreview
         public Vector2 UpdateWindows(IEnumerable<DesktopWindow> snapshot, Vector2 position, bool gripping)
         {
             SupportLost = false;
-            long attached = gripping ? WindowAtEdge(position, out _, out _) : 0;
+            long attached = gripping ? WindowAtSurface(position) : 0;
             Rect oldBounds = default;
             foreach (var window in windows) if (window.Id == attached) oldBounds = window.Bounds;
             UpdateWindows(snapshot);
@@ -41,6 +41,8 @@ namespace CyanPreview
             {
                 if (window.Id != attached) continue;
                 var oldEdge = new FrameSurfaces(oldBounds).Nearest(position, out var normal);
+                bool onPlane = oldBounds.Contains(position) && Vector2.Distance(oldEdge, position) >= 30;
+                if (onPlane) { oldEdge = position; normal = Vector2.zero; }
                 var fraction = new Vector2(Mathf.InverseLerp(oldBounds.xMin, oldBounds.xMax, oldEdge.x),
                     Mathf.InverseLerp(oldBounds.yMin, oldBounds.yMax, oldEdge.y));
                 var nextEdge = window.Bounds.min + Vector2.Scale(fraction, window.Bounds.size);
@@ -48,12 +50,18 @@ namespace CyanPreview
                 var nextPosition = position + delta;
                 // A hidden or off-screen support must release the pet, not teleport it.
                 var safeBounds = new Rect(Bounds.x + 8, Bounds.y + 8, Bounds.width - 16, Bounds.height - 16);
-                if (!safeBounds.Contains(nextPosition) || WindowAtEdge(nextEdge + normal, out _, out _) != attached)
+                if (!safeBounds.Contains(nextPosition) || WindowAtSurface(onPlane ? nextPosition : nextEdge + normal) != attached)
                     return Vector2.zero;
                 SupportLost = false;
                 return delta;
             }
             return Vector2.zero;
+        }
+        public long WindowAtSurface(Vector2 point)
+        {
+            if (!UseWindowEdges) return 0;
+            foreach (var window in windows) if (window.Bounds.Contains(point)) return window.Id;
+            return WindowAtEdge(point, out _, out _);
         }
         public long WindowAtEdge(Vector2 point, out Vector2 edge, out Vector2 normal)
         {

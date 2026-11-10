@@ -7,8 +7,11 @@ namespace CyanPreview
     {
         readonly PetMotion pet;
         public PettingContact Petting { get; } = new PettingContact();
-        public bool Hover(Vector2 point, float seconds, bool blocked = false)
-            => Petting.Advance(seconds, !blocked && !pressed && pet.State == PetMotionState.Crawling && pet.Contains(point));
+        public bool Hover(Vector2 point, float seconds, bool blocked = false, bool canRespond = true)
+        {
+            if (blocked || pressed || pet.State != PetMotionState.Crawling) Petting.ResetContact();
+            return Petting.Advance(seconds, !blocked && !pressed && pet.State == PetMotionState.Crawling && pet.Contains(point), canRespond);
+        }
         bool pressed, startedOnPet, dragging;
         float heldSeconds;
         Vector2 pressOffset;

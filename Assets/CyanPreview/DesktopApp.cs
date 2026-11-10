@@ -242,7 +242,7 @@ namespace CyanPreview
                 // The native button callback owns pet presses; other application drags pass through.
                 native.SetClickThrough(!input.CapturesPointer && (buttonHeld || !motion.Contains(point)));
                 RefreshWindows();
-                if (input.Hover(point, Time.unscaledDeltaTime, buttonHeld)) petAudio?.PettingCall();
+                if (input.Hover(point, Time.unscaledDeltaTime, buttonHeld, petAudio != null && petAudio.CanPettingCall)) petAudio.PettingCall();
                 petAudio?.Advance(Time.unscaledDeltaTime);
                 motion.Advance(Time.unscaledDeltaTime);
                 jumpEffects.Advance(Time.unscaledDeltaTime);
