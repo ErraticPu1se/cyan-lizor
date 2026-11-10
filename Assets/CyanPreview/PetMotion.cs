@@ -26,7 +26,9 @@ namespace CyanPreview
         readonly MovementCapabilities capabilities;
         readonly System.Random jumpRandom;
         int jumpWait = 320;
-        Vector2 grabOffset;
+        Vector2 grabOffset, grabAnchor;
+        int grabbedChunk, heldTicks;
+        float turnDirection = 1;
         bool propelled;
         float jumpPower;
         public event Action<Vector2, Vector2, float> JumpLaunched;
@@ -102,14 +104,19 @@ namespace CyanPreview
         }
         public void BeginGrab(Vector2 point)
         {
-            grabOffset = Position - point; propelled = false;
+            grabbedChunk = 0;
+            for (int i = 1; i < chunks.Length; i++)
+                if (Vector2.Distance(point, (Vector2)Get(chunks[i], "pos")) < Vector2.Distance(point, (Vector2)Get(chunks[grabbedChunk], "pos"))) grabbedChunk = i;
+            grabAnchor = (Vector2)Get(chunks[grabbedChunk], "pos");
+            grabOffset = grabAnchor - point; heldTicks = 0; propelled = false;
             Behavior.Rest(); ChangeState(PetMotionState.Grabbed);
             for (int i = 0; i < 4; i++) { planted[i] = seeking[i] = false; gripAge[i] = 0; }
         }
         public void DragTo(Vector2 point)
         {
             if (State != PetMotionState.Grabbed) return;
-            var delta = surfaces.Constrain(point + grabOffset, 8, out _) - Position;
+            grabAnchor = surfaces.Constrain(point + grabOffset, 8, out _);
+            var delta = grabAnchor - (Vector2)Get(chunks[grabbedChunk], "pos");
             foreach (var chunk in chunks) { TranslatePart(chunk, delta); Set(chunk, "vel", Vector2.zero); }
             // Carry the complete pose, including interpolation history. Feet must
             // not chase an externally moved body at their normal crawling speed.
@@ -127,6 +134,13 @@ namespace CyanPreview
             foreach (var cosmetic in (IEnumerable)Get(graphics, "cosmetics"))
                 if (pet.Context.Type("LizardCosmetics.LongBodyScales").IsInstanceOfType(cosmetic))
                     foreach (var scale in (Array)Get(cosmetic, "scaleObjects")) TranslatePart(scale, delta);
+            // Input can arrive between physics ticks; keep dragged chunks inside
+            // the arena immediately, before the joint solver gets its next step.
+            foreach (var chunk in chunks)
+            {
+                var position = (Vector2)Get(chunk, "pos");
+                TranslatePart(chunk, surfaces.Constrain(position, 8, out _) - position);
+            }
         }
         static void TranslatePart(object part, Vector2 delta)
         {
@@ -173,10 +187,34 @@ namespace CyanPreview
         {
             if (State == PetMotionState.Grabbed)
             {
+                heldTicks++;
+                for (int i = 0; i < chunks.Length; i++)
+                {
+                    var p = (Vector2)Get(chunks[i], "pos");
+                    Set(chunks[i], "lastPos", p);
+                    // Only the held point is fixed. Gravity and small muscular
+                    // impulses act on the rest through the existing body joints.
+                    var struggle = new Vector2(Mathf.Sin(heldTicks * .23f + i * 1.7f) * .35f,
+                        Mathf.Cos(heldTicks * .17f + i) * .15f);
+                    var velocity = (Vector2)Get(chunks[i], "vel") * .94f + Vector2.down * .9f + struggle;
+                    Set(chunks[i], "pos", i == grabbedChunk ? grabAnchor : surfaces.Constrain(p + velocity, 8, out _));
+                    Set(chunks[i], "vel", i == grabbedChunk ? Vector2.zero : velocity);
+                }
+                for (int pass = 0; pass < 6; pass++)
+                {
+                    foreach (var connection in connections) Call(connection, "Update");
+                    foreach (var chunk in chunks)
+                    {
+                        Set(chunk, "pos", surfaces.Constrain((Vector2)Get(chunk, "pos"), 8, out var hit));
+                        var velocity = (Vector2)Get(chunk, "vel");
+                        Set(chunk, "vel", velocity - hit * Mathf.Min(0, Vector2.Dot(velocity, hit)));
+                    }
+                    Set(chunks[grabbedChunk], "pos", grabAnchor); Set(chunks[grabbedChunk], "vel", Vector2.zero);
+                }
                 for (int i = 0; i < 4; i++)
                 {
                     var shoulder = (Vector2)Get(chunks[i < 2 ? 0 : 2], "pos");
-                    Set(feet[i], "absoluteHuntPos", shoulder + new Vector2(i % 2 == 0 ? -8 : 8, -14));
+                    Set(feet[i], "absoluteHuntPos", shoulder + new Vector2(Mathf.Sin(heldTicks * .28f + i * 2) * 12, -8 + Mathf.Cos(heldTicks * .28f + i * 2) * 9));
                     Call(feet[i], "Update");
                     float reach = (float)Get(((Array)Get(graphics, "limbs")).GetValue(i), "jointDist");
                     Call(feet[i], "ConnectToPoint", shoulder, reach, false, 0f, Vector2.zero, 0f, 0f);
@@ -250,18 +288,22 @@ namespace CyanPreview
                         // Head leads, the middle follows its route, and the rear is pulled
                         // by the original chunk connections instead of a rigid pose.
                         var forward = (Position - (Vector2)Get(chunks[1], "pos")).normalized;
-                        float turn = Mathf.InverseLerp(0, -1, Vector2.Dot(forward, tangent));
-                        // Give the leading chunk room to turn above its supporting
-                        // surface instead of dragging the rear into a corner backwards.
+                        float facing = Vector2.Dot(forward, tangent);
                         surfaces.Nearest(ahead, out var targetNormal);
                         var target = ahead + targetNormal * clearance;
-                        if (i == 0 && turn > 0)
+                        if (facing < .95f)
                         {
                             float angle = Vector2.SignedAngle(forward, tangent);
-                            if (Mathf.Abs(angle) > 170) angle = Vector2.SignedAngle(forward, normal) >= 0 ? 180 : -180;
-                            var bending = (Vector2)(Quaternion.Euler(0, 0, Mathf.Clamp(angle, -15, 15)) * forward);
-                            var neckTarget = (Vector2)Get(chunks[1], "pos") + bending * 17;
-                            v += (neckTarget - p) * .7f;
+                            if (Mathf.Abs(angle) > 170)
+                            {
+                                if (normal != Vector2.zero) turnDirection = Vector2.SignedAngle(forward, normal) >= 0 ? 1 : -1;
+                                angle = turnDirection * 180;
+                            }
+                            else turnDirection = Mathf.Sign(angle);
+                            var bending = (Vector2)(Quaternion.Euler(0, 0, Mathf.Clamp(angle, -18, 18)) * forward);
+                            var middle = (Vector2)Get(chunks[1], "pos");
+                            if (i == 0) v += (middle + bending * 17 - p) * .65f;
+                            if (i == 2) v += (middle - bending * 17 - p) * .35f;
                         }
                         float alignment = 1;
                         if (i == 1)
@@ -271,7 +313,7 @@ namespace CyanPreview
                             if (Behavior.Intent == PetIntent.Pursuing)
                                 alignment = Mathf.Lerp(.5f, 1, (Vector2.Dot((leadTarget - p).normalized, (target - p).normalized) + 1) * .5f);
                         }
-                        if (i < 2) v += (target - p).normalized * capabilities.CrawlSpeed * (Behavior.RunSpeed / .5f) * (i == 0 ? .55f : .35f) * alignment;
+                        if (i < 2) v += (target - p).normalized * capabilities.CrawlSpeed * (Behavior.RunSpeed / .5f) * (i == 0 ? .55f : .35f) * alignment * Mathf.InverseLerp(.3f, .9f, facing);
                     }
                     if (State == PetMotionState.Charging)
                     {
@@ -381,6 +423,11 @@ namespace CyanPreview
                     var sideways = new Vector2(-forward.y, forward.x);
                     Set(segment, "vel", (Vector2)Get(segment, "vel") - launchVelocity.normalized * i
                         + sideways * ((chargeDuration - chargeTicks) % 6 < 3 ? -5 : 5));
+                }
+                if (State == PetMotionState.Grabbed)
+                {
+                    var segment = tails.GetValue(i);
+                    Set(segment, "vel", (Vector2)Get(segment, "vel") * .95f + Vector2.down * .9f);
                 }
                 Call(graphics, "UpdateTailSegment", i, stiffness);
                 var tail = tails.GetValue(i);

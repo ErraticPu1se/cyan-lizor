@@ -167,3 +167,29 @@ entered Pursuing/Charging then landed at the selected upper frame edge. Player
 log contains no runtime exceptions. Audio was loaded and playback controls
 exercised; audible fidelity and exact frame-by-frame particle parity were not verified.
 Local build: `Builds/TargetingPreview/CyanLizor.exe` (ignored).
+
+## Held physics and turning follow-up (2026-11-10)
+
+Grab selects the nearest of the three body chunks. That point stays pinned while
+other chunks receive gravity and small deterministic struggle forces through the
+existing body connections. Feet paddle within reach and tail segments receive
+gravity. Cursor translation still carries interpolation history to avoid lagging
+feet. Joint corrections and between-tick dragging both respect arena boundaries.
+Turning bends front and rear around the middle and gates forward drive until
+aligned, including near-180-degree reversals. Propulsion smoke/flash/shockwave
+radius is 45% of the previous setting; trailing smoke is 60%. Voice bubbles are unchanged.
+
+Expanded assertions passed in `research/unity-hold-edge-verify.log`:
+- 45 hold scenarios: IDs 0/42/12345, front/middle/rear grips, all four extreme
+  out-of-bounds corners plus an interior point, repeated outside release/cancel.
+- Fixed anchor, finite positions, arena containment, bounded body separation,
+  gravity sag, ongoing struggle, release fall and fast-drag limb reach.
+- Grab during both charge and flight; no deferred launch while held; recovery.
+- Identical fixed-step results at two render frame rates; another pet remains untouched.
+- Reversal before substantial backward travel on floor, background, pole and wall.
+- Existing target propulsion, near click, charge/effect lifetime, sound assets,
+  autonomous roaming, rendering and independent-pet checks.
+The boundary test initially failed and revealed a between-tick corner-drag escape;
+the final implementation fixes it and the full suite passes. Build log:
+`research/unity-hold-build.log`. Local player: `Builds/GripPreview/CyanLizor.exe`.
+These checks establish behavior invariants, not exact Rain World motion parity.

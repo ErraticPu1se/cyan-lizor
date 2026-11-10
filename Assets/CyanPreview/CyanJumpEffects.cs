@@ -48,14 +48,14 @@ namespace CyanPreview
             BurstCount++;
             for (int i = 0; i < 7; i++)
                 Add(p, -velocity * Next() * .5f + Direction() * Mathf.Lerp(6, 23, power),
-                    Mathf.Lerp(30, 140, power) * Mathf.Lerp(.3f, 1, Next()) / 40, Mathf.Lerp(28, 46, Next()));
+                    Mathf.Lerp(30, 140, power) * Mathf.Lerp(.3f, 1, Next()) / 40, Mathf.Lerp(28, 46, Next()) * .45f);
             for (int i = 0; i < 1 + (int)(power * 10); i++)
                 Add(p, Direction() * (2 + power * 10), .3f + Next() * .6f, 2 + power * 5, true);
-            Add(p - velocity.normalized * 10, Vector2.zero, Mathf.Lerp(4, 22, power * power) / 40, Mathf.Lerp(50, 90, power), false, true);
-            Add(p - velocity.normalized * 15, Vector2.zero, (6 + power * 4) / 40, Mathf.Lerp(40, 120, power), true);
+            Add(p - velocity.normalized * 10, Vector2.zero, Mathf.Lerp(4, 22, power * power) / 40, Mathf.Lerp(50, 90, power) * .45f, false, true);
+            Add(p - velocity.normalized * 15, Vector2.zero, (6 + power * 4) / 40, Mathf.Lerp(40, 120, power) * .45f, true);
         }
         void Trail(Vector2 p, Vector2 velocity, float power)
-        { Add(p, velocity + Direction() * 2, motion.SmokeLifeTicks * Mathf.Lerp(.3f, 1, Next()) / 40, Mathf.Lerp(28, 46, Next()), small: true); }
+        { Add(p, velocity + Direction() * 2, motion.SmokeLifeTicks * Mathf.Lerp(.3f, 1, Next()) / 40, Mathf.Lerp(28, 46, Next()) * .6f, small: true); }
         public void HeadBubble(float intensity)
         {
             // LizardBubble's nested lifetime distribution and free-floating emission.
