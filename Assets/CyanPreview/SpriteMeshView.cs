@@ -1,0 +1,105 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+namespace CyanPreview
+{
+    public sealed class SpriteMeshView : IDisposable
+    {
+        readonly Transform root;
+        readonly List<Mesh> meshes = new List<Mesh>();
+        readonly List<GameObject> objects = new List<GameObject>();
+        readonly Dictionary<Texture2D, Material> materials = new Dictionary<Texture2D, Material>();
+        public SpriteMeshView(Transform parent)
+        {
+            root = new GameObject("Reference lizard").transform;
+            root.SetParent(parent, false);
+        }
+        public void SetScale(float scale) => root.localScale = Vector3.one * scale;
+
+        public void Refresh(ReferenceBridge reference)
+        {
+            var sprites = reference.OrderedSprites.ToArray();
+            while (objects.Count < sprites.Length)
+            {
+                var go = new GameObject("Reference sprite " + objects.Count);
+                go.transform.SetParent(root, false);
+                var mesh = new Mesh();
+                mesh.MarkDynamic();
+                go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                go.AddComponent<MeshRenderer>();
+                objects.Add(go);
+                meshes.Add(mesh);
+            }
+            for (int i = 0; i < objects.Count; i++)
+            {
+                var go = objects[i];
+                if (i >= sprites.Length) { go.SetActive(false); continue; }
+                var sprite = sprites[i];
+                go.SetActive((bool)ReferenceBridge.Get(sprite, "isVisible"));
+                if (!go.activeSelf) continue;
+                var element = ReferenceBridge.Get(sprite, "element");
+                string name = (string)ReferenceBridge.Get(element, "name");
+                var texture = reference.Textures[name];
+                if (!materials.TryGetValue(texture, out var material))
+                {
+                    material = new Material(Shader.Find("CyanPreview/Sprite"));
+                    material.mainTexture = texture;
+                    materials.Add(texture, material);
+                }
+                var renderer = go.GetComponent<MeshRenderer>();
+                renderer.sharedMaterial = material;
+                renderer.sortingOrder = i;
+                Vector2[] points;
+                Vector2[] uv;
+                int[] indices;
+                Color[] colors;
+                Color color = (Color)ReferenceBridge.Get(sprite, "color");
+                float alpha = (float)ReferenceBridge.Get(sprite, "alpha");
+                if (sprite.GetType().Name == "TriangleMesh")
+                {
+                    points = (Vector2[])ReferenceBridge.Get(sprite, "vertices");
+                    uv = (Vector2[])ReferenceBridge.Get(sprite, "UVvertices");
+                    var triangles = (Array)ReferenceBridge.Get(sprite, "triangles");
+                    indices = new int[triangles.Length * 3];
+                    for (int t = 0; t < triangles.Length; t++)
+                    {
+                        var triangle = triangles.GetValue(t);
+                        indices[t * 3] = Convert.ToInt32(ReferenceBridge.Get(triangle, "a"));
+                        indices[t * 3 + 1] = Convert.ToInt32(ReferenceBridge.Get(triangle, "b"));
+                        indices[t * 3 + 2] = Convert.ToInt32(ReferenceBridge.Get(triangle, "c"));
+                    }
+                    colors = (bool)ReferenceBridge.Get(sprite, "customColor")
+                        ? ((Color[])ReferenceBridge.Get(sprite, "verticeColors")).ToArray()
+                        : Enumerable.Repeat(color, points.Length).ToArray();
+                }
+                else
+                {
+                    ReferenceBridge.Call(sprite, "UpdateLocalVertices");
+                    points = (Vector2[])ReferenceBridge.Get(sprite, "_localVertices");
+                    uv = new[] { new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0), new Vector2(0, 0) };
+                    indices = new[] { 0, 1, 2, 0, 2, 3 };
+                    colors = Enumerable.Repeat(color, 4).ToArray();
+                }
+                for (int c = 0; c < colors.Length; c++) colors[c].a *= alpha;
+                var mesh = meshes[i];
+                mesh.Clear();
+                mesh.vertices = points.Select(p => new Vector3(p.x, p.y, 0)).ToArray();
+                mesh.uv = uv;
+                mesh.colors = colors;
+                mesh.triangles = indices;
+                mesh.RecalculateBounds();
+                go.transform.localPosition = new Vector3((float)ReferenceBridge.Get(sprite, "x"), (float)ReferenceBridge.Get(sprite, "y"), 0);
+                go.transform.localRotation = Quaternion.Euler(0, 0, -(float)ReferenceBridge.Get(sprite, "rotation"));
+                go.transform.localScale = new Vector3((float)ReferenceBridge.Get(sprite, "scaleX"), (float)ReferenceBridge.Get(sprite, "scaleY"), 1);
+            }
+        }
+        public void Dispose()
+        {
+            foreach (var mesh in meshes) ReferenceBridge.Release(mesh);
+            foreach (var material in materials.Values) ReferenceBridge.Release(material);
+            ReferenceBridge.Release(root.gameObject);
+        }
+    }
+}
