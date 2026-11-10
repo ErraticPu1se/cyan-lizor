@@ -36,6 +36,46 @@ the reference boundary. No editor assemblies or game DLLs should enter the playe
 
 ## Next components
 
+### Extension review: species and multiple pets
+
+The following is the intended ownership model, not implemented support:
+
+| Responsibility | Ownership |
+| --- | --- |
+| Game compatibility, assembly loading, atlas textures | One shared reference context for the application |
+| Species generation and movement capabilities | Explicit species definition/adapter; cyan first |
+| Creature graphics, pose, behavior, size, den | One independent pet instance |
+| Mesh objects and draw order | One view per pet, with ordering that keeps each pet's sprites together |
+| Visible windows and monitor surfaces | Shared desktop service |
+| Selection and control panel | Edits a selected pet by its application identity |
+| Saved roster | Versioned collection of pet records |
+
+Current blockers are concrete: `ReferenceBridge` combines atlas initialization
+with mutable creature state, `PreviewApp` owns one reference/view, and
+`SpriteMeshView` starts sprite sorting at zero for every view. Duplicating these
+objects is not sufficient for safe multi-pet support. Shared Futile static state
+must be initialized once; disposing a pet must not release shared textures.
+
+Separate shared resource ownership from creature state before adding a second
+pet. Preserve the current single-pet API during that refactor and verify unchanged
+ID results. Then introduce a roster, per-pet rendering groups and selected-pet
+controls. Add species definitions when a second species is implemented, keeping
+its breed parameters and color generation out of the UI. Shared capabilities
+such as climbing should drive navigation instead of scattered species-name checks.
+
+A pet's application identity must differ from its appearance ID: two pets with
+the same Rain World ID still need independent size, pose, den and behavior.
+Keep generation on the Unity main thread with random-state restoration. A
+versioned roster save should migrate the existing `LastId` and `ReferenceCache`
+preferences, and preserve data if a future schema cannot be read.
+
+Acceptance checks for this extension: interleave two pets' generation without
+changing either appearance; change or remove one pet without changing the other;
+render overlapping pets without mixing their sprite layers; round-trip duplicate
+appearance IDs through persistence; reject unsupported species explicitly.
+
+### Planned desktop features
+
 - Desktop overlay: transparency, hit testing, click-through, tray, focus behavior.
 - Surface service: visible window rectangles and edges, monitor boundaries,
   DPI/multiple-monitor coordinate transforms, movement updates.
