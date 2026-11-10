@@ -121,6 +121,19 @@ namespace CyanPreview.Editor
                 if (reference.Summary != first || reference.EffectColor != color)
                     throw new Exception("Prior generations changed the result");
                 VerifyIndependentPets(context, reference);
+                reference.Pose(0, .7f);
+                reference.Draw();
+                var initialPose = SpriteGeometry(reference);
+                reference.Pose(2, -.4f);
+                reference.Draw();
+                reference.Pose(0, .7f);
+                reference.Draw();
+                if (!initialPose.SequenceEqual(SpriteGeometry(reference)))
+                    throw new Exception("Comparison pose depends on previous cosmetic spring history");
+                if (reference.Summary != first || reference.EffectColor != color)
+                    throw new Exception("Pose changed ID-generated appearance");
+                if (!UnityEngine.Random.state.Equals(state)) throw new Exception("Pose leaked random state");
+                Debug.Log("POSE_REPEATABILITY_CHECK_PASSED");
                 var root = new GameObject("Verification view");
                 using (var view = new SpriteMeshView(root.transform))
                 {
@@ -155,6 +168,15 @@ namespace CyanPreview.Editor
                 UnityEngine.Object.DestroyImmediate(root);
             }
             Debug.Log("CYAN_PREVIEW_VERIFICATION_PASSED");
+        }
+
+        static float[] SpriteGeometry(ReferenceBridge pet)
+        {
+            return pet.OrderedSprites.SelectMany(sprite => new[] { "x", "y", "rotation", "scaleX", "scaleY" }
+                .Select(name => (float)ReferenceContext.Get(sprite, name))
+                .Concat(sprite.GetType().Name == "TriangleMesh"
+                    ? ((Vector2[])ReferenceContext.Get(sprite, "vertices")).SelectMany(v => new[] { v.x, v.y })
+                    : Enumerable.Empty<float>())).ToArray();
         }
     }
 }

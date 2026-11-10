@@ -9,6 +9,7 @@ namespace CyanPreview
     {
         public abstract string Id { get; }
         public abstract string DisplayName { get; }
+        public virtual float HeadLightRadius => 0;
         internal abstract object CreateLizard(ReferenceContext context, int spawner, int seed);
         static readonly LizardSpecies cyan = new CyanSpecies();
         public static LizardSpecies Find(string id)
@@ -22,6 +23,7 @@ namespace CyanPreview
     {
         public override string Id => "cyan";
         public override string DisplayName => "Cyan lizard";
+        public override float HeadLightRadius => 100f;
         internal override object CreateLizard(ReferenceContext context, int spawner, int seed)
         {
             var cyan = context.Static("CreatureTemplate+Type", "CyanLizard");
@@ -41,6 +43,7 @@ namespace CyanPreview
                 {"headSize",.95f}, {"tailLengthFactor",1.8f}, {"limbSpeed",6},
                 {"limbQuickness",.6f}, {"limbSize",1}, {"limbThickness",1},
                 {"tailColorationStart",.3f}, {"tailColorationExponent",2},
+                {"tailStiffness",250}, {"tailStiffnessDecline",.2f},
                 {"jawOpenAngle",110}, {"jawOpenLowerJawFac",.55f}, {"jawOpenMoveJawsApart",22}
             };
             foreach (var pair in values) Set(breed, pair.Key, pair.Value);
@@ -53,12 +56,13 @@ namespace CyanPreview
             var chunks = new object[3];
             for (int i = 0; i < 3; i++) chunks[i] = context.New("BodyChunk", lizard, i, new Vector2(-17 * i, 0), 8f, 2f / 3f);
             Set(lizard, "bodyChunks", context.TypedArray("BodyChunk", chunks));
-            var connections = new object[3];
-            for (int i = 0; i < 3; i++)
-            {
-                connections[i] = context.Blank("PhysicalObject+BodyChunkConnection");
-                Set(connections[i], "distance", 17f);
-            }
+            var normal = context.Static("PhysicalObject+BodyChunkConnection+Type", "Normal");
+            var push = context.Static("PhysicalObject+BodyChunkConnection+Type", "Push");
+            var connections = new[] {
+                context.New("PhysicalObject+BodyChunkConnection", chunks[0], chunks[1], 17f, normal, .95f, .5f),
+                context.New("PhysicalObject+BodyChunkConnection", chunks[1], chunks[2], 17f, normal, .95f, .5f),
+                context.New("PhysicalObject+BodyChunkConnection", chunks[0], chunks[2], 17f, push, .1f, .5f)
+            };
             Set(lizard, "bodyChunkConnections", context.TypedArray("PhysicalObject+BodyChunkConnection", connections));
             // A retracted tongue still participates in the graphics constructor
             // and consumes its own random draws. Omitting it changes cosmetics!

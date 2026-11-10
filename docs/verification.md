@@ -43,3 +43,34 @@ Still pending:
 - An F12 capture was attempted, but a new Steam screenshot file was not found; this check was observed through the live window only.
 
 Console syntax reference: https://github.com/SlimeCubed/DevConsole/wiki/Built-In-Commands
+
+## 2026-11-10: user reference screenshots and presentation fixes
+
+The user's ID 12345 images show a flexed body, grounded/gripping feet, cyan
+rings and tail markings, and light spilling onto nearby walls from the head.
+The old preview's straight spine and symmetric leg spread were an unsuitable
+side-on comparison pose. Bright eye sprites alone also omitted the head light.
+
+Changes:
+- Use the original BodyChunkConnection constructors and their Update method to
+  enforce body spacing, instead of blank connection objects containing only distances.
+- Use the original LizardGraphics.UpdateTailSegment routine with cyan stiffness
+  250 and decline 0.2. It applies the game's tail gravity, stiffness and constraints.
+- Use a controlled side-on body/foot placement and the original signed-distance
+  limb-flip calculation. Top view still spreads the feet when view depth is zero.
+- Reset cosmetic spring state before settling each comparison pose, so changing
+  the viewing angle and returning to it yields the same geometry.
+- Add a head-centered light using the generated effect color and the game's
+  100-unit radius and 0.6 alpha setting. The preview uses a custom additive falloff;
+  it does not reproduce Rain World's darkness buffer, shadows or terrain lighting.
+
+Validation: Unity verification passes ID/appearance determinism, independent pet
+ownership, finite geometry and exact pose round-trip geometry. ID-generated
+cosmetics, proportions and effect color remain unchanged by posing. Rendered
+output was inspected with the added light.
+
+Limits: body/foot targets are controlled preview positions, not game locomotion.
+Tail constraints run over a bounded settling interval, not a complete room
+simulation. Cyan propulsion, jumping, gripping and collision navigation remain
+unimplemented. Screenshot lighting/poses are not standardized, so exact visual
+parity is still unproven; no seed parameters were tuned to fit a screenshot.

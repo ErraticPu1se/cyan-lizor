@@ -31,6 +31,7 @@ namespace CyanPreview
         public string Identity { get; private set; }
         public Color EffectColor { get; private set; }
         public string Summary { get; private set; }
+        public Vector2 HeadPosition => (Vector2)Get(Get(Graphics, "head"), "pos");
 
         internal ReferenceBridge(ReferenceContext context, LizardSpecies species)
         {
@@ -112,31 +113,57 @@ namespace CyanPreview
             EnsureAlive();
             var positions = (Vector2[,])Get(Graphics, "drawPositions");
             var chunks = (Array)Get(Lizard, "bodyChunks");
+            float profile = Mathf.Clamp01(Mathf.Abs(depth) / .7f);
             for (int i = 0; i < 3; i++)
             {
-                var point = new Vector2(30 - i * 17, Mathf.Sin(phase + i * .5f) * 1.5f);
+                var point = new Vector2(30 - i * 17, i * 5f * profile + Mathf.Sin(phase + i * .5f) * 1.5f);
                 positions[i, 0] = positions[i, 1] = point;
                 Position(chunks.GetValue(i), point);
             }
-            Position(Get(Graphics, "head"), positions[0, 0] + new Vector2(11, 1));
+            for (int step = 0; step < 12; step++)
+                foreach (var connection in (Array)Get(Lizard, "bodyChunkConnections")) Call(connection, "Update");
+            for (int i = 0; i < 3; i++)
+            {
+                var point = (Vector2)Get(chunks.GetValue(i), "pos");
+                positions[i, 0] = positions[i, 1] = point;
+                Position(chunks.GetValue(i), point);
+                Set(chunks.GetValue(i), "vel", Vector2.zero);
+            }
+            Position(Get(Graphics, "head"), positions[0, 0] + new Vector2(11, Mathf.Lerp(1, -3, profile)));
             Vector2 tailPoint = positions[2, 0];
             int segment = 0;
             foreach (var tail in (Array)Get(Graphics, "tail"))
             {
                 float length = (float)Get(tail, "connectionRad");
-                float angle = .15f * Mathf.Sin(phase + segment * .6f);
+                float angle = profile * (.3f - segment * .18f) + .15f * Mathf.Sin(phase + segment * .6f);
                 tailPoint += new Vector2(-Mathf.Cos(angle), Mathf.Sin(angle)) * length;
                 Position(tail, tailPoint);
+                Set(tail, "vel", Vector2.zero);
                 Set(tail, "stretched", 1f);
                 segment++;
             }
+            var tailParts = (Array)Get(Graphics, "tail");
+            Set(tailParts.GetValue(0), "connectedPoint", (Vector2?)positions[2, 0]);
+            Set(Graphics, "tailDirection", Vector2.zero);
+            float stiffness = (float)Get(Get(Lizard, "lizardParams"), "tailStiffness");
+            // Use the game's gravity, stiffness and segment constraints, without creature AI.
+            for (int step = 0; step < 12; step++)
+                for (int i = tailParts.Length - 1; i >= 0; i--)
+                    Call(Graphics, "UpdateTailSegment", i, stiffness);
             var limbs = (Array)Get(Graphics, "limbs");
             for (int i = 0; i < limbs.Length; i++)
             {
                 var limb = limbs.GetValue(i);
                 float side = i % 2 == 0 ? 1 : -1;
-                Position(limb, positions[i < 2 ? 0 : 2, 0] + new Vector2(-10, side * 19));
-                Set(limb, "flip", side);
+                var shoulder = positions[i < 2 ? 0 : 2, 0];
+                var spreadFoot = shoulder + new Vector2(-10, side * 19);
+                var groundedFoot = new Vector2(shoulder.x - 7 + side * 4, -9 + side * 2);
+                Position(limb, Vector2.Lerp(spreadFoot, groundedFoot, profile));
+                var connection = Get(limb, "connection");
+                float distance = (float)Call(context.Type("RWCustom.Custom"), "DistanceToLine",
+                    Get(limb, "pos"), Get(connection, "pos"), Get(Get(connection, "rotationChunk"), "pos"));
+                distance *= i > 1 ? 1 : -1;
+                Set(limb, "flip", distance < 0 ? 1f : -1f);
             }
             foreach (string name in new[] { "depthRotation", "lastDepthRotation", "headDepthRotation", "lastHeadDepthRotation" }) Set(Graphics, name, depth);
             Set(Graphics, "headColorSetter", 1f);
@@ -146,8 +173,23 @@ namespace CyanPreview
             var random = UnityEngine.Random.state;
             try
             {
+                UnityEngine.Random.InitState(Seed);
                 foreach (var cosmetic in (IEnumerable)Get(Graphics, "cosmetics"))
+                {
+                    // Comparison poses must not retain spring history from earlier angles.
+                    Call(cosmetic, "Reset");
+                    if (context.Type("LizardCosmetics.LongBodyScales").IsInstanceOfType(cosmetic))
+                    {
+                        var scales = (Array)Get(cosmetic, "scaleObjects");
+                        for (int i = 0; i < scales.Length; i++)
+                        {
+                            var back = Call(cosmetic, "GetBackPos", i, 1f, true);
+                            Position(scales.GetValue(i), (Vector2)Get(back, "outerPos"));
+                            Set(scales.GetValue(i), "vel", Vector2.zero);
+                        }
+                    }
                     for (int i = 0; i < 20; i++) Call(cosmetic, "Update");
+                }
             }
             finally { UnityEngine.Random.state = random; }
         }

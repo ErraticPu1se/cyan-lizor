@@ -115,3 +115,15 @@ parity checks require a machine with the supported local game/editor.
 - Future editor upgrade needs random-sequence and rendered-image comparisons.
 - Full independent distribution without a Rain World installation is not the
   current package design.
+
+## Appearance comparison implementation
+
+The controlled pose drives the original body-connection and tail-segment
+constraints. Cosmetic springs reset before comparison settling; they do not
+accumulate changes when users revisit an angle. This preserves ID generation
+while making comparison geometry reproducible. It is not a locomotion controller.
+
+The preview head light is a separate per-view additive pass. Species data supplies
+its radius; pet state supplies its position and generated color. It currently
+approximates light spill against the preview background. Full terrain lighting,
+room darkness and shadows are a separate rendering integration task.

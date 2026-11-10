@@ -11,16 +11,38 @@ namespace CyanPreview
         readonly List<Mesh> meshes = new List<Mesh>();
         readonly List<GameObject> objects = new List<GameObject>();
         readonly Dictionary<Texture2D, Material> materials = new Dictionary<Texture2D, Material>();
+        readonly GameObject headGlow;
+        readonly Mesh glowMesh;
+        readonly Material glowMaterial;
         public SpriteMeshView(Transform parent, int sortingOrder = 0)
         {
             root = new GameObject("Reference lizard").transform;
             root.SetParent(parent, false);
             root.gameObject.AddComponent<UnityEngine.Rendering.SortingGroup>().sortingOrder = sortingOrder;
+            headGlow = new GameObject("Head light");
+            headGlow.transform.SetParent(root, false);
+            glowMesh = new Mesh { vertices = new[] {
+                new Vector3(-1, -1), new Vector3(1, -1), new Vector3(1, 1), new Vector3(-1, 1) },
+                uv = new[] { Vector2.zero, Vector2.right, Vector2.one, Vector2.up },
+                triangles = new[] { 0, 1, 2, 0, 2, 3 } };
+            headGlow.AddComponent<MeshFilter>().sharedMesh = glowMesh;
+            glowMaterial = new Material(Shader.Find("CyanPreview/HeadGlow"));
+            var glowRenderer = headGlow.AddComponent<MeshRenderer>();
+            glowRenderer.sharedMaterial = glowMaterial;
+            glowRenderer.sortingOrder = -1;
+            headGlow.SetActive(false);
         }
         public void SetScale(float scale) => root.localScale = Vector3.one * scale;
 
         public void Refresh(ReferenceBridge reference)
         {
+            // shortcut: local light spill only; match room lighting once a desktop surface model exists.
+            headGlow.SetActive(reference.Species.HeadLightRadius > 0);
+            headGlow.transform.localPosition = reference.HeadPosition;
+            headGlow.transform.localScale = Vector3.one * reference.Species.HeadLightRadius;
+            var lightColor = reference.EffectColor;
+            lightColor.a = .6f;
+            glowMaterial.SetColor("_Tint", lightColor);
             var sprites = reference.OrderedSprites.ToArray();
             while (objects.Count < sprites.Length)
             {
@@ -100,6 +122,8 @@ namespace CyanPreview
         {
             foreach (var mesh in meshes) ReferenceContext.Release(mesh);
             foreach (var material in materials.Values) ReferenceContext.Release(material);
+            ReferenceContext.Release(glowMaterial);
+            ReferenceContext.Release(glowMesh);
             ReferenceContext.Release(root.gameObject);
         }
     }
