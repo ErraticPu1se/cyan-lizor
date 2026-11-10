@@ -59,7 +59,7 @@ namespace CyanPreview
             this.surfaces = surfaces ?? throw new ArgumentNullException(nameof(surfaces));
             graphics = pet.Graphics;
             int seed = behaviorSeed ?? pet.PetId.GetHashCode();
-            Behavior = new PetBehavior(seed);
+            Behavior = new PetBehavior(seed, pet.Personality);
             jumpRandom = new System.Random(seed ^ 21761);
             capabilities = pet.Species.Movement;
             var body = (Array)Get(pet.Lizard, "bodyChunks");
@@ -94,7 +94,7 @@ namespace CyanPreview
             try { return pet.Context.New("Limb", graphics, chunks[index < 2 ? 0 : 2], index, 2.5f, .7f, .99f, 6f, .6f); }
             finally { UnityEngine.Random.state = state; }
         }
-        public void LookAt(Vector2? point) { lookTarget = point; }
+        public void LookAt(Vector2? point) { lookTarget = point; Behavior.ObserveOwner(point); }
         public void MoveTo(Vector2 point) { Behavior.Target(surfaces.Nearest(point, out _)); }
         public bool Contains(Vector2 point)
         {
@@ -226,7 +226,7 @@ namespace CyanPreview
             if (cooldown > 0) cooldown--;
             var exploration = Behavior.ExplorationTarget;
             if (State == PetMotionState.Crawling && cooldown == 0 && GripCount > 0 && exploration.HasValue
-                && Vector2.Distance(Position, exploration.Value) > 120
+                && Vector2.Distance(Position, exploration.Value) > Mathf.Lerp(190, 120, pet.Personality.Bravery)
                 && PetJumpPlanner.TryPlanToTarget(Position, exploration.Value, surfaces, capabilities, out var targetedJump))
             {
                 launchVelocity = targetedJump.Velocity;
@@ -234,7 +234,7 @@ namespace CyanPreview
             }
             if (AutonomousJumps && Roam && Behavior.Intent == PetIntent.Roaming && State == PetMotionState.Crawling && --jumpWait <= 0 && GripCount > 0)
             {
-                jumpWait = jumpRandom.Next(240, 481);
+                jumpWait = jumpRandom.Next(240, 481) + Mathf.RoundToInt((1 - pet.Personality.Bravery) * 160);
                 if (PetJumpPlanner.TryPlan(Position, surfaces, capabilities, jumpRandom, out var candidate))
                 {
                     launchVelocity = candidate.Velocity;

@@ -27,7 +27,7 @@ namespace CyanPreview.Editor
                 behavior.Target(new Vector2(100, 20));
                 Require(behavior.Intent == PetIntent.Investigating && behavior.ExplorationTarget == new Vector2(100, 20), "Repeat click did not replace inspection");
                 behavior.Update(new Vector2(100, 20), surface);
-                for (int i = 0; i < 160 && behavior.Intent == PetIntent.Inspecting; i++) behavior.Update(new Vector2(100, 20), surface);
+                for (int i = 0; i < 400 && behavior.Intent == PetIntent.Inspecting; i++) behavior.Update(new Vector2(100, 20), surface);
                 Require(behavior.Intent == PetIntent.Settling, "Missing settling phase");
                 behavior.Target(new Vector2(-100, 20));
                 Require(behavior.Intent == PetIntent.Investigating, "Click did not interrupt settling");

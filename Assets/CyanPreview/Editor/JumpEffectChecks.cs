@@ -13,19 +13,6 @@ namespace CyanPreview.Editor
                 if (clip.samples <= 0 || clip.length <= 0) throw new Exception("Empty game sound: " + name);
             }
             var frame = new FrameSurfaces(new Rect(-360, -180, 720, 360));
-            var behavior = new PetBehavior(17);
-            var position = new Vector2(0, -166);
-            int idle = 0;
-            while (behavior.Intent == PetIntent.Idle && idle < 700) { behavior.Update(position, frame); idle++; }
-            if (idle < 320 || idle > 600) throw new Exception("Idle duration outside 8-15 seconds");
-            int roaming = 0;
-            while (behavior.Intent != PetIntent.Idle && roaming < 1100)
-            {
-                var goal = behavior.Update(position, frame);
-                if (goal.HasValue) { frame.Nearest(goal.Value, out var normal); position = goal.Value + normal * 14; }
-                roaming++;
-            }
-            if (roaming < 599 || roaming > 1000) throw new Exception("Roaming duration outside 15-25 seconds");
             if (PetInteraction.GrabDelay != .1f) throw new Exception("Grab hold delay changed");
             using (var pet = context.CreatePet())
             {

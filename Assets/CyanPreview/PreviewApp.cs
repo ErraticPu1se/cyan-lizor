@@ -20,7 +20,7 @@ namespace CyanPreview
         PetInteraction interaction;
         CyanJumpEffects jumpEffects;
         CyanPetAudio petAudio;
-        bool soundEnabled = true;
+        bool soundEnabled = true, showDecisions;
         string audioError;
         bool clickToExplore = true, autonomousJumps = true;
         Vector2 panelScroll;
@@ -227,6 +227,8 @@ namespace CyanPreview
                 if (nextSurface != surfaceMode) { surfaceMode = nextSurface; BeginMotion(); }
                 if (surfaceMode == 2) GUILayout.Label("Pole crawling test; jumping between poles comes later.", small);
                 if (GUILayout.Button("Propel toward centre")) motion.JumpTo(new Vector2(-40, 15));
+                showDecisions = GUILayout.Toggle(showDecisions, " Show decision scores");
+                if (showDecisions) GUILayout.Label(motion.Behavior.DecisionSummary, small);
                 GUILayout.Label(motion.Behavior.Intent + " / " + motion.State + " · " + motion.GripCount + " feet gripping", small);
                 GUILayout.Label("Idle: watches cursor. Hold on pet for 0.1s to drag. Release to drop. Click elsewhere to explore. Right click to jump.", small);
             }

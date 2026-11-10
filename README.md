@@ -97,7 +97,7 @@ No public release or installer publication happens automatically from a commit.
 ## Pet behavior and interaction preview
 
 Movement mode starts idle, watches the cursor while idle, and selects a new
-roaming destination after a 8–15 second rest. Behavior (idle/roam/pursuit) is
+roaming destination when exploration utility exceeds resting utility. Behavior (idle/roam/pursuit) is
 separate from physical state (crawl/charge/airborne/grabbed). Both belong to one
 pet; neither shares its timers, destinations or random generator with another.
 
@@ -116,14 +116,14 @@ These are preview surfaces, not real desktop windows. Moving-window tracking,
 transparent overlay, transfers between poles/windows, and exact game AI parity
 remain unimplemented.
 
-Roaming bouts last 15–25 seconds, choosing additional destinations within each
-bout. The default test arena is 720 × 360 world units (previously 180 × 84),
+Rest and roaming duration now emerge from exertion, restlessness and utility
+competition, rather than fixed bout timers. The default test arena is 720 × 360 world units (previously 180 × 84),
 with a 1× default pet scale and a 1440 × 900 default player window.
 Cyan jumps include a smoke burst/trail, bubbles, flash and expanding shockwave,
 adapted from the locally inspected game behavior to preview shaders.
 
 Click exploration interrupts idle on mouse press. Nearby destinations use paced
-crawling; distant destinations (over 120 world units) attempt a trajectory-tested
+crawling; distant destinations (120–190 world units, depending on bravery) attempt a trajectory-tested
 cyan jump, then continue exploring after landing. If no valid landing is found,
 the pet crawls instead. Fast dragging carries the complete rendered pose and
 constrains dangling limbs, so feet cannot be left behind at an old cursor position.
@@ -149,5 +149,30 @@ Clicks now invite investigation rather than pursuit: approach, inspect the area,
 settle, then rest with small body shifts and intermittent cursor attention. A new
 click replaces the current interest; grabbing cancels it. This works when roaming
 is disabled. The panel displays all six original ID-generated personality values.
-Traits remain faithful to the installed game; unsupported trait-to-speed mappings
-are not invented. Inspection timing and resting pose are desktop adaptations.
+Trait values come from the installed game. Energy, sympathy and bravery now have
+explicit desktop decision mappings described below; resting pose is also adapted.
+
+### Utility decisions and future den/feeding
+
+Rest, exploration, click interest and friendly owner-following compete through
+weighted, smoothed utility scores with continuation hysteresis. Energy changes how
+quickly restlessness grows and how strongly exploration competes; sympathy weights
+click interest; bravery lowers the distance at which a safe jump is preferred and
+reduces reluctance between autonomous jump attempts. These are deliberately approved
+desktop personality adaptations, not claims about the original cyan AI's mappings.
+Dominance, nervousness and aggression are preserved without invented effects.
+
+Click inspection reduces interest; exertion promotes rest. Stalled cues expire.
+A previously invited owner can attract following when the cursor is distant and
+stays still; rapid cursor movement suppresses following. Disabling roaming also
+disables autonomous owner-following. The cursor is never a prey target. Enable
+**Show decision scores** to see smoothed utilities, exertion and restlessness.
+Continuation bonuses affect selection beyond the displayed baseline scores.
+
+Planned, not implemented: a movable den with a stable per-pet home reference, return-
+to-den utility and destination updates when moved; feeding with separately identified
+prey, hunger/hunt utility, capture/carry physics and delivery into the den. Owner cues
+must remain distinct from prey targets. A carried meal should make den return the
+preferred task; missing/moved dens or removed prey must invalidate only that task.
+These additions belong in decisions and target ownership, with the current movement
+controller executing routes. No placeholder prey or den objects are created now.

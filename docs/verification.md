@@ -239,3 +239,33 @@ checks pass. The pole climb check now verifies that it climbed with gripping fee
 before inspection can legitimately walk back down. Windows build succeeded
 (`research/unity-cursor-build.log`). Local build: `Builds/CursorPreview/CyanLizor.exe`.
 Exact naturalness remains a visual comparison task; this is desktop exploration.
+
+## Utility-based desktop personality (2026-11-10)
+
+This supersedes the earlier fixed rest/roam and inspection timing notes. Reviewed
+local UtilityComparer weighted utility/smoothing and FriendTracker utility/run-speed.
+The host uses those concepts plus explicit continuation hysteresis (the inspected
+UtilityComparer declares continuationBonus but does not apply it in the displayed
+selection implementation). Host needs/scores and the approved energy/sympathy/bravery
+mappings are adaptations. The full game AI/relationship world is not instantiated.
+
+Rest/explore/click/friend scores now compete. Exertion increases with movement/work
+and recovers at rest; restlessness grows at an energy-dependent rate. Inspection
+satisfies click curiosity and settling ends as movement slows. Only attention,
+local waypoint, obstruction and jump cooldowns retain short timing safeguards.
+Stable distant owner attention is allowed only after an owner cue; moving cursors
+and disabled autonomy suppress friendly following. Bravery modifies safe propulsion
+preference, never trajectory validity. All scores/needs are owned per pet.
+
+Verification passed: `research/unity-utility-verify.log`. Tests compare energy across
+8 controlled seeds, sympathy weighting, brave/timid actual jump choice, 4000-step
+rest/explore stability, unreachable cue expiry, stable owner attraction, disable-
+autonomy interruption and rapid-cursor suppression. All existing personality,
+inspection, cursor, dragging, boundaries, climbing, autonomy, sound, rendering and
+ownership checks also passed. Fixed-duration assertions were removed because they
+asserted the behavior this change intentionally replaces.
+
+Windows build succeeded (`research/unity-utility-build.log`). Native player check
+showed changing decision scores and autonomous transition to roaming. Runtime log:
+`research/utility-player.log`. Build: `Builds/UtilityPreview/CyanLizor.exe` (ignored).
+Movable den and feeding/capture/carry/delivery are documented future work only.
