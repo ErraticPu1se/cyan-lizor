@@ -40,6 +40,7 @@ namespace CyanPreview
         public void SetScale(float scale) => root.transform.localScale = Vector3.one * scale;
         void Add(Vector2 p, Vector2 v, float life, float radius, bool ring = false, bool flash = false, bool small = false)
         {
+            if (disposed) return;
             if (particles.Count >= 128) particles.RemoveAt(0);
             particles.Add(new Particle { Position = p, Velocity = v, Life = life, Radius = radius, Ring = ring, Flash = flash, Small = small });
         }

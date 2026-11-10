@@ -3,7 +3,7 @@ Shader "CyanPreview/JumpParticle"
     SubShader
     {
         Tags { "Queue"="Transparent" "RenderType"="Transparent" }
-        Blend SrcAlpha OneMinusSrcAlpha
+        Blend SrcAlpha OneMinusSrcAlpha, One OneMinusSrcAlpha
         Cull Off ZWrite Off
         Pass
         {

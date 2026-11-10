@@ -165,7 +165,9 @@ namespace CyanPreview
             if (disposed) throw new ObjectDisposedException(nameof(ReferenceContext));
             if (soundBundle == null)
             {
-                soundBundle = AssetBundle.LoadFromFile(Path.Combine(Manifest.gamePath, "RainWorld_Data", "StreamingAssets", "AssetBundles", "loadedsoundeffects"));
+                var bundlePath = Path.Combine(Manifest.gamePath, "RainWorld_Data", "StreamingAssets", "AssetBundles", "loadedsoundeffects");
+                if (!File.Exists(bundlePath)) throw new IOException("The local Rain World sound bundle is missing.");
+                soundBundle = AssetBundle.LoadFromFile(bundlePath);
                 if (soundBundle == null) throw new IOException("Cannot load this Rain World installation's sound bundle.");
             }
             var clip = soundBundle.LoadAsset<AudioClip>("Assets/LoadedSoundEffects/" + name + ".wav");

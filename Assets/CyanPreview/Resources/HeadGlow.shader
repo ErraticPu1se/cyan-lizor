@@ -1,11 +1,11 @@
 Shader "CyanPreview/HeadGlow"
 {
-    Properties { _Tint ("Light color", Color) = (0,1,1,0.6) }
+    Properties { _Tint ("Light color", Color) = (0,1,1,0.6) _DstBlend ("Destination blend", Float) = 1 }
     SubShader
     {
         Tags { "Queue"="Transparent" "RenderType"="Transparent" }
         Cull Off ZWrite Off ZTest Always
-        Blend SrcAlpha One
+        Blend SrcAlpha [_DstBlend], One OneMinusSrcAlpha
         Pass
         {
             CGPROGRAM

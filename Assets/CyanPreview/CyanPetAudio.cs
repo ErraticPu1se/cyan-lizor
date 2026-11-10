@@ -22,6 +22,7 @@ namespace CyanPreview
             get => enabled;
             set
             {
+                if (disposed || enabled == value) return;
                 enabled = value;
                 if (!value) { charge.Stop(); voice.Stop(); foreach (var source in launch) source.Stop(); motion.VoiceIntensity = 0; }
             }
@@ -77,6 +78,7 @@ namespace CyanPreview
         public void Advance(float seconds)
         {
             if (disposed) return;
+            seconds = float.IsNaN(seconds) || float.IsInfinity(seconds) ? 0 : Mathf.Clamp(seconds, 0, .25f);
             var intent = motion.Behavior.Intent;
             if (intent == PetIntent.Investigating && lastIntent != intent) Vocalize();
             lastIntent = intent;
