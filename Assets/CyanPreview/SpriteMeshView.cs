@@ -32,6 +32,7 @@ namespace CyanPreview
             glowRenderer.sortingOrder = -1;
             headGlow.SetActive(false);
         }
+        public void SetVisible(bool visible) => root.gameObject.SetActive(visible);
         public void SetScale(float scale) => root.localScale = Vector3.one * scale;
 
         public void Refresh(ReferenceBridge reference)

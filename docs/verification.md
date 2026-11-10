@@ -269,3 +269,22 @@ Windows build succeeded (`research/unity-utility-build.log`). Native player chec
 showed changing decision scores and autonomous transition to roaming. Runtime log:
 `research/utility-player.log`. Build: `Builds/UtilityPreview/CyanLizor.exe` (ignored).
 Movable den and feeding/capture/carry/delivery are documented future work only.
+
+## Movable den prototype (separate branch, 2026-11-10)
+
+Prototype only: generated 32x32 pixel den, pointer-event drag capture, constrained
+placement, spawn/emergence, preview food-return trigger, entry, 200-tick rest,
+automatic emergence and Come out. Original LizardGraphics.SuckedIntoShortCut is
+called for tail/limb entry; original exit chunk offsets/velocity and graphics reset
+are adapted from Lizard.SpitOutOfShortCut. No real room shortcut graph, feeding,
+prey carrying or interior map is implemented. Position is session-local.
+
+Full verification passed: research/unity-den-verify.log. Tests cover frame,
+background and pole, relocation during return/entry/exit, occupied movement,
+out-of-bounds dragging, repeated spawning/requests, grab cancellation, hidden
+input rejection, early emergence, invalid positions, independent pets, and global
+random preservation. Native player verified fast den drag, return, hidden rest and
+automatic emergence. Event-based mouse handling fixed missed fast drag starts;
+graphics and limb reset calls now preserve shared random state. Windows build
+passed: research/unity-den-build.log. Local build: Builds/DenPreview/CyanLizor.exe.
+This prototype is kept apart from desktop integration at the user's request.

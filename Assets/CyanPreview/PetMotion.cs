@@ -43,7 +43,8 @@ namespace CyanPreview
         public Vector2 HeadPosition => pet.HeadPosition;
         public float VoiceIntensity { get; set; }
         Vector2 destination, launchVelocity, jumpTarget;
-        Vector2? lookTarget;
+        Vector2? lookTarget, denDestination;
+        float TravelSpeed => denDestination.HasValue ? .35f : Behavior.RunSpeed;
         bool hasDestination;
         public PetBehavior Behavior { get; }
         public bool Roam { get => Behavior.Roam; set => Behavior.Roam = value; }
@@ -96,6 +97,41 @@ namespace CyanPreview
         }
         public void LookAt(Vector2? point) { lookTarget = point; Behavior.ObserveOwner(point); }
         public void MoveTo(Vector2 point) { Behavior.Target(surfaces.Nearest(point, out _)); }
+        internal void SetDenDestination(Vector2 point) { denDestination = surfaces.Nearest(point, out _); }
+        internal void CancelDenDestination() { denDestination = null; }
+        internal void EnterDenStep(Vector2 entrance)
+        {
+            propelled = false; ChangeState(PetMotionState.Crawling);
+            foreach (var chunk in chunks)
+            {
+                Set(chunk, "lastPos", Get(chunk, "pos"));
+                Set(chunk, "pos", Vector2.Lerp((Vector2)Get(chunk, "pos"), entrance, .18f));
+                Set(chunk, "vel", Vector2.zero);
+            }
+            UpdateGraphics();
+            Call(graphics, "SuckedIntoShortCut", entrance);
+        }
+        internal void ExitDen(Vector2 entrance, Vector2 direction)
+        {
+            Behavior.Rest(); denDestination = null; propelled = false; cooldown = 20; accumulator = 0; resting = false;
+            for (int i = 0; i < chunks.Length; i++)
+            {
+                // Lizard.SpitOutOfShortCut places chunks 15 units apart with exit velocity 2.
+                Set(chunks[i], "pos", surfaces.Constrain(entrance - direction * ((-1.5f + i) * 15), 8, out _));
+                Set(chunks[i], "lastPos", entrance); Set(chunks[i], "vel", direction * 2);
+            }
+            var randomState = UnityEngine.Random.state;
+            try
+            {
+                Call(graphics, "Reset");
+                for (int i = 0; i < feet.Length; i++)
+                {
+                    Call(feet[i], "Reset", entrance); planted[i] = seeking[i] = false; gripAge[i] = 0; anchors[i] = entrance;
+                }
+            }
+            finally { UnityEngine.Random.state = randomState; }
+            ChangeState(PetMotionState.Crawling); UpdateGraphics();
+        }
         public bool Contains(Vector2 point)
         {
             foreach (var chunk in chunks)
@@ -111,7 +147,7 @@ namespace CyanPreview
                 if (Vector2.Distance(point, (Vector2)Get(chunks[i], "pos")) < Vector2.Distance(point, (Vector2)Get(chunks[grabbedChunk], "pos"))) grabbedChunk = i;
             grabAnchor = (Vector2)Get(chunks[grabbedChunk], "pos");
             grabOffset = grabAnchor - point; heldTicks = 0; propelled = false;
-            Behavior.Rest(); ChangeState(PetMotionState.Grabbed);
+            denDestination = null; Behavior.Rest(); ChangeState(PetMotionState.Grabbed);
             for (int i = 0; i < 4; i++) { planted[i] = seeking[i] = false; gripAge[i] = 0; }
         }
         public void DragTo(Vector2 point)
@@ -232,7 +268,7 @@ namespace CyanPreview
                 launchVelocity = targetedJump.Velocity;
                 BeginJump(targetedJump.Landing, targetedJump.Power);
             }
-            if (AutonomousJumps && Roam && Behavior.Intent == PetIntent.Roaming && State == PetMotionState.Crawling && --jumpWait <= 0 && GripCount > 0)
+            if (!denDestination.HasValue && AutonomousJumps && Roam && Behavior.Intent == PetIntent.Roaming && State == PetMotionState.Crawling && --jumpWait <= 0 && GripCount > 0)
             {
                 jumpWait = jumpRandom.Next(240, 481) + Mathf.RoundToInt((1 - pet.Personality.Bravery) * 160);
                 if (PetJumpPlanner.TryPlan(Position, surfaces, capabilities, jumpRandom, out var candidate))
@@ -249,10 +285,10 @@ namespace CyanPreview
                 ChangeState(PetMotionState.Airborne);
                 JumpLaunched?.Invoke((Vector2)Get(chunks[1], "pos"), launchVelocity, jumpPower);
             }
-            var goal = Behavior.Update(Position, surfaces, State == PetMotionState.Crawling);
+            var goal = denDestination ?? Behavior.Update(Position, surfaces, State == PetMotionState.Crawling);
             hasDestination = goal.HasValue;
             if (goal.HasValue) destination = goal.Value;
-            Set(Get(pet.Lizard, "AI"), "runSpeed", Behavior.RunSpeed);
+            Set(Get(pet.Lizard, "AI"), "runSpeed", TravelSpeed);
             bool airborne = State == PetMotionState.Airborne;
             poseTicks++;
             bool atRest = State == PetMotionState.Crawling && !hasDestination;
@@ -319,7 +355,7 @@ namespace CyanPreview
                             if (Behavior.Intent == PetIntent.Investigating)
                                 alignment = Mathf.Lerp(.5f, 1, (Vector2.Dot((leadTarget - p).normalized, (target - p).normalized) + 1) * .5f);
                         }
-                        if (i < 2) v += (target - p).normalized * capabilities.CrawlSpeed * (Behavior.RunSpeed / .5f) * (i == 0 ? .55f : .35f) * alignment * Mathf.InverseLerp(.3f, .9f, facing);
+                        if (i < 2) v += (target - p).normalized * capabilities.CrawlSpeed * (TravelSpeed / .5f) * (i == 0 ? .55f : .35f) * alignment * Mathf.InverseLerp(.3f, .9f, facing);
                     }
                     if (resting)
                     {
@@ -400,6 +436,7 @@ namespace CyanPreview
             var forward = (draw[0, 0] - draw[1, 0]).normalized;
             var target = draw[0, 0] + forward * 100;
             if (State == PetMotionState.Charging || (State == PetMotionState.Airborne && propelled)) target = jumpTarget;
+            else if (denDestination.HasValue) target = denDestination.Value;
             else if (Behavior.InterestPoint.HasValue && lookTarget.HasValue) target = lookTarget.Value;
             else if (Behavior.ExplorationTarget.HasValue) target = Behavior.ExplorationTarget.Value;
             else if (Behavior.InterestPoint.HasValue) target = Behavior.InterestPoint.Value + new Vector2(Mathf.Sin(poseTicks * .035f) * 35, 18 + Mathf.Sin(poseTicks * .06f) * 12);

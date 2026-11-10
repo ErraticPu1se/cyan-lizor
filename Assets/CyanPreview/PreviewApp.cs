@@ -15,9 +15,12 @@ namespace CyanPreview
         Camera previewCamera;
         string id = "12345", cache, status = "Choose your prepared local reference folder.", error;
         float zoom = 1f, depth = .7f, phase;
-        bool animate, locomotion;
+        bool animate, locomotion = true;
         PetMotion motion;
         PetInteraction interaction;
+        PetDen den;
+        PetDenJourney denJourney;
+        DenView denView;
         CyanJumpEffects jumpEffects;
         CyanPetAudio petAudio;
         bool soundEnabled = true, showDecisions;
@@ -40,13 +43,17 @@ namespace CyanPreview
             jumpEffects?.Dispose();
             IPetSurfaces surfaces = surfaceMode == 1 ? (IPetSurfaces)new BackgroundSurfaces(movementFrame.Bounds)
                 : surfaceMode == 2 ? (IPetSurfaces)new PoleSurfaces(movementFrame.Bounds, 0) : movementFrame;
+            var denPosition = den != null ? den.Position : new Vector2(-220, -150);
+            den = new PetDen(surfaces, movementFrame.Bounds, denPosition);
+            denView?.Dispose(); denView = new DenView(transform); denView.Refresh(den, zoom);
             motion = new PetMotion(reference, surfaces) { AutonomousJumps = autonomousJumps && surfaceMode != 2 };
             jumpEffects = new CyanJumpEffects(transform, motion, reference.EffectColor, reference.Seed);
             jumpEffects.SetScale(zoom);
             audioError = null;
             try { petAudio = new CyanPetAudio(transform, context, motion, jumpEffects, reference.Seed) { Enabled = soundEnabled }; }
             catch (Exception e) { audioError = e.Message; Debug.LogWarning("Pet audio unavailable: " + e.Message); }
-            interaction = new PetInteraction(motion) { ClickToExplore = clickToExplore };
+            denJourney = new PetDenJourney(motion, den); denJourney.Spawn();
+            interaction = new PetInteraction(motion, denJourney) { ClickToExplore = clickToExplore };
         }
         string gameFolder = @"C:\Program Files (x86)\Steam\steamapps\common\Rain World";
         Process importer;
@@ -141,12 +148,12 @@ namespace CyanPreview
                     var point = (Vector2)previewCamera.ScreenToWorldPoint(mouse) / zoom;
                     motion.LookAt(point);
                     bool inside = previewCamera.pixelRect.Contains(mouse);
-                    if (inside && Input.GetMouseButtonDown(0)) interaction.Press(point);
                     if (Input.GetMouseButton(0)) interaction.Hold(point, Time.deltaTime);
-                    if (Input.GetMouseButtonUp(0)) interaction.Release(point, inside);
-                    if (inside && Input.GetMouseButtonDown(1)) motion.JumpTo(point);
-                    petAudio?.Advance(Time.deltaTime);
-                    motion.Advance(Time.deltaTime);
+                    if (inside && Input.GetMouseButtonDown(1) && denJourney.Phase == DenPhase.Outside && !den.Dragging) motion.JumpTo(point);
+                    if (petAudio != null) petAudio.Enabled = soundEnabled && denJourney.CanInteract;
+                    if (denJourney.CanInteract) petAudio?.Advance(Time.deltaTime);
+                    denJourney.Advance(Time.deltaTime);
+                    denView.Refresh(den, zoom);
                     jumpEffects.Advance(Time.deltaTime);
                 }
                 else
@@ -156,12 +163,25 @@ namespace CyanPreview
                 }
                 reference.Draw(locomotion ? motion.Interpolation : 1f);
                 view.Refresh(reference);
+                view.SetVisible(!locomotion || denJourney.Visible);
             }
             catch (Exception e) { animate = locomotion = false; Fail(e); }
         }
         void OnApplicationFocus(bool focused) { if (!focused) interaction?.Cancel(); }
         void OnGUI()
         {
+            if (locomotion && interaction != null && previewCamera != null)
+            {
+                var evt = Event.current;
+                var mouse = new Vector2(evt.mousePosition.x, Screen.height - evt.mousePosition.y);
+                var point = (Vector2)previewCamera.ScreenToWorldPoint(mouse) / zoom;
+                if (evt.button == 0 && evt.type == EventType.MouseDown && previewCamera.pixelRect.Contains(mouse))
+                { interaction.Press(point); evt.Use(); }
+                else if (evt.button == 0 && evt.type == EventType.MouseDrag && interaction.HasPointerCapture)
+                { interaction.Hold(point, 0); evt.Use(); }
+                else if (evt.button == 0 && evt.rawType == EventType.MouseUp && interaction.HasPointerCapture)
+                { interaction.Hold(point, 0); interaction.Release(point, previewCamera.pixelRect.Contains(mouse)); evt.Use(); }
+            }
             if (Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Return && GUI.GetNameOfFocusedControl() == "CreatureId" && reference != null)
             { Generate(); Event.current.Use(); }
             if (title == null)
@@ -207,14 +227,14 @@ namespace CyanPreview
                 try
                 {
                     if (locomotion) BeginMotion();
-                    else { petAudio?.Dispose(); petAudio = null; jumpEffects?.Dispose(); jumpEffects = null; reference.Pose(phase, depth); reference.Draw(); view.Refresh(reference); }
+                    else { interaction?.Cancel(); denView?.Dispose(); denView = null; view.SetVisible(true); petAudio?.Dispose(); petAudio = null; jumpEffects?.Dispose(); jumpEffects = null; reference.Pose(phase, depth); reference.Draw(); view.Refresh(reference); }
                 }
                 catch (Exception e) { locomotion = false; Fail(e); }
             }
             if (locomotion)
             {
                 soundEnabled = GUILayout.Toggle(soundEnabled, " Pet sounds");
-                if (petAudio != null) petAudio.Enabled = soundEnabled;
+                if (petAudio != null) petAudio.Enabled = soundEnabled && denJourney.CanInteract;
                 if (GUILayout.Button("Vocalize")) petAudio?.Vocalize();
                 if (audioError != null) GUILayout.Label("Sound unavailable: " + audioError, small);
                 motion.Roam = GUILayout.Toggle(motion.Roam, " Roam after resting");
@@ -226,7 +246,13 @@ namespace CyanPreview
                 int nextSurface = GUILayout.SelectionGrid(surfaceMode, new[] { "Frame", "Background", "Pole" }, 3);
                 if (nextSurface != surfaceMode) { surfaceMode = nextSurface; BeginMotion(); }
                 if (surfaceMode == 2) GUILayout.Label("Pole crawling test; jumping between poles comes later.", small);
+                GUI.enabled = denJourney.Phase == DenPhase.Outside;
                 if (GUILayout.Button("Propel toward centre")) motion.JumpTo(new Vector2(-40, 15));
+                if (GUILayout.Button("Test food return (preview)")) denJourney.RequestFoodReturn();
+                GUI.enabled = denJourney.Phase == DenPhase.Inside;
+                if (GUILayout.Button("Come out")) denJourney.ComeOut();
+                GUI.enabled = true;
+                GUILayout.Label("Den: " + denJourney.Phase + " / drag the square to move home", small);
                 showDecisions = GUILayout.Toggle(showDecisions, " Show decision scores");
                 if (showDecisions) GUILayout.Label(motion.Behavior.DecisionSummary, small);
                 GUILayout.Label(motion.Behavior.Intent + " / " + motion.State + " · " + motion.GripCount + " feet gripping", small);
@@ -302,6 +328,6 @@ namespace CyanPreview
             Destroy(image);
             status = "Saved: " + file;
         }
-        void OnDestroy() { petAudio?.Dispose(); jumpEffects?.Dispose(); view?.Dispose(); reference?.Dispose(); context?.Dispose(); }
+        void OnDestroy() { interaction?.Cancel(); denView?.Dispose(); petAudio?.Dispose(); jumpEffects?.Dispose(); view?.Dispose(); reference?.Dispose(); context?.Dispose(); }
     }
 }
