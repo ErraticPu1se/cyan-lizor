@@ -19,3 +19,27 @@ Still pending:
 - Side-by-side comparison with the same ID in Rain World. Original generation and drawing calls are used, but the preview uses a controlled pose and neutral palette; exact visual parity is not established.
 - Testing on a clean second Windows machine and other game versions. The current adapter deliberately supports the inspected game assembly only.
 - Desktop overlay, climbing, cursor petting, sound, den behavior, and installer. This milestone is an appearance preview, not the finished desktop pet.
+
+## 2026-11-10: architecture refactor
+
+- Unity verification passes after extracting ReferenceContext and LizardSpecies.
+- Two pets with the same appearance ID have distinct application IDs and graphics,
+  share the atlas textures, and remain independent under interleaved generation.
+- Removing one pet leaves the other able to draw and regenerate; premature shared
+  context disposal and unknown species are rejected.
+- Each rendered pet has its own SortingGroup and explicit group order.
+- The rendered ID 12345 PNG is byte-for-byte identical before and after this
+  refactor (SHA-256 34D08EF7B24DD0E34084F4DFD850957DF417103C1FC01B3A5192FDAC92EBDE24).
+- Windows build succeeds, and the rebuilt player's cyan preview was inspected.
+- No roster UI, second species, or persistence migration is included in this refactor.
+
+## 2026-11-10: first in-game comparison
+
+- In the user's Warehouse arena, Dev Console accepted `spawn CyanLizard ID.-1.12345` and the cyan lizard was visibly present afterward.
+- Observed broad features also present in the preview: dark body, cyan rings and cyan tail-tip markings. This is a qualitative observation, not a numerical appearance match.
+- Used `game_speed 0` for a stationary observation, then restored `game_speed 1` and closed the console.
+- Arena palette, lighting, pose and scale differ from the controlled preview. Existing active mods were retained; their influence was not ruled out.
+- No appearance changes were made from this observation alone. Next comparison should align pose/scale and inspect color, proportions and cosmetic details for several IDs before declaring parity.
+- An F12 capture was attempted, but a new Steam screenshot file was not found; this check was observed through the live window only.
+
+Console syntax reference: https://github.com/SlimeCubed/DevConsole/wiki/Built-In-Commands

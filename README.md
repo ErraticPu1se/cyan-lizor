@@ -76,7 +76,9 @@ importer, and notices, and rejects accidental game binaries or reference caches.
 
 ## Structure
 
-- `Assets/CyanPreview/ReferenceBridge.cs`: local-game compatibility boundary.
+- `Assets/CyanPreview/ReferenceContext.cs`: shared local-game compatibility and assets.
+- `Assets/CyanPreview/ReferenceBridge.cs`: independent pet identity and graphics state.
+- `Assets/CyanPreview/LizardSpecies.cs`: supported species creation (cyan only).
 - `Assets/CyanPreview/SpriteMeshView.cs`: presents reference sprite geometry.
 - `Assets/CyanPreview/PreviewApp.cs`: ID input, preview controls, local import.
 - `Assets/CyanPreview/Editor/PreviewBuild.cs`: scene, build, reference checks.

@@ -9,6 +9,7 @@ namespace CyanPreview
 {
     public sealed class PreviewApp : MonoBehaviour
     {
+        ReferenceContext context;
         ReferenceBridge reference;
         SpriteMeshView view;
         Camera previewCamera;
@@ -51,7 +52,8 @@ namespace CyanPreview
             try
             {
                 if (reference != null) throw new InvalidOperationException("Restart the app to change reference installations.");
-                reference = new ReferenceBridge(cache);
+                context = new ReferenceContext(cache);
+                reference = context.CreatePet();
                 PlayerPrefs.SetString("ReferenceCache", cache);
                 Generate();
             }
@@ -67,7 +69,7 @@ namespace CyanPreview
                 reference.Draw();
                 view.Refresh(reference);
                 view.SetScale(zoom);
-                status = reference.Identity + "  ·  Cyan lizard  ·  " + reference.Manifest.gameVersion;
+                status = reference.Identity + "  ·  " + reference.Species.DisplayName + "  ·  " + reference.Manifest.gameVersion;
                 error = null;
                 PlayerPrefs.SetString("LastId", id);
                 PlayerPrefs.Save();
@@ -197,6 +199,6 @@ namespace CyanPreview
             Destroy(image);
             status = "Saved: " + file;
         }
-        void OnDestroy() { view?.Dispose(); reference?.Dispose(); }
+        void OnDestroy() { view?.Dispose(); reference?.Dispose(); context?.Dispose(); }
     }
 }

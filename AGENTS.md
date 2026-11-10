@@ -13,7 +13,7 @@
 - Windows desktop pet; current milestone is a single cyan appearance preview.
 - Future requirements include multiple species and multiple pets. Do not implement unrequested species or present planned support as working.
 - Keep UI, appearance generation, rendering, and future desktop navigation separate. Do not add pet simulation to PreviewApp or game-reflection details to new UI code.
-- Before enabling multiple pets, separate shared game/atlas resources from per-pet mutable state. Do not create one complete ReferenceBridge per pet: it initializes shared Futile state.
+- Keep one ReferenceContext for shared game/atlas resources. Create per-pet ReferenceBridge instances through context.CreatePet; never reinitialize shared Futile state per pet. Dispose views, then pets, then context.
 - Give each pet its own application identity, separate from its Rain World appearance ID. Two pets may intentionally share an appearance ID.
 - Put species-specific generation and movement capabilities behind explicit species definitions as species support is introduced; unknown species must not silently become cyan.
 - Keep appearance randomness isolated from behavior randomness and other pets. Unity and game graphics calls remain on the Unity main thread.

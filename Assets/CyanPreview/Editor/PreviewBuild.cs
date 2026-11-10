@@ -44,13 +44,64 @@ namespace CyanPreview.Editor
             if (report.summary.result != BuildResult.Succeeded) throw new Exception("Build failed: " + report.summary.result);
         }
 
+        static void VerifyIndependentPets(ReferenceContext context, ReferenceBridge first)
+        {
+            bool rejected = false;
+            try { context.CreatePet("unknown"); }
+            catch (NotSupportedException) { rejected = true; }
+            if (!rejected) throw new Exception("Unknown species silently accepted");
+            rejected = false;
+            try { context.Dispose(); }
+            catch (InvalidOperationException) { rejected = true; }
+            if (!rejected) throw new Exception("Released shared assets while pets are alive");
+            var firstGraphics = first.Graphics;
+            var firstSprites = first.OrderedSprites.ToArray();
+            var summary = first.Summary;
+            var color = first.EffectColor;
+            var root = new GameObject("Two-pet verification");
+            using (var other = context.CreatePet())
+            using (var firstView = new SpriteMeshView(root.transform, 0))
+            using (var otherView = new SpriteMeshView(root.transform, 1))
+            {
+                other.Generate("12345");
+                if (first.PetId == other.PetId || ReferenceEquals(first.Graphics, other.Graphics))
+                    throw new Exception("Duplicate appearance IDs share mutable pet identity/state");
+                if (summary != other.Summary || color != other.EffectColor)
+                    throw new Exception("Duplicate IDs have different appearances");
+                if (!ReferenceEquals(first.Textures, other.Textures))
+                    throw new Exception("Atlas textures duplicated per pet");
+                other.Generate("42");
+                other.Pose(2, -.4f);
+                other.Draw();
+                if (first.Graphics != firstGraphics || !firstSprites.SequenceEqual(first.OrderedSprites) || first.Summary != summary)
+                    throw new Exception("Updating another pet changed this pet");
+                first.Pose(0, .7f);
+                first.Draw();
+                firstView.Refresh(first);
+                otherView.Refresh(other);
+                var groups = root.GetComponentsInChildren<UnityEngine.Rendering.SortingGroup>();
+                if (groups.Length != 2 || groups[0].sortingOrder == groups[1].sortingOrder)
+                    throw new Exception("Pet views do not have independent sorting groups");
+                other.Generate("12345");
+                if (summary != other.Summary || color != other.EffectColor)
+                    throw new Exception("Interleaving pets changed appearance generation");
+            }
+            UnityEngine.Object.DestroyImmediate(root);
+            if (first.Textures.Values.Any(t => t == null)) throw new Exception("Removing a pet destroyed shared textures");
+            first.Generate("12345");
+            if (summary != first.Summary || color != first.EffectColor)
+                throw new Exception("Remaining pet cannot regenerate after removal");
+            Debug.Log("MULTI_PET_OWNERSHIP_CHECK_PASSED");
+        }
+
         public static void Verify()
         {
             if (!ReferenceBridge.TryParseId("ID.7.12345", out var spawner, out var seed) || spawner != 7 || seed != 12345)
                 throw new Exception("Full ID parser failed");
             foreach (var invalid in new[] { "", "ID.a.2", "1.2.3", "2147483648", "ID.1.2.3" })
                 if (ReferenceBridge.TryParseId(invalid, out _, out _)) throw new Exception("Accepted invalid ID: " + invalid);
-            using (var reference = new ReferenceBridge(Path.GetFullPath("local-data")))
+            using (var context = new ReferenceContext(Path.GetFullPath("local-data")))
+            using (var reference = context.CreatePet())
             {
                 UnityEngine.Random.InitState(99);
                 var state = UnityEngine.Random.state;
@@ -69,6 +120,7 @@ namespace CyanPreview.Editor
                 reference.Generate("12345");
                 if (reference.Summary != first || reference.EffectColor != color)
                     throw new Exception("Prior generations changed the result");
+                VerifyIndependentPets(context, reference);
                 var root = new GameObject("Verification view");
                 using (var view = new SpriteMeshView(root.transform))
                 {

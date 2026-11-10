@@ -38,7 +38,8 @@ the reference boundary. No editor assemblies or game DLLs should enter the playe
 
 ### Extension review: species and multiple pets
 
-The following is the intended ownership model, not implemented support:
+The shared-resource and per-pet rendering boundaries below are implemented.
+Desktop behavior, roster UI and persistence remain planned:
 
 | Responsibility | Ownership |
 | --- | --- |
@@ -50,18 +51,22 @@ The following is the intended ownership model, not implemented support:
 | Selection and control panel | Edits a selected pet by its application identity |
 | Saved roster | Versioned collection of pet records |
 
-Current blockers are concrete: `ReferenceBridge` combines atlas initialization
-with mutable creature state, `PreviewApp` owns one reference/view, and
-`SpriteMeshView` starts sprite sorting at zero for every view. Duplicating these
-objects is not sufficient for safe multi-pet support. Shared Futile static state
-must be initialized once; disposing a pet must not release shared textures.
+`ReferenceContext` now owns assembly resolution, compatibility validation and
+atlas textures. Its `CreatePet(speciesId)` factory returns an independent
+`ReferenceBridge`; it rejects unknown species and a second simultaneous context.
+Live pets prevent disposal of shared resources. Dispose views, then pets, then
+the context. All these calls belong on the Unity main thread.
 
-Separate shared resource ownership from creature state before adding a second
-pet. Preserve the current single-pet API during that refactor and verify unchanged
-ID results. Then introduce a roster, per-pet rendering groups and selected-pet
-controls. Add species definitions when a second species is implemented, keeping
-its breed parameters and color generation out of the UI. Shared capabilities
-such as climbing should drive navigation instead of scattered species-name checks.
+`ReferenceBridge` owns one creature's graphics, pose and comparison camera, with
+a separate `PetId` GUID. `LizardSpecies` resolves supported species and owns
+species-specific creation; `CyanSpecies` contains the existing cyan initialization
+unchanged. Only cyan is registered. `SpriteMeshView` uses a Unity SortingGroup
+per pet, with an explicit group order, while preserving the game's internal
+sprite order. The control panel still presents one pet.
+
+The next product step is a roster and selected-pet controls. Add movement
+capabilities when navigation is introduced; do not scatter species-name checks
+through that code. Species additions need their own generation and parity checks.
 
 A pet's application identity must differ from its appearance ID: two pets with
 the same Rain World ID still need independent size, pose, den and behavior.
