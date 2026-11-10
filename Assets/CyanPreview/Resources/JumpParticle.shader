@@ -1,5 +1,6 @@
 Shader "CyanPreview/JumpParticle"
 {
+    Properties { _DesktopCutout ("Desktop coverage", Float) = 0 }
     SubShader
     {
         Tags { "Queue"="Transparent" "RenderType"="Transparent" }
@@ -11,6 +12,8 @@ Shader "CyanPreview/JumpParticle"
             #pragma vertex vert
             #pragma fragment frag
             #include "UnityCG.cginc"
+            #include "DesktopTransparency.cginc"
+            float _DesktopCutout;
             struct appdata { float4 vertex : POSITION; float3 uv : TEXCOORD0; fixed4 color : COLOR; };
             struct v2f { float4 vertex : SV_POSITION; float3 uv : TEXCOORD0; fixed4 color : COLOR; };
             v2f vert(appdata v) { v2f o; o.vertex=UnityObjectToClipPos(v.vertex); o.uv=v.uv; o.color=v.color; return o; }
@@ -20,7 +23,7 @@ Shader "CyanPreview/JumpParticle"
                 float lobes = .07*sin(i.uv.x*18+i.uv.y*7)*sin(i.uv.y*14-i.uv.x*9);
                 float soft=smoothstep(1,.25,r+lobes);
                 float ring=saturate(1-abs(r-.8)*12);
-                return fixed4(i.color.rgb,i.color.a*lerp(soft,ring,i.uv.z));
+                return DesktopCoverage(fixed4(i.color.rgb,i.color.a*lerp(soft,ring,i.uv.z)), i.vertex.xy, _DesktopCutout);
             }
             ENDCG
         }

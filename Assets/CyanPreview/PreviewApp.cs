@@ -23,6 +23,8 @@ namespace CyanPreview
         bool soundEnabled = true, showDecisions;
         readonly DesktopLauncher desktop = new DesktopLauncher();
         bool desktopWindowEdges, desktopClicks;
+        bool desktopSounds = true;
+        int desktopVocalizeRequest;
         float desktopScale = .75f;
         string audioError;
         bool clickToExplore = true, autonomousJumps = true;
@@ -120,7 +122,7 @@ namespace CyanPreview
             Debug.LogException(e);
         }
         DesktopSettings DesktopConfiguration() => new DesktopSettings { id = reference.Identity, cache = cache, scale = desktopScale,
-            windowEdges = desktopWindowEdges, clickToExplore = desktopClicks, roam = motion?.Roam ?? true, jumps = autonomousJumps };
+            windowEdges = desktopWindowEdges, clickToExplore = desktopClicks, sound = desktopSounds, vocalizeRequest = desktopVocalizeRequest, roam = motion?.Roam ?? true, jumps = autonomousJumps };
         void Update()
         {
             if (desktop.Active)
@@ -156,6 +158,7 @@ namespace CyanPreview
                     if (Input.GetMouseButton(0)) interaction.Hold(point, Time.deltaTime);
                     if (Input.GetMouseButtonUp(0)) interaction.Release(point, inside);
                     if (inside && Input.GetMouseButtonDown(1)) motion.JumpTo(point);
+                    if (petAudio != null) petAudio.Enabled = soundEnabled && !desktop.Active;
                     petAudio?.Advance(Time.deltaTime);
                     motion.Advance(Time.deltaTime);
                     jumpEffects.Advance(Time.deltaTime);
@@ -225,7 +228,7 @@ namespace CyanPreview
             if (locomotion)
             {
                 soundEnabled = GUILayout.Toggle(soundEnabled, " Pet sounds");
-                if (petAudio != null) petAudio.Enabled = soundEnabled;
+                if (petAudio != null) petAudio.Enabled = soundEnabled && !desktop.Active;
                 if (GUILayout.Button("Vocalize")) petAudio?.Vocalize();
                 if (audioError != null) GUILayout.Label("Sound unavailable: " + audioError, small);
                 motion.Roam = GUILayout.Toggle(motion.Roam, " Roam after resting");
@@ -250,6 +253,10 @@ namespace CyanPreview
             GUILayout.Label(desktopWindowEdges ? "Uses window edges and background." : "Monitor frame only.", small);
             desktopClicks = GUILayout.Toggle(desktopClicks, " React to desktop clicks");
             if (desktopClicks) GUILayout.Label("Clicks outside the pet also reach your apps.", small);
+            desktopSounds = GUILayout.Toggle(desktopSounds, " Desktop sounds");
+            GUI.enabled = desktop.Active && desktopSounds;
+            if (GUILayout.Button("Vocalize desktop pet")) desktopVocalizeRequest++;
+            GUI.enabled = true;
             GUILayout.Label("Desktop size " + desktopScale.ToString("0.00") + "×", small);
             desktopScale = GUILayout.HorizontalSlider(desktopScale, .5f, 2f);
             GUI.enabled = reference != null && !Application.isEditor;

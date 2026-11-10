@@ -11,7 +11,7 @@ for comparing cyan lizard IDs with Rain World.
   small reflection adapter; no game DLLs or sprites are committed or distributed.
 - Size slider, view angle, controlled pose motion, and comparison screenshots.
 - Neutral preview palette. This is not a complete Rain World room simulation.
-- Desktop roaming, window climbing, den placement, and cursor petting come later.
+- Desktop roaming and window climbing are available in the Windows prototype; den and feeding remain separate work.
 
 The adapter currently targets **Rain World v1.11.8**, with the assembly fingerprint
 checked before loading. Mod hooks, alternate seeds, winterized creatures, rot,
@@ -205,9 +205,15 @@ The desktop size slider is separate from the large preview's size.
   contents. It only changes the styles of its own overlay window.
 
 This is a first Windows integration milestone: primary monitor only, one cyan,
-no tray controls or installer yet. Desktop audio, jump smoke and soft head glow
-are not connected; those remain available in the preview. Color-key transparency
-is used, so soft translucent effects need a later rendering pass. Window-edge
+no tray controls or installer yet. Desktop charge/launch sounds, cyan calls, head
+bubbles, propulsion smoke and head lighting reuse the preview components. The
+**Desktop sounds** toggle mutes the desktop pet; **Vocalize desktop pet** previews
+a call. Preview audio is muted while a desktop pet runs to avoid doubled sounds.
+Missing local audio leaves movement and visual effects working.
+
+Color-key transparency uses ordered pixel coverage for fades on the desktop, so
+particles and head lighting have a stippled appearance instead of soft alpha
+blending. The preview retains its original soft/additive rendering. Window-edge
 navigation is local, not a complete pathfinder around overlapping applications.
 Mixed-DPI and secondary monitors remain unverified. A native left-button listener
 retains press/release positions between rendered frames and is removed on exit.
@@ -225,3 +231,29 @@ checks cover fast movement during the hold delay, short presses, cancellation,
 release outside the work area, application drags crossing the pet, resize-relative
 attachment, occlusion, removal, off-screen supports and preserved crawl velocity.
 These checks do not establish parity across all Windows/DPI configurations.
+
+
+### Letting a friend test
+
+Send the generated `CyanLizor-0.1.0-desktop-effects-win-x64.zip`, not just the EXE
+and not your `local-data` folder. The ZIP includes the player, self-contained
+reference importer and dependency notices, but no Rain World graphics or audio.
+
+1. Use a Windows x64 laptop with the supported Rain World v1.11.8 installation.
+2. Extract the whole ZIP to a writable folder and open `CyanLizor.exe`.
+3. On first launch, enter their own Rain World install folder (the folder containing
+   `RainWorld_Data`), then select **Prepare local game assets**. Allow preparation
+   to finish. This reads their installation without modifying it.
+4. Generate an ID and select **Start desktop pet**. Keep the control panel open.
+5. Try the size slider, window climbing, 0.1-second hold/drag/release, optional click
+   exploration, **Desktop sounds**, and **Vocalize desktop pet**. Autonomous jumps
+   provide propulsion smoke and launch sounds.
+
+Unity Hub, Python and Docker are not needed on the tester's laptop. Compatibility
+is fingerprint-checked: a different game build may be rejected even if the menu
+shows a similar version. Report the displayed error rather than replacing DLLs.
+Ask for their Windows version, screen resolution/scaling, lizard ID and steps to
+reproduce a problem. The app's desktop log is under
+`%USERPROFILE%/AppData/LocalLow/ErraticPu1se/Cyan Lizor Preview/desktop-player.log`.
+Primary-monitor support is the current limit; another laptop has not yet been
+verified. This is an unsigned test build, not an installed or auto-updating release.

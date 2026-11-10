@@ -13,6 +13,8 @@ namespace CyanPreview
         public int schema = 1, controllerPid;
         public string id, cache;
         public float scale = .75f;
+        public bool sound = true;
+        public int vocalizeRequest;
         public bool running = true, windowEdges, clickToExplore, roam = true, jumps = true;
         public void Validate()
         {
@@ -70,6 +72,8 @@ namespace CyanPreview
         ReferenceBridge pet;
         SpriteMeshView view;
         PetMotion motion;
+        CyanJumpEffects jumpEffects;
+        CyanPetAudio petAudio;
         PetInteraction input;
         DesktopSurfaces surfaces;
         Camera cameraView;
@@ -87,11 +91,12 @@ namespace CyanPreview
                 native = new WindowsDesktop(settings.controllerPid);
                 QualitySettings.antiAliasing = 0; Application.runInBackground = true; Application.targetFrameRate = 60;
                 cameraView = new GameObject("Desktop camera").AddComponent<Camera>();
+                cameraView.gameObject.AddComponent<AudioListener>();
                 cameraView.orthographic = true; cameraView.clearFlags = CameraClearFlags.SolidColor;
                 cameraView.backgroundColor = new Color(1, 0, 1, 1); cameraView.transform.position = new Vector3(0, 0, -10);
                 Screen.SetResolution((int)native.WorkArea.width, (int)native.WorkArea.height, FullScreenMode.Windowed);
                 context = new ReferenceContext(settings.cache); pet = context.CreatePet();
-                view = new SpriteMeshView(transform) { HeadGlowEnabled = false };
+                view = new SpriteMeshView(transform) { DesktopTransparency = true };
                 RebuildPet();
             }
             catch (Exception e) { Debug.LogException(e); Application.Quit(); yield break; }
@@ -114,6 +119,8 @@ namespace CyanPreview
         void RebuildPet(Vector2? keepPosition = null)
         {
             input?.Cancel();
+            petAudio?.Dispose(); petAudio = null;
+            jumpEffects?.Dispose(); jumpEffects = null;
             var area = native.WorkArea;
             surfaces = new DesktopSurfaces(new Rect(-area.width / (2 * settings.scale), -area.height / (2 * settings.scale), area.width / settings.scale, area.height / settings.scale)) { UseWindowEdges = settings.windowEdges };
             pet.Generate(settings.id); pet.Pose(0, .7f);
@@ -124,6 +131,9 @@ namespace CyanPreview
                 motion.ShiftWithSurface(restingPoint - motion.Position);
             }
             motion.StateChanged += state => Debug.Log("DESKTOP_STATE " + state + " " + motion.Position);
+            jumpEffects = new CyanJumpEffects(transform, motion, pet.EffectColor, pet.Seed, desktopTransparency: true);
+            try { petAudio = new CyanPetAudio(transform, context, motion, jumpEffects, pet.Seed) { Enabled = settings.sound }; }
+            catch (Exception e) { Debug.LogWarning("Desktop pet audio unavailable: " + e.Message); }
             input = new PetInteraction(motion) { ClickToExplore = settings.clickToExplore };
             cameraView.orthographicSize = area.height / (2 * settings.scale);
         }
@@ -148,6 +158,7 @@ namespace CyanPreview
                     if (!next.running || !native.ControllerAlive) { Application.Quit(); return; }
                     bool rebuild = next.id != settings.id || next.scale != settings.scale || next.windowEdges != settings.windowEdges;
                     var keepPosition = motion.Position * settings.scale / next.scale;
+                    bool vocalize = next.vocalizeRequest != settings.vocalizeRequest;
                     settings = next;
                     if (native.RefreshWorkArea())
                     {
@@ -156,6 +167,7 @@ namespace CyanPreview
                     if (rebuild) RebuildPet(keepPosition);
                     motion.Roam = settings.roam; motion.AutonomousJumps = settings.jumps;
                     input.ClickToExplore = settings.clickToExplore;
+                    if (petAudio != null) { petAudio.Enabled = settings.sound; if (vocalize) petAudio.Vocalize(); }
                 }
                 var cursor = native.Cursor;
                 var point = DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale);
@@ -179,7 +191,10 @@ namespace CyanPreview
                 // The native button callback owns pet presses; other application drags pass through.
                 native.SetClickThrough(!input.CapturesPointer && (buttonHeld || !motion.Contains(point)));
                 RefreshWindows();
-                motion.Advance(Time.unscaledDeltaTime); pet.Draw(motion.Interpolation); view.Refresh(pet);
+                petAudio?.Advance(Time.unscaledDeltaTime);
+                motion.Advance(Time.unscaledDeltaTime);
+                jumpEffects.Advance(Time.unscaledDeltaTime);
+                pet.Draw(motion.Interpolation); view.Refresh(pet);
             }
             catch (Exception e) { Debug.LogException(e); Application.Quit(); }
         }
@@ -191,7 +206,7 @@ namespace CyanPreview
         }
         void OnDestroy()
         {
-            native?.Dispose(); input?.Cancel(); view?.Dispose(); pet?.Dispose(); context?.Dispose();
+            native?.Dispose(); input?.Cancel(); petAudio?.Dispose(); jumpEffects?.Dispose(); view?.Dispose(); pet?.Dispose(); context?.Dispose();
         }
     }
 }

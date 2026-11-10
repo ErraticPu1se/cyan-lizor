@@ -32,6 +32,10 @@ namespace CyanPreview
             glowRenderer.sortingOrder = -1;
             headGlow.SetActive(false);
         }
+        public bool DesktopTransparency
+        {
+            set { glowMaterial.SetFloat("_DesktopCutout", value ? 1 : 0); glowMaterial.SetInt("_DstBlend", value ? 0 : 1); }
+        }
         public bool HeadGlowEnabled { get; set; } = true;
         public void SetScale(float scale) => root.localScale = Vector3.one * scale;
 
