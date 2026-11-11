@@ -4,7 +4,7 @@ A desktop cyan lizard.
 
 It roams, rests, climbs, observes the cursor, and propels itself across the screen. Its decisions are influenced by personality and current state. It will not always cooperate. That is not a defect.
 
-Developed by **ErraticPu1se**. Any resemblance between that name and another iterator is irrelevant.
+Developed by ErraticPu1se. Any resemblance between that name and another iterator is irrelevant.
 
 ## Download
 
@@ -83,7 +83,7 @@ Right-clicks outside the lizard remain available to other applications. Naturall
 ## Planned additions
 
 - Feeding
-- Multiple simultaneous pets
+- Multiple simultaneous pets (they might fight with each other)
 - Additional lizard species
 
 They are planned. They are not present in this preview.
