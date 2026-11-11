@@ -7,7 +7,7 @@ using Debug = UnityEngine.Debug;
 
 namespace CyanPreview
 {
-    public enum DesktopMenuAction { None, Settings, Small, Medium, Large, Roaming, ExploreClicks, Sound, Stop, Climbing, EdgesOnly, EdgesAndBackgrounds }
+    public enum DesktopMenuAction { None, Settings, Small, Medium, Large, Roaming, ExploreClicks, Sound, Stop, Climbing, EdgesOnly, EdgesAndBackgrounds, ExtraLarge }
 
     [Serializable]
     public sealed class DesktopSettings
@@ -15,7 +15,8 @@ namespace CyanPreview
         public int schema = 2, controllerPid;
         public ClimbingMode climbingMode = ClimbingMode.EdgesAndBackgrounds;
         public string id, cache;
-        public float scale = .75f;
+        public const float DefaultScale = 1.2f;
+        public float scale = DefaultScale;
         public bool sound = true;
         public int vocalizeRequest;
         public bool running = true, windowEdges, clickToExplore, roam = true, jumps = true;
@@ -24,8 +25,9 @@ namespace CyanPreview
             switch (action)
             {
                 case DesktopMenuAction.Small: scale = 1; break;
-                case DesktopMenuAction.Medium: scale = 1.5f; break;
-                case DesktopMenuAction.Large: scale = 2; break;
+                case DesktopMenuAction.Medium: scale = DefaultScale; break;
+                case DesktopMenuAction.Large: scale = 1.5f; break;
+                case DesktopMenuAction.ExtraLarge: scale = 2; break;
                 case DesktopMenuAction.Roaming: roam = !roam; break;
                 case DesktopMenuAction.ExploreClicks: clickToExplore = !clickToExplore; break;
                 case DesktopMenuAction.Sound: sound = !sound; break;

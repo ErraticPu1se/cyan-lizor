@@ -20,7 +20,7 @@ namespace CyanPreview
         string gameFolder=@"C:\Program Files (x86)\Steam\steamapps\common\Rain World";
         Process importer;
         Task<string> importerOutput, importerError;
-        float phase, depth=.7f, desktopScale=.75f, previewClock;
+        float phase, depth=.7f, desktopScale=DesktopSettings.DefaultScale, previewClock;
         bool animate=true, desktopClicks, desktopSounds=true, desktopRoam=true, autonomousJumps=true;
         bool movementOpen=true, interactionOpen, soundOpen, advancedOpen;
         int desktopVocalizeRequest;
@@ -122,7 +122,7 @@ namespace CyanPreview
             if(Event.current.type==EventType.KeyDown && Event.current.keyCode==KeyCode.Return && GUI.GetNameOfFocusedControl()=="CreatureId" && reference != null)
             { Generate(); Event.current.Use(); }
             float width=Mathf.Min(580,Screen.width-32), left=(Screen.width-width)/2;
-            GUI.Label(new Rect(left,16,width-110,35),"LIAZRD",theme.Title);
+            GUI.Label(new Rect(left,16,width-110,35),"LIZARD",theme.Title);
             GUI.Label(new Rect(left,52,width,22),"desktop settings & preview",theme.Small);
             GUI.Label(new Rect(left+width-96,23,96,25),desktop.Active?"RUNNING":"STOPPED",theme.Badge);
             float heroHeight=Mathf.Clamp(Screen.height*.16f,90,144);
@@ -153,11 +153,13 @@ namespace CyanPreview
             GUILayout.Space(10);
             GUILayout.Label("Desktop size  "+desktopScale.ToString("0.00")+"×");
             GUILayout.BeginHorizontal();
-            SizePreset("Small · 1×",1); SizePreset("Medium · 1.5×",1.5f); SizePreset("Large · 2×",2);
+            SizePreset("Small · 1×",1); SizePreset("Medium · 1.2×",DesktopSettings.DefaultScale);
+            GUILayout.EndHorizontal(); GUILayout.BeginHorizontal();
+            SizePreset("Large · 1.5×",1.5f); SizePreset("Extra large · 2×",2);
             GUILayout.EndHorizontal();
             desktopScale=GUILayout.HorizontalSlider(desktopScale,.5f,2f);
             GUILayout.BeginHorizontal(); GUILayout.Label("Changes the small pet on your desktop.",theme.Small);
-            if(GUILayout.Button("Reset size",GUILayout.Width(84))) desktopScale=.75f;
+            if(GUILayout.Button("Reset size",GUILayout.Width(84))) desktopScale=DesktopSettings.DefaultScale;
             GUILayout.EndHorizontal(); GUILayout.EndVertical();
             GUILayout.BeginVertical(theme.Card);
             if(Section("Movement",ref movementOpen))

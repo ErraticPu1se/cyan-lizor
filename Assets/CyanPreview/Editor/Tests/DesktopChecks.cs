@@ -10,10 +10,11 @@ namespace CyanPreview.Editor
         public static void Run(ReferenceContext context)
         {
             var menuSettings = new DesktopSettings();
-            foreach (var action in new[] { DesktopMenuAction.Small, DesktopMenuAction.Medium, DesktopMenuAction.Large })
+            Require(menuSettings.scale == 1.2f, "Launch size is not Medium 1.2x");
+            foreach (var action in new[] { DesktopMenuAction.Small, DesktopMenuAction.Medium, DesktopMenuAction.Large, DesktopMenuAction.ExtraLarge })
             {
                 menuSettings.ApplyMenu(action);
-                Require(menuSettings.scale == (action == DesktopMenuAction.Small ? 1 : action == DesktopMenuAction.Medium ? 1.5f : 2), "Menu size preset is wrong");
+                Require(menuSettings.scale == (action == DesktopMenuAction.Small ? 1 : action == DesktopMenuAction.Medium ? 1.2f : action == DesktopMenuAction.Large ? 1.5f : 2), "Menu size preset is wrong");
             }
             bool initialRoam = menuSettings.roam, initialSound = menuSettings.sound, initialClicks = menuSettings.clickToExplore;
             foreach (var action in new[] { DesktopMenuAction.Roaming, DesktopMenuAction.Sound, DesktopMenuAction.ExploreClicks })

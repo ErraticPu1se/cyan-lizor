@@ -40,7 +40,7 @@ Preparation reads your game installation without modifying it. Game graphics and
 Right-click the desktop lizard to open its menu:
 
 - Open **Settings**.
-- Choose **Small (1.0×)**, **Medium (1.5×)**, or **Large (2.0×)**.
+- Choose **Small (1.0×)**, **Medium (1.2×, default)**, **Large (1.5×)**, or **Extra large (2.0×)**.
 - Choose **Edges only** or **Edges + backgrounds** climbing; toggle roaming, click exploration, or sound.
 - Stop the desktop pet.
 
