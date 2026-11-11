@@ -13,7 +13,12 @@ namespace CyanPreview
         Vector2 Approach(Vector2 point, Vector2 destination, float distance);
     }
 
-    public sealed class FrameSurfaces : IPetSurfaces
+    public interface IEdgeCatchSurfaces
+    {
+        bool TryCatchEdge(Vector2 point, float reach, out Vector2 edge, out Vector2 normal);
+    }
+
+    public sealed class FrameSurfaces : IPetSurfaces, IEdgeCatchSurfaces
     {
         public bool SupportsFreeClimbing => false;
         public Rect Bounds { get; }
@@ -30,6 +35,11 @@ namespace CyanPreview
             else if (side == 2) p.y = Bounds.yMax;
             else p.x = Bounds.xMin;
             return p;
+        }
+        public bool TryCatchEdge(Vector2 point, float reach, out Vector2 edge, out Vector2 normal)
+        {
+            edge = Nearest(point, out normal);
+            return normal.y < .5f && Vector2.Distance(point,edge) <= reach; // Ground uses normal collision landing.
         }
         public Vector2 Constrain(Vector2 p, float radius, out Vector2 normal)
         {

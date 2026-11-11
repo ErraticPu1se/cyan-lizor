@@ -13,7 +13,7 @@ namespace CyanPreview
         public DesktopWindow(long id, Rect bounds) { Id = id; Bounds = bounds; }
     }
     // Desktop snapshots are front-to-back and contain no window titles or content.
-    public sealed class DesktopSurfaces : IPetSurfaces
+    public sealed class DesktopSurfaces : IPetSurfaces, IEdgeCatchSurfaces
     {
         readonly FrameSurfaces frame;
         readonly BackgroundSurfaces background;
@@ -87,6 +87,15 @@ namespace CyanPreview
                 best = distance; edge = candidate; normal = inward; id = windows[i].Id;
             }
             return id;
+        }
+        public bool TryCatchEdge(Vector2 point, float reach, out Vector2 edge, out Vector2 normal)
+        {
+            edge = frame.Nearest(point, out normal);
+            float distance = normal.y > .5f ? float.PositiveInfinity : Vector2.Distance(point,edge);
+            if (FindWindowEdge(point, Mathf.Min(reach + .001f,distance), out var windowEdge, out var windowNormal) != 0)
+            { edge = windowEdge; normal = windowNormal; distance = Vector2.Distance(point,edge); }
+            if (Vector2.Dot(point-edge,normal) < 0) normal = -normal;
+            return distance <= reach;
         }
         public bool IsWindowChrome(Vector2 point, float scale)
         {

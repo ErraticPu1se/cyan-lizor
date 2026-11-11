@@ -91,6 +91,8 @@ namespace CyanPreview.Editor
         static void PutInFlight(ReferenceBridge pet, PetMotion motion, Vector2 point, Vector2 velocity)
         {
             motion.BeginGrab(motion.Position); motion.EndGrab();
+            // This fixture injects impact velocity; wall/ceiling impacts represent deliberate propulsion.
+            Set(motion,"propelled",velocity.y >= 0);
             var chunks=(Array)Get(pet.Lizard,"bodyChunks");
             for(int i=0;i<chunks.Length;i++)
             {

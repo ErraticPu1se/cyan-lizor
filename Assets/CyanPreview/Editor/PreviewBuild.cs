@@ -124,6 +124,7 @@ namespace CyanPreview.Editor
                 VerifyIndependentPets(context, reference);
                 DesktopChecks.Run(context);
                 ClimbingModeChecks.Run(context);
+                FallCatchChecks.Run(context);
                 UtilityChecks.Run(context);
                 CompanionChecks.Run(context);
                 TargetingChecks.Run(context);
