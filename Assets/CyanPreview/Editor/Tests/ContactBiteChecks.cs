@@ -128,6 +128,12 @@ namespace CyanPreview.Editor
                 Check(a.Motion.Behavior.TaskTarget==a.Motion.RivalTarget && a.Motion.Behavior.HoldPosition && a.Bite.Jaw==jawBeforePickup,"Carrier pickup interrupted rival bite preparation");
                 Call(host,"AdvanceFeeding",.025f);
                 Check(a.Motion.Behavior.TaskTarget==a.Motion.RivalTarget && a.Motion.VoiceIntensity==.23f,"Food follower overwrote combat or voice state");
+                Call(host,"ConfigureRival",a,b,true,false);
+                Check(!a.Motion.Behavior.HoldPosition && !a.Motion.RivalStance,"Food challenger stopped to posture instead of pursuing carrier");
+                Call(host,"ConfigureRival",a,b,true,true);
+                Check(!a.Motion.Behavior.HoldPosition,"Brief carrier contact froze challenger while jaw opened");
+                Call(host,"ConfigureRival",b,a,true,true);
+                Check(b.Motion.Behavior.TaskTarget==b.Feeding.Target && !b.Motion.Behavior.HoldPosition && !b.Motion.RivalTarget.HasValue,"Combat overwrote carrier escape route");
                 a.Audio.Enabled=true; b.Audio.Enabled=true;
                 var otherVoice=Get(a.Audio,"voice"); var otherClip=Get(otherVoice,"clip");
                 float otherCooldown=(float)Get(a.Audio,"affectionCooldown");
@@ -142,6 +148,26 @@ namespace CyanPreview.Editor
                 Call(host,"AdvanceFeeding",.025f);
                 Check(a.Feeding.Active,"Combat cancellation prevented fresh loose-food interest");
                 a.Feeding.Cancel(); b.Feeding.Cancel();
+                // Real crawling must progress toward a moving carrier, not just expose a target.
+                food.Cancel(); food.Begin(); food.Place(Vector2.zero); food.Take("b");
+                a.Bite.Cancel(); a.Motion.BeginIdleHold();
+                float floor=area.yMin+18;
+                Pose(a,new Vector2(-200,floor),new Vector2(-217,floor),new Vector2(-234,floor));
+                Pose(b,new Vector2(-70,floor+18),new Vector2(-104,floor+18),new Vector2(-138,floor+18));
+                var chaseStart=a.Motion.Position;
+                for(int i=0;i<40;i++)
+                {
+                    b.Motion.ShiftWithSurface(new Vector2(.2f,0));
+                    a.Motion.RivalTarget=a.Local(PetContacts.TargetPoint(a,b));
+                    a.Bite.Advance(.025f,true,true,true,false);
+                    Call(host,"ConfigureRival",a,b,true,false);
+                    a.Motion.Advance(.025f);
+                }
+                Check(a.Motion.Position.x>chaseStart.x+10,"Challenger remained frozen in the real motion loop");
+                a.Bite.ReceiveHit(); Call(host,"ConfigureRival",a,b,true,false);
+                Check(a.Motion.Behavior.HoldPosition,"Carrier pursuit bypassed hit recovery");
+                food.Drop(Vector2.zero); Call(host,"ConfigureRival",a,b,true,true);
+                Check(a.Motion.Behavior.HoldPosition,"Dropping food removed ordinary contact/recovery control");
                 // Exercise the real motion loop: preparation must produce a physical lunge.
                 food.Cancel(); a.Bite.Cancel();
                 Pose(a,Vector2.zero,new Vector2(-17,0),new Vector2(-34,0));

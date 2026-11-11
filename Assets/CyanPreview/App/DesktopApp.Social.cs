@@ -112,6 +112,18 @@ namespace CyanPreview
         static string BiteStatus(DesktopPet pet,PetScuffle fight) => pet.Bite.Snapping?"Bite":pet.Bite.Recovering?"Recoil":pet.Bite.Lunging?"Lunge":pet.Bite.Threatening?"Threat":fight.Phase.ToString();
         void ConfigureRival(DesktopPet pet,DesktopPet rival,bool near,bool contact)
         {
+            bool carrying=food.Owner==FoodOwner.Pet && food.Holder==pet.Config.key;
+            if(carrying)
+            {
+                // ReturnPrey owns the carrier's destination; its occupied mouth cannot attack.
+                pet.Motion.RivalTarget=null; pet.Motion.RivalJaw=0; pet.Motion.RivalBiting=false;
+                pet.Motion.RivalStance=pet.Motion.RivalLunging=pet.Motion.RivalPropelling=pet.Motion.RivalRecovering=false;
+                pet.Motion.Behavior.TaskTarget=pet.Feeding.Target;
+                pet.Motion.Behavior.HoldPosition=pet.Feeding.UsingRoute;
+                pet.Motion.AutonomousJumps=false;
+                return;
+            }
+            bool pursuingCarrier=food.Owner==FoodOwner.Pet && food.Holder==rival.Config.key;
             var target=pet.Local(PetContacts.TargetPoint(pet,rival));
             pet.Motion.RivalJaw=pet.Bite.Jaw; pet.Motion.RivalBiting=pet.Bite.Snapping;
             if(pet.Bite.Lunging && !pet.Motion.RivalLunging)
@@ -119,8 +131,8 @@ namespace CyanPreview
             pet.Motion.RivalLunging=pet.Bite.Lunging;
             pet.Motion.RivalPropelling=pet.Bite.Propelling;
             pet.Motion.RivalRecovering=pet.Bite.Recovering;
-            pet.Motion.RivalStance=pet.Bite.Threatening;
-            pet.Motion.Behavior.HoldPosition=pet.Bite.Recovering || pet.Bite.Threatening || pet.Bite.Lunging || contact;
+            pet.Motion.RivalStance=pet.Bite.Threatening && !pursuingCarrier;
+            pet.Motion.Behavior.HoldPosition=pet.Bite.Recovering || pet.Bite.Lunging || (!pursuingCarrier && (pet.Bite.Threatening || contact));
             pet.Motion.Behavior.TaskTarget=target; pet.Motion.AutonomousJumps=false;
         }
         void ApplyBite(DesktopPet attacker,DesktopPet defender,BiteDecision decision,int contact)
