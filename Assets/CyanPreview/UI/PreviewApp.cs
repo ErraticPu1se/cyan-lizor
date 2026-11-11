@@ -7,7 +7,7 @@ using Debug = UnityEngine.Debug;
 
 namespace CyanPreview
 {
-    public sealed class PreviewApp : MonoBehaviour
+    public sealed partial class PreviewApp : MonoBehaviour
     {
         WindowsTray tray;
         SingleInstance instance;
@@ -80,6 +80,7 @@ namespace CyanPreview
             var preferences=CompanionPreferences.Read(PlayerPrefs.GetString(PreferencesKey,""),out preferenceWarning);
             gameFolder=preferences.gameFolder; desktopScale=preferences.scale; desktopClimbingMode=preferences.climbingMode;
             desktopClicks=preferences.clickToExplore; desktopSounds=preferences.sound; desktopRoam=preferences.roam; autonomousJumps=preferences.jumps;
+            InitializePresets(preferences);
             savedPreferences=JsonUtility.ToJson(preferences); initialized=true;
             DetectInstallation();
             view=new SpriteMeshView(transform);
@@ -168,6 +169,7 @@ namespace CyanPreview
             var preferences=new CompanionPreferences { gameFolder=gameFolder, scale=desktopScale, climbingMode=desktopClimbingMode,
                 sound=desktopSounds, roam=desktopRoam, jumps=autonomousJumps, clickToExplore=desktopClicks };
             string json=JsonUtility.ToJson(preferences);
+            try { SavePreset(); } catch(Exception e) { presetWarning="Could not save preset: "+e.Message; }
             if(json==savedPreferences) return;
             try { PlayerPrefs.SetString(PreferencesKey,json); PlayerPrefs.Save(); savedPreferences=json; }
             catch(Exception e) { preferenceWarning="Could not save preferences: "+e.Message; }
@@ -262,6 +264,7 @@ namespace CyanPreview
             if(!string.IsNullOrEmpty(trayWarning)) GUILayout.Label(trayWarning,theme.Small);
             if(!string.IsNullOrEmpty(preferenceWarning)) GUILayout.Label(preferenceWarning,theme.Small);
             if(!Ready) DrawSetup();
+            DrawPresets();
             GUILayout.BeginVertical(theme.Card);
             GUILayout.Label("Your lizard",theme.Heading);
             GUILayout.Space(8);
