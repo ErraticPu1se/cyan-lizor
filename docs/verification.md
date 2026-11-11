@@ -277,3 +277,11 @@ Full `PreviewBuild.Verify` passed, including `TRAY_LIFECYCLE_MIGRATION_SINGLE_IN
 Live player checks: existing appearance ID, reference path, and complete CompanionPreferences JSON matched the old registry values byte-for-byte; the old values also matched the pre-test snapshot. Pause/Resume updated both panel and desktop IPC without changing saved sound/roaming settings. Closing the panel kept controller and pet alive. Launching again restored the original controller without an extra pet. Quit while paused removed both owned processes; relaunch loaded the same settings with no persistent pause. The user confirmed the actual Liz tray context menu and double-click restore work.
 
 Not exercised live: restarting Windows Explorer, Windows sign-out, or a second computer. Close fallback/shutdown policy and multiple icon sizes have automated coverage. The test build is `Builds/TrayPreview/Lizor.exe`; production builds now use `Builds/LizorWindows/Lizor.exe`. No release was published for this change.
+
+## Saved pet presets (2026-11-11)
+
+Saved pets use versioned `saved-pets.v1.json` in Lizor's persistent data directory. The first entry imports the existing appearance and pet preferences once. Installation/reference paths remain app-wide; pause, running state, process IDs, and sound requests are excluded. Preset keys are separate from appearance IDs. Writes use a flushed temporary file and atomic replacement with a previous-save backup. Recovery validates the backup and preserves the damaged original. Unrecoverable data disables preset saving rather than overwriting user files.
+
+Full Unity verification and Windows player build passed. `SAVED_PET_PRESET_EDGE_CASES_PASSED` covers exact migration, repeated migration, duplicate appearance identity, independent rename, invalid name/species/size/appearance/selection/keys, interrupted writes, backup recovery, corrupt stores, and last-preset deletion protection. Live player loaded ID 9320, 1.5x, and the current movement/sound options; all three existing preference values matched the pre-launch snapshot byte-for-byte. Saved pets controls were inspected in the player. One pet is active at a time. Selecting a preset constructs its appearance before committing the selection.
+
+Local build: `Builds/PresetsPreview/Lizor.exe`. No README or release change.
