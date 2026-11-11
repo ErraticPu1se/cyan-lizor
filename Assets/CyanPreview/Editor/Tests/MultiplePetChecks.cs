@@ -39,15 +39,15 @@ namespace CyanPreview.Editor
             var low=new PetScuffle(); var high=new PetScuffle();
             for(int i=0;i<100;i++) { low.Advance(.1f,true,true,40,false,0,0); high.Advance(.1f,true,true,40,false,1,0); }
             Check(high.Tension>low.Tension,"Personality has no rivalry effect");
-            var fight=new PetScuffle(); int bites=0;
-            for(int i=0;i<100;i++) { fight.Advance(.1f,true,true,40,true,1,0); if(fight.BiteStarted) bites++; }
-            Check(bites==2 && fight.Phase==ScufflePhase.Cooldown,"Unbounded fight or missing cooldown");
+            var fight=new PetScuffle();
+            for(int i=0;i<105;i++) fight.Advance(.1f,true,true,40,true,1,0);
+            Check(fight.Phase==ScufflePhase.Cooldown,"Unbounded fight or missing cooldown");
             for(int i=0;i<20;i++) fight.Advance(.1f,true,true,40,true,1,0);
             Check(!fight.Active,"Fight restarted before cooldown");
             var interrupted=new PetScuffle();
             for(int i=0;i<20;i++) interrupted.Advance(.1f,true,true,40,true,1,0);
             Check(interrupted.Active,"Fight did not start"); interrupted.Advance(.1f,false,true,40,true,1,0);
-            Check(!interrupted.Active && !interrupted.BiteStarted,"Turning off fighting left attack active");
+            Check(!interrupted.Active,"Turning off fighting left attack active");
             var grabbed=new PetScuffle(); for(int i=0;i<20;i++) grabbed.Advance(.1f,true,true,40,true,1,0);
             grabbed.Advance(.1f,true,false,40,true,1,0); Check(!grabbed.Active,"Grab failed to interrupt fight");
             float tension=low.Tension; low.Advance(float.NaN,true,true,20,true,1,0); low.Advance(0,true,true,20,true,1,0);
@@ -56,16 +56,16 @@ namespace CyanPreview.Editor
             Check(manual.TryStartManual() && !manual.TryStartManual(),"Manual start duplicated an active encounter");
             manual.Advance(0,true,true,400,false,0,0); Check(manual.Phase==ScufflePhase.Approaching,"Paused approach advanced");
             manual.Advance(.1f,true,true,50,false,0,0); Check(manual.Phase==ScufflePhase.Posture,"Manual approach did not reach posture");
-            int manualBites=0;
-            for(int i=0;i<40;i++) { manual.Advance(.1f,true,true,40,false,0,0); if(manual.BiteStarted) manualBites++; }
-            Check(manualBites==2 && manual.Phase==ScufflePhase.Cooldown && !manual.TryStartManual(),"Manual fight bypassed bounded bites/cooldown");
+
+            for(int i=0;i<90;i++) manual.Advance(.1f,true,true,40,false,0,0);
+            Check(manual.Phase==ScufflePhase.Cooldown && !manual.TryStartManual(),"Manual encounter bypassed duration limit/cooldown");
             var unreachable=new PetScuffle(); unreachable.TryStartManual();
             for(int i=0;i<210;i++) unreachable.Advance(.1f,true,true,500,false,0,0);
             Check(!unreachable.Active && !string.IsNullOrEmpty(unreachable.Outcome),"Unreachable manual pair had no timeout feedback");
             var cancelled=new PetScuffle(); cancelled.TryStartManual(); cancelled.Advance(.1f,true,false,100,false,0,0);
             Check(!cancelled.Active,"Manual approach survived a grab/unavailable pet");
             var status=new PetSocialStatus {state="Calm"}; var displayFight=new PetScuffle();
-            for(int i=0;i<20;i++) displayFight.Advance(.1f,true,true,40,true,1,0);
+            for(int i=0;i<21;i++) displayFight.Advance(.1f,true,true,40,true,1,0);
             DesktopApp.UpdateSocialStatus(status,displayFight,"Other pet",true);
             Check(status.active && status.state=="Posture" && status.rival=="Other pet","Indicator did not expose actual posture state");
             DesktopApp.UpdateSocialStatus(status,new PetScuffle(),"Bystander",true);

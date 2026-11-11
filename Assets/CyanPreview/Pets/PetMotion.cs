@@ -518,7 +518,7 @@ namespace CyanPreview
         {
             Set(pet.Lizard, "animation", pet.Context.Static("Lizard+Animation", State == PetMotionState.Charging ? "PrepareToJump" : RivalTarget.HasValue ? "FightingStance" : "Standard"));
             Set(pet.Lizard,"lastJawOpen",Get(pet.Lizard,"jawOpen"));
-            Set(pet.Lizard,"jawOpen",RivalBiting?0f:RivalStance?1f:0f);
+            Set(pet.Lizard,"jawOpen",RivalTarget.HasValue?RivalJaw:0f);
             Set(pet.Lizard, "timeInAnimation", chargeDuration - chargeTicks);
             Set(pet.Lizard, "timeToRemainInAnimation", chargeDuration);
             Set(graphics, "lastVoiceVisualization", Get(graphics, "voiceVisualization"));

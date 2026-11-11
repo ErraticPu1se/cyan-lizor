@@ -27,6 +27,7 @@ namespace CyanPreview
         public readonly SpriteMeshView View;
         public readonly GameObject Root;
         public PetMotion Motion { get; private set; }
+        public PetBite Bite { get; private set; }
         public PetInteraction Input { get; private set; }
         public DesktopSurfaces Surfaces { get; private set; }
         public DenRouteSurfaces Den { get; private set; }
@@ -55,6 +56,7 @@ namespace CyanPreview
             Surfaces=new DesktopSurfaces(new Rect(worldBounds.position/config.scale,worldBounds.size/config.scale)) {Mode=config.climbingMode};
             Den=new DenRouteSurfaces(Surfaces,Surfaces.Bounds);
             Pet.Generate(config.id); Pet.Pose(0,.7f);
+            Bite=new PetBite(Pet.Seed ^ Config.key.GetHashCode(),Pet.Species.Biting);
             Motion=new PetMotion(Pet,Den) {Roam=config.roam,AutonomousJumps=config.jumps};
             if(worldPosition.HasValue) { var p=Surfaces.Nearest(Local(worldPosition.Value),out var n)+n*14; Motion.ShiftWithSurface(p-Motion.Position); }
             Input=new PetInteraction(Motion) {ClickToExplore=config.clickToExplore};

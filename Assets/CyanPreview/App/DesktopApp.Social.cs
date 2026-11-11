@@ -80,35 +80,19 @@ namespace CyanPreview
                 if(!fight.Active) continue;
                 engaged.Add(a.Config.key); engaged.Add(b.Config.key);
                 a.Motion.RivalTarget=a.Local(b.WorldPosition); b.Motion.RivalTarget=b.Local(a.WorldPosition);
-                bool bite=fight.Phase==ScufflePhase.Bite;
-                var first=a.Pet.Personality.Dominance>=b.Pet.Personality.Dominance?a:b;
-                var attacker=fight.ExchangeIndex%2==0?first:(first==a?b:a);
-                var defender=attacker==a?b:a;
-                attacker.Motion.RivalBiting=bite;
-                a.Motion.RivalStance=b.Motion.RivalStance=fight.Phase==ScufflePhase.Posture;
-                bool hold=fight.Phase==ScufflePhase.Bite || fight.Phase==ScufflePhase.Recoil || (fight.Phase==ScufflePhase.Posture && Vector2.Distance(a.WorldPosition,b.WorldPosition)/scale<=75);
-                a.Motion.Behavior.HoldPosition=b.Motion.Behavior.HoldPosition=hold;
-                a.Motion.Behavior.TaskTarget=a.Local(b.WorldPosition); b.Motion.Behavior.TaskTarget=b.Local(a.WorldPosition);
-                a.Motion.AutonomousJumps=b.Motion.AutonomousJumps=false;
-                var direction=(b.WorldPosition-a.WorldPosition).normalized;
-                if(direction.sqrMagnitude<.1f) direction=Vector2.right;
-                if(fight.BiteStarted)
-                {
-                    bool contact=Vector2.Distance(attacker.WorldMouth,defender.WorldPosition)<=28*scale;
-                    if(attacker.Motion.BiteToward(attacker.Local(defender.WorldPosition)))
-                    {
-                        attacker.Audio?.Bite(contact);
-                        if(contact) defender.Motion.ScuffleImpulse((defender.WorldPosition-attacker.WorldPosition).normalized*5);
-                    }
-                    if(food.Owner==FoodOwner.Pet && (food.Holder==a.Config.key || food.Holder==b.Config.key))
-                    { var holder=food.Holder==a.Config.key?a:b; food.Drop(Clamp(holder.WorldMouth)); ResetInterest(holder); }
-                }
-                if(fight.RecoilStarted)
-                {
-                    a.Motion.ScuffleImpulse(-direction*4); b.Motion.ScuffleImpulse(direction*4);
-                    // Jaw snaps have their own sound; do not substitute two vocal calls.
-                }
+                int contactA=PetContacts.BiteContact(a,b,out bool nearA), contactB=PetContacts.BiteContact(b,a,out bool nearB);
+                bool canA=food.Holder!=a.Config.key && a.Motion.GripCount>0;
+                bool canB=food.Holder!=b.Config.key && b.Motion.GripCount>0;
+                // Decide both jaws from the same contact snapshot; order never chooses a winner.
+                var decisionA=a.Bite.Advance(dt,true,canA,nearA,contactA>=0);
+                var decisionB=b.Bite.Advance(dt,true,canB,nearB,contactB>=0);
+                ApplyBite(a,b,decisionA,contactA); ApplyBite(b,a,decisionB,contactB);
+                ConfigureRival(a,b,nearA,contactA>=0); ConfigureRival(b,a,nearB,contactB>=0);
+                socialStates[i].state=BiteStatus(a,fight); socialStates[j].state=BiteStatus(b,fight);
             }
+            foreach(var pet in pets) if(!engaged.Contains(pet.Config.key))
+            { pet.Bite.Advance(dt,false,false,false,false); pet.Bite.Cancel(); }
+
             socialRefresh-=dt;
             if(socialRefresh<=0 && !string.IsNullOrEmpty(settingsFile))
             {
@@ -121,6 +105,32 @@ namespace CyanPreview
                 }
                 catch(IOException) { }
             }
+        }
+        static string BiteStatus(DesktopPet pet,PetScuffle fight) => pet.Bite.Snapping?"Bite":pet.Bite.Recovering?"Recoil":fight.Phase.ToString();
+        void ConfigureRival(DesktopPet pet,DesktopPet rival,bool near,bool contact)
+        {
+            pet.Motion.RivalJaw=pet.Bite.Jaw; pet.Motion.RivalBiting=pet.Bite.Snapping;
+            pet.Motion.RivalStance=near && !pet.Bite.Snapping && !pet.Bite.Recovering;
+            pet.Motion.Behavior.HoldPosition=pet.Bite.Recovering || contact;
+            pet.Motion.Behavior.TaskTarget=pet.Local(rival.WorldPosition); pet.Motion.AutonomousJumps=false;
+        }
+        void ApplyBite(DesktopPet attacker,DesktopPet defender,BiteDecision decision,int contact)
+        {
+            if(decision==BiteDecision.None) return;
+            var target=contact>=0?defender.Motion.BodyPosition(contact)*defender.Config.scale:defender.WorldPosition;
+            if(decision==BiteDecision.Home) { attacker.Motion.BiteHoming(attacker.Local(target),attacker.Pet.Species.Biting.Homing); return; }
+            if(!attacker.Motion.BiteToward(attacker.Local(target))) return;
+            bool hit=decision==BiteDecision.Hit && contact>=0 && PetContacts.Available(defender);
+            attacker.Audio?.Bite(hit);
+            if(!hit) return;
+            var direction=(target-attacker.WorldPosition).normalized;
+            defender.Motion.ContactCorrection(contact,Vector2.zero,direction*5/defender.Config.scale);
+            defender.Bite.ReceiveHit();
+            if(food.DropFromBite(defender.Config.key,Clamp(defender.WorldMouth))) ResetInterest(defender);
+        }
+        void ResolvePetContacts(float dt)
+        {
+            for(int i=0;i<pets.Count;i++) for(int j=i+1;j<pets.Count;j++) PetContacts.Resolve(pets[i],pets[j],dt);
         }
         public static void UpdateSocialStatus(PetSocialStatus status,PetScuffle fight,string rival,bool eligible)
         {

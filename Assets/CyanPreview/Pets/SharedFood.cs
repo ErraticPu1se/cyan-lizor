@@ -19,6 +19,8 @@ namespace CyanPreview
         public bool TakeCursor() { if(!Available) return false; Owner=FoodOwner.Cursor; Holder=null; Revision++; return true; }
         public void Drop(Vector2 p)
         { if(Owner!=FoodOwner.Pet && Owner!=FoodOwner.Cursor) return; Move(p); Holder=null; Owner=FoodOwner.Loose; Revision++; }
+        public bool DropFromBite(string victim,Vector2 position)
+        { if(Owner!=FoodOwner.Pet || Holder!=victim) return false; Drop(position); return true; }
         public bool EnterDen(string pet)
         { if(Owner!=FoodOwner.Pet || Holder!=pet) return false; Owner=FoodOwner.Den; Revision++; return true; }
         public void Remove(string pet,Vector2 drop)
@@ -31,22 +33,17 @@ namespace CyanPreview
     {
         public ScufflePhase Phase { get; private set; }
         public float Tension { get; private set; }
-        public bool Active => Phase==ScufflePhase.Approaching || Phase==ScufflePhase.Posture || Phase==ScufflePhase.Bite || Phase==ScufflePhase.Recoil;
-        public bool BiteStarted { get; private set; }
-        public bool RecoilStarted { get; private set; }
-        float remaining; int exchanges, repositionAttempts;
-        public int ExchangeIndex => exchanges;
+        public bool Active => Phase==ScufflePhase.Approaching || Phase==ScufflePhase.Posture;
+        float remaining, engagement;
         public string Outcome { get; private set; }
         public bool TryStartManual()
         {
             if(Active || Phase==ScufflePhase.Cooldown) return false;
-            Phase=ScufflePhase.Approaching; remaining=20; exchanges=0; repositionAttempts=0; Tension=1; Outcome=null;
-            BiteStarted=RecoilStarted=false; return true;
+            Phase=ScufflePhase.Approaching; remaining=20; engagement=0; Tension=1; Outcome=null; return true;
         }
-        public void Interrupt() { Phase=ScufflePhase.Cooldown; remaining=8; Tension=0; BiteStarted=RecoilStarted=false; }
+        public void Interrupt() { Phase=ScufflePhase.Cooldown; remaining=8; Tension=0; }
         public void Advance(float seconds,bool allowed,bool eligible,float distance,bool competing,float aggression,float dominanceDifference)
         {
-            BiteStarted=RecoilStarted=false;
             if(!allowed || !eligible) { if(Active) Interrupt(); else Tension=0; return; }
             if(float.IsNaN(seconds)||float.IsInfinity(seconds)||seconds<=0) return;
             float dt=Mathf.Min(seconds,.1f);
@@ -54,35 +51,16 @@ namespace CyanPreview
             if(Phase==ScufflePhase.Calm)
             {
                 Tension=Mathf.Clamp01(Tension+(distance<160?(competing?.35f:.035f)*Mathf.Lerp(.4f,1.6f,Mathf.Clamp01(aggression)):-.2f)*dt);
-                if(Tension>=1) { Phase=ScufflePhase.Posture; remaining=.9f; exchanges=0; repositionAttempts=0; }
+                if(Tension>=1) { Phase=ScufflePhase.Approaching; remaining=20; engagement=0; }
                 return;
             }
-            if(Phase==ScufflePhase.Approaching)
+            if(distance<=90 || engagement>0)
             {
-                remaining-=dt;
-                if(distance<=50) { Phase=ScufflePhase.Posture; remaining=.9f; }
-                else if(remaining<=0) { Interrupt(); Outcome="Could not reach each other. Move them closer and retry after cooldown."; }
-                return;
+                engagement+=dt; Phase=distance<=90?ScufflePhase.Posture:ScufflePhase.Approaching;
+                // Desktop safety limit, independent of number/order of successful bites.
+                if(engagement>=8) { Interrupt(); Outcome="Encounter finished. Cooling down."; }
             }
-            if(distance>260) { Interrupt(); return; }
-            remaining-=dt;
-            if(Phase==ScufflePhase.Posture && remaining<=0)
-            {
-                if(distance>55)
-                {
-                    if(++repositionAttempts>2) { Interrupt(); Outcome="Could not get within biting range. Move the pets closer."; }
-                    else { Phase=ScufflePhase.Approaching; remaining=5; }
-                    return;
-                }
-                Phase=ScufflePhase.Bite; remaining=.22f; BiteStarted=true;
-            }
-            else if(Phase==ScufflePhase.Bite && remaining<=0) { Phase=ScufflePhase.Recoil; remaining=.55f; RecoilStarted=true; }
-            else if(Phase==ScufflePhase.Recoil && remaining<=0)
-            {
-                exchanges++;
-                if(exchanges>=2 || dominanceDifference>.45f) Interrupt();
-                else { Phase=ScufflePhase.Posture; remaining=.65f; }
-            }
+            else if((remaining-=dt)<=0) { Interrupt(); Outcome="Could not reach each other. Move them closer and retry after cooldown."; }
         }
     }
 }

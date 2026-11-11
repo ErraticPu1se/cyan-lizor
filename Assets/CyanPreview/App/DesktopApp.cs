@@ -300,7 +300,7 @@ namespace CyanPreview
                 var hovered=HitPet(point);
                 foreach(var p in pets)
                     if(p.Input.Hover(p.Local(point),dt,buttonHeld || hovered!=p || p.Feeding.UsingRoute || p.Motion.RivalTarget.HasValue,p.Audio!=null && p.Audio.CanPettingCall)) p.Audio.PettingCall();
-                AdvanceFeeding(dt); AdvanceScuffles(dt); DrawFrame(dt,false);
+                ResolvePetContacts(dt); AdvanceFeeding(dt); AdvanceScuffles(dt); DrawFrame(dt,false);
             }
             catch(Exception e) { Debug.LogException(e); Application.Quit(); }
         }

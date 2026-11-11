@@ -5,6 +5,27 @@ namespace CyanPreview
     public sealed partial class PetMotion
     {
         public Vector2? RivalTarget { get; set; }
+        public float RivalJaw { get; set; }
+        public int BodyCount => chunks.Length;
+        public Vector2 BodyPosition(int index) => (Vector2)Get(chunks[index],"pos");
+        public Vector2 BodyVelocity(int index) => (Vector2)Get(chunks[index],"vel");
+        public float BodyRadius(int index) => (float)Get(chunks[index],"rad");
+        public float BodyMass(int index) => (float)Get(chunks[index],"mass");
+        public Vector2 BitePoint => Position+(Position-BodyPosition(1)).normalized*Species.Biting.Forward;
+        public void ContactCorrection(int index,Vector2 delta,Vector2 velocityDelta)
+        {
+            if(State==PetMotionState.Grabbed) return;
+            var p=BodyPosition(index); var next=surfaces.Constrain(p+delta,BodyRadius(index),out _);
+            TranslatePart(chunks[index],next-p);
+            Set(chunks[index],"vel",Vector2.ClampMagnitude(BodyVelocity(index)+velocityDelta,18));
+            resting=false;
+        }
+        public void BiteHoming(Vector2 target,float strength)
+        {
+            if(State!=PetMotionState.Crawling) return;
+            var direction=(target-Position).normalized;
+            for(int i=0;i<chunks.Length;i++) Set(chunks[i],"vel",Vector2.ClampMagnitude(BodyVelocity(i)+direction*strength*(i==0?3:-1),14));
+        }
         public bool RivalStance { get; set; }
         public bool RivalBiting { get; set; }
         public bool BiteToward(Vector2 target)
