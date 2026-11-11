@@ -92,6 +92,7 @@ Right-clicks outside the lizard remain available to other applications. Naturall
 - Additional lizard species
 - white lizard camo with background
 - lizard spit might propel the cursor?
+- mac support, but only with limited lizard presets.
 
 They are planned. They are not present in this preview.
 
