@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using UnityEngine;
+using Unity.Collections;
 
 namespace CyanPreview.Editor
 {
@@ -10,7 +11,8 @@ namespace CyanPreview.Editor
         public static void Run(ReferenceContext context)
         {
             var packed = new byte[8];
-            DesktopAlphaRenderer.PackPixels(new[] { new Color32(10,20,30,40), new Color32(0,0,0,0) }, packed, 1, 2);
+            using (var pixels = new NativeArray<Color32>(new[] { new Color32(10,20,30,40), new Color32(0,0,0,0) }, Allocator.Temp))
+                DesktopAlphaRenderer.PackPixels(pixels, packed, 1, 2);
             Require(packed[3] == 0 && packed[4] == 30 && packed[5] == 20 && packed[6] == 10 && packed[7] == 40, "Alpha bitmap orientation/channel mapping failed");
             var work = new Rect(-1920,40,1920,1040);
             foreach (float scale in new[] { .5f, 1f, 2f })
@@ -21,7 +23,7 @@ namespace CyanPreview.Editor
             var outside = DesktopAlphaRenderer.CaptureRect(new Bounds(new Vector3(100000,100000,0), Vector3.one), work, 1);
             Require(outside.width == 1 && outside.height == 1, "Off-screen effects did not clear their surface");
             bool invalid = false;
-            try { DesktopAlphaRenderer.PackPixels(new Color32[1], new byte[4], 2, 2); }
+            try { using (var pixels = new NativeArray<Color32>(1, Allocator.Temp)) DesktopAlphaRenderer.PackPixels(pixels, new byte[4], 2, 2); }
             catch (ArgumentException) { invalid = true; }
             Require(invalid, "Invalid alpha buffer was accepted");
             VerifyCoverage("CyanPreview/HeadGlow"); VerifyCoverage("CyanPreview/JumpParticle");

@@ -1,6 +1,6 @@
 # Development
 
-To build the published Windows preview, check out tag `v0.2.0-preview.1` before following these instructions.
+To build the published Windows preview, check out tag `v0.2.0-preview.2` before following these instructions.
 
 ## Build from source
 
@@ -68,3 +68,16 @@ Climbing modes use per-pet DesktopSettings schema 2. Schema 1 windowEdges=true m
 FallCatchProgress is per pet and resets on each grab, new flight, and landing. A drop from the airborne apex must reach the initial body-chain length plus end radii (50 world units for current cyan, excluding tail) and at least 0.1 seconds, with downward velocity. Only species with wall-climbing capability can catch. IEdgeCatchSurfaces supplies current visible edges without background support; feet must reach an edge within their actual joint distance before attachment. LizardLimb's default hunt speed plus connection velocity informs the reaching motion. Catches preserve body position, damp velocity, and enter landing recovery without a floor thud. Ground collision still lands immediately, including short drops. Tests cover both modes, window and desktop sides, apex/threshold timing, regrabbing, missing/moved/covered edges, limb reach, and independent duplicate-ID pets.
 
 The compact panel defaults to 540×900 and uses a separate 768×240 render texture for its contained animated preview (30 updates/sec). PanelTheme owns the reusable grey/cyan styles and their generated textures. Advanced retains pose animation, view angle, identity/personality details, and screenshot capture; the large movement lab is removed from the user panel. Automated verification and a Windows build pass. Player checks covered preview animation, medium/reset size, invalid-ID feedback and recovery, expanded sections/scrolling, and desktop Start/Stop. Native right-click synchronization code remains unchanged. The user's LIAZRD title, subtitle, and scene-object wording were preserved; the attribution was revised with permission.
+
+
+## First-run setup and preferences
+
+The source now detects the saved Rain World folder and common Steam installations, including additional libraries listed in `libraryfolders.vdf`. Detection only checks for installation files; the importer still verifies the supported game fingerprint. Non-Steam/custom locations can be selected with **Browse** or pasted into the folder field. Canceling the picker preserves the current path. Detection does not overwrite a path edited while the search was running.
+
+The setup panel explains why Start is disabled: assets have not been prepared, preparation is running, setup failed, the appearance ID needs applying, or the app is running inside the Unity Editor. The desktop pet is never started automatically.
+
+`CompanionPreferences` stores size, climbing mode, roaming, propulsion, click exploration, sound, and the game folder in a versioned PlayerPrefs entry. Changes save within half a second and on normal close. The existing `LastId` and `ReferenceCache` entries remain compatible. Temporary process IDs, running state, and sound requests are not saved. Missing fields use defaults; malformed or unsupported preference data displays a warning and falls back to defaults.
+
+`SetupChecks` covers preference storage round trips, partial/corrupt/unsupported data, invalid scale and mode values, multiple/duplicate/missing Steam libraries, legacy library syntax, quoted/Unicode paths, wrong data subfolders, removed installations, and launch-blocker states. The Windows player was also checked for automatic detection, native folder-picker cancellation, successful preparation, and size/mode restoration after restarting.
+
+See [setup preview performance measurements](performance-setup-preview.md) for the local CPU, GPU, and memory samples. Setup and preference improvements are included in v0.2.0-preview.2. See [desktop rendering optimization](performance-desktop-rendering.md) for the subsequent profiling and verification.

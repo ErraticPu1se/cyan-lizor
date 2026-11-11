@@ -19,7 +19,7 @@ namespace CyanPreview.Editor
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene("Assets/Scenes/Preview.unity", true) };
             PlayerSettings.companyName = "ErraticPu1se";
             PlayerSettings.productName = "Cyan Lizor Preview";
-            PlayerSettings.bundleVersion = "0.2.0-preview.1";
+            PlayerSettings.bundleVersion = "0.2.0-preview.2";
             PlayerSettings.defaultScreenWidth = 540;
             PlayerSettings.defaultScreenHeight = 900;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
@@ -97,6 +97,7 @@ namespace CyanPreview.Editor
 
         public static void Verify()
         {
+            SetupChecks.Run();
             if (!ReferenceBridge.TryParseId("ID.7.12345", out var spawner, out var seed) || spawner != 7 || seed != 12345)
                 throw new Exception("Full ID parser failed");
             foreach (var invalid in new[] { "", "ID.a.2", "1.2.3", "2147483648", "ID.1.2.3" })
@@ -129,6 +130,7 @@ namespace CyanPreview.Editor
                 CompanionChecks.Run(context);
                 TargetingChecks.Run(context);
                 DesktopEffectsChecks.Run(context);
+                RenderOptimizationChecks.Run(context);
                 InteractionUpgradeChecks.Run(context);
                 LandingRecoveryChecks.Run(context);
                 JumpEffectChecks.Run(context);
