@@ -20,6 +20,10 @@ namespace CyanPreview
         public bool sound = true;
         public int vocalizeRequest, feedRequest, cancelFeedRequest;
         public bool paused;
+        public bool allowFighting;
+        public DesktopPetConfiguration[] pets;
+        public const int MaximumPets = 3;
+        public DesktopPetConfiguration[] Roster => pets ?? new[] { DesktopPetConfiguration.From(this) };
         public bool running = true, windowEdges, clickToExplore, roam = true, jumps = true;
         public void ApplyMenu(DesktopMenuAction action)
         {
@@ -44,9 +48,16 @@ namespace CyanPreview
             if (schema != 2 || !Enum.IsDefined(typeof(ClimbingMode), climbingMode))
                 throw new InvalidDataException("Invalid climbing settings.");
         }
+        public void ValidateRoster()
+        {
+            var roster=Roster;
+            if(roster.Length<1 || roster.Length>MaximumPets) throw new InvalidDataException("Choose one to three pets.");
+            var keys=new System.Collections.Generic.HashSet<string>();
+            foreach(var pet in roster) { if(pet==null) throw new InvalidDataException("Missing pet."); pet.Validate(); if(!keys.Add(pet.key)) throw new InvalidDataException("Duplicate pet instance."); }
+        }
         public void Validate()
         {
-            UpgradeClimbingMode();
+            UpgradeClimbingMode(); ValidateRoster();
             if (schema != 2 || controllerPid <= 0 || !ReferenceBridge.TryParseId(id, out _, out _)
                 || string.IsNullOrEmpty(cache) || !File.Exists(Path.Combine(cache, "reference.json"))
                 || float.IsNaN(scale) || float.IsInfinity(scale) || scale < .5f || scale > 2)
@@ -71,8 +82,10 @@ namespace CyanPreview
             if (File.Exists(file)) File.Replace(temp, file, null); else File.Move(temp, file);
             previous = json;
         }
-        public bool TryReadMenu(out DesktopMenuAction action)
+        public bool TryReadMenu(out DesktopMenuAction action) => TryReadMenu(out _,out action);
+        public bool TryReadMenu(out string key,out DesktopMenuAction action)
         {
+            key="primary";
             action = DesktopMenuAction.None;
             var directory = Path.GetDirectoryName(file);
             if (!Directory.Exists(directory)) return false;
@@ -82,6 +95,7 @@ namespace CyanPreview
             if (requests.Length == 0) return false;
             string request = requests[0];
             string value = File.ReadAllText(request); File.Delete(request);
+            int separator=value.IndexOf('|'); if(separator>=0) { key=value.Substring(0,separator); value=value.Substring(separator+1); }
             if (!int.TryParse(value, out int number) || !Enum.IsDefined(typeof(DesktopMenuAction), number)) return false;
             action = (DesktopMenuAction)number; return true;
         }
@@ -119,193 +133,186 @@ namespace CyanPreview
         DesktopSettings settings;
         WindowsDesktop native;
         ReferenceContext context;
-        ReferenceBridge pet;
-        SpriteMeshView view;
-        PetMotion motion;
-        CyanJumpEffects jumpEffects;
-        CyanPetAudio petAudio;
-        PetInteraction input;
-        DesktopSurfaces surfaces;
-        DenRouteSurfaces denSurfaces;
+        readonly System.Collections.Generic.List<DesktopPet> pets = new System.Collections.Generic.List<DesktopPet>();
         Camera cameraView;
         DesktopAlphaRenderer desktopRenderer;
-        float refresh;
-        bool ready, buttonHeld, menuOpen;
+        DesktopPet pointerPet;
+        float refresh, holdElapsed;
         uint pressTime;
-        float holdElapsed;
+        bool ready, buttonHeld, foodPressed, menuOpen;
+        Rect Bounds => new Rect(-native.WorkArea.width/2,-native.WorkArea.height/2,native.WorkArea.width,native.WorkArea.height);
+        Vector2 World(Vector2 screen) => DesktopCoordinates.ToWorld(screen,native.WorkArea,1);
+        Vector2 Clamp(Vector2 p) => new Vector2(Mathf.Clamp(p.x,Bounds.xMin+10,Bounds.xMax-10),Mathf.Clamp(p.y,Bounds.yMin+10,Bounds.yMax-10));
         IEnumerator Start()
         {
             try
             {
-                var args = Environment.GetCommandLineArgs(); int index = Array.IndexOf(args, "--desktop-settings");
-                if (index < 0 || index + 1 >= args.Length) throw new InvalidDataException("Desktop settings argument missing.");
-                settingsFile = args[index + 1]; settings = LoadSettings();
-                native = new WindowsDesktop(settings.controllerPid);
-                QualitySettings.antiAliasing = 0; Application.runInBackground = true; QualitySettings.vSyncCount = 0; Application.targetFrameRate = 60;
-                cameraView = new GameObject("Desktop camera").AddComponent<Camera>();
-                cameraView.gameObject.AddComponent<AudioListener>();
-                cameraView.orthographic = true; cameraView.clearFlags = CameraClearFlags.SolidColor;
-                cameraView.enabled = false; cameraView.backgroundColor = Color.clear; cameraView.transform.position = new Vector3(0, 0, -10);
-                Screen.SetResolution((int)native.WorkArea.width, (int)native.WorkArea.height, FullScreenMode.Windowed);
-                context = new ReferenceContext(settings.cache); pet = context.CreatePet();
-                view = new SpriteMeshView(transform) { DesktopTransparency = true };
-                RebuildPet();
+                var args=Environment.GetCommandLineArgs(); int index=Array.IndexOf(args,"--desktop-settings");
+                if(index<0 || index+1>=args.Length) throw new InvalidDataException("Desktop settings argument missing.");
+                settingsFile=args[index+1]; settings=LoadSettings(); native=new WindowsDesktop(settings.controllerPid);
+                QualitySettings.antiAliasing=0; Application.runInBackground=true; QualitySettings.vSyncCount=0; Application.targetFrameRate=60;
+                cameraView=new GameObject("Desktop camera").AddComponent<Camera>(); cameraView.gameObject.AddComponent<AudioListener>();
+                cameraView.orthographic=true; cameraView.clearFlags=CameraClearFlags.SolidColor; cameraView.enabled=false;
+                cameraView.backgroundColor=Color.clear; cameraView.transform.position=new Vector3(0,0,-10);
+                Screen.SetResolution((int)native.WorkArea.width,(int)native.WorkArea.height,FullScreenMode.Windowed);
+                context=new ReferenceContext(settings.cache); foodView=new FoodMorselView(transform); SyncPets(false);
             }
-            catch (Exception e) { Debug.LogException(e); Application.Quit(); yield break; }
+            catch(Exception e) { Debug.LogException(e); Application.Quit(); yield break; }
             yield return null; yield return null;
             try
             {
-                if (!native.Initialize()) throw new InvalidOperationException("Owned overlay window not found.");
-                desktopRenderer = new DesktopAlphaRenderer(native.WindowHandle, cameraView, transform);
-                native.HitTest = cursor => !settings.paused && !feeding.Frozen && (feeding.Stage==FeedingStage.Placing || motion.Contains(DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale)));
-                ready = true; RefreshWindows();
-                Debug.Log("DESKTOP_OVERLAY_READY " + native.WorkArea);
+                if(!native.Initialize()) throw new InvalidOperationException("Owned overlay window not found.");
+                desktopRenderer=new DesktopAlphaRenderer(native.WindowHandle,cameraView,transform);
+                native.HitTest=cursor=>!settings.paused && (food.Owner==FoodOwner.Placing || HitPet(World(cursor))!=null || HitFood(World(cursor)));
+                ready=true; RefreshWindows(); Debug.Log("DESKTOP_OVERLAY_READY pets="+pets.Count);
             }
-            catch (Exception e) { Debug.LogException(e); Application.Quit(); }
+            catch(Exception e) { Debug.LogException(e); Application.Quit(); }
         }
         DesktopSettings LoadSettings()
         {
-            var value = JsonUtility.FromJson<DesktopSettings>(File.ReadAllText(settingsFile));
-            if (value == null) throw new InvalidDataException("Missing desktop settings.");
-            value.Validate(); return value;
+            var value=JsonUtility.FromJson<DesktopSettings>(File.ReadAllText(settingsFile));
+            if(value==null) throw new InvalidDataException("Missing desktop settings."); value.Validate(); return value;
         }
-        void RebuildPet(Vector2? keepPosition = null)
+        void SyncPets(bool displayChanged)
         {
-            input?.Cancel();
-            petAudio?.Dispose(); petAudio = null;
-            jumpEffects?.Dispose(); jumpEffects = null;
-            var area = native.WorkArea;
-            surfaces = new DesktopSurfaces(new Rect(-area.width / (2 * settings.scale), -area.height / (2 * settings.scale), area.width / settings.scale, area.height / settings.scale)) { Mode = settings.climbingMode };
-            pet.Generate(settings.id); pet.Pose(0, .7f);
-            denSurfaces = new DenRouteSurfaces(surfaces,surfaces.Bounds);
-            motion = new PetMotion(pet, denSurfaces) { Roam = settings.roam, AutonomousJumps = settings.jumps };
-            if (keepPosition.HasValue)
+            var roster=settings.Roster;
+            for(int i=pets.Count-1;i>=0;i--)
             {
-                var restingPoint = surfaces.Nearest(keepPosition.Value, out var inward) + inward * 14;
-                motion.ShiftWithSurface(restingPoint - motion.Position);
+                var p=pets[i];
+                if(Array.Exists(roster,c=>c.key==p.Config.key)) continue;
+                foodView.Show(false,Vector2.zero); food.Remove(p.Config.key,Clamp(p.WorldMouth));
+                if(pointerPet==p) CancelPointer(); p.Dispose(); pets.RemoveAt(i); scuffles.Clear();
             }
-            motion.StateChanged += state => Debug.Log("DESKTOP_STATE " + state + " " + motion.Position);
-            jumpEffects = new CyanJumpEffects(transform, motion, pet.EffectColor, pet.Seed);
-            try { petAudio = new CyanPetAudio(transform, context, motion, jumpEffects, pet.Seed) { Enabled = settings.sound && !settings.paused }; }
-            catch (Exception e) { Debug.LogWarning("Desktop pet audio unavailable: " + e.Message); }
-            input = new PetInteraction(motion) { ClickToExplore = settings.clickToExplore };
-            cameraView.orthographicSize = area.height / (2 * settings.scale);
-            ResetFeeding();
+            foreach(var config in roster)
+            {
+                var p=pets.Find(x=>x.Config.key==config.key);
+                if(p==null)
+                {
+                    p=new DesktopPet(context,transform,config,Bounds,nextOrder++); pets.Add(p);
+                    var position=new Vector2(Bounds.xMin+Bounds.width*(pets.Count/(float)(roster.Length+1)),Bounds.yMin+16*config.scale);
+                    p.Motion.ShiftWithSurface(p.Local(position)-p.Motion.Position);
+                }
+                else if(displayChanged || p.Config.id!=config.id || p.Config.scale!=config.scale)
+                {
+                    foodView.Show(false,Vector2.zero); food.Remove(p.Config.key,Clamp(p.WorldMouth));
+                    if(pointerPet==p) CancelPointer(); p.Rebuild(config,Bounds,Clamp(p.WorldPosition)); scuffles.Clear();
+                }
+                p.Configure(config,settings.paused);
+            }
+            cameraView.orthographicSize=native.WorkArea.height/2;
+            if(displayChanged) CancelFeeding();
         }
-        void RefreshWindows()
+        int nextOrder;
+        DesktopPet HitPet(Vector2 point)
+        { for(int i=pets.Count-1;i>=0;i--) if(pets[i].Contains(point)) return pets[i]; return null; }
+        DesktopPet NearestPet(Vector2 point)
         {
-            if(denSurfaces.Active) { surfaces.UpdateWindows(native.Snapshot(settings.scale)); return; }
-            var delta = surfaces.UpdateWindows(native.Snapshot(settings.scale), motion.Position,
-                motion.State == PetMotionState.Crawling && motion.GripCount > 0 && !input.CapturesPointer);
-            if (surfaces.SupportLost) motion.ReleaseSupport();
-            else if (delta.sqrMagnitude > 0) { motion.Behavior.Rest(); motion.ShiftWithSurface(delta, resetVelocity: false); }
+            DesktopPet best=null; float distance=float.MaxValue;
+            foreach(var p in pets) if(!p.Feeding.Active && !p.FollowingFood && !p.Motion.RivalTarget.HasValue && p.Config.clickToExplore)
+            { float d=(p.WorldPosition-point).sqrMagnitude; if(d<distance) { best=p; distance=d; } }
+            return best;
         }
-
+        bool HitFood(Vector2 point) => food.Available && (food.Position-point).sqrMagnitude<=18*18;
+        void RefreshWindows() { foreach(var p in pets) p.RefreshWindows(native.Snapshot(p.Config.scale)); }
+        void CancelPointer()
+        {
+            pointerPet?.Input.Cancel(); pointerPet=null; foodPressed=buttonHeld=false;
+            if(food.Owner==FoodOwner.Cursor) food.Drop(Clamp(food.Position));
+        }
         void Update()
         {
-            if (!ready || menuOpen) return;
+            if(!ready || menuOpen) return;
             try
             {
-                refresh -= Time.unscaledDeltaTime;
-                if (refresh <= 0)
+                float dt=Time.unscaledDeltaTime; refresh-=dt;
+                if(refresh<=0)
                 {
-                    refresh = .25f;
-                    DesktopSettings next;
-                    try { next = LoadSettings(); } catch (IOException) { next = settings; }
-                    if (!next.running || !native.ControllerAlive) { Application.Quit(); return; }
-                    bool rebuild = next.id != settings.id || next.scale != settings.scale;
-                    var keepPosition = motion.Position * settings.scale / next.scale;
-                    bool modeChanged = next.climbingMode != settings.climbingMode;
-                    bool vocalize = next.vocalizeRequest != settings.vocalizeRequest;
-                    bool feed=next.feedRequest!=settings.feedRequest, cancelFeed=next.cancelFeedRequest!=settings.cancelFeedRequest;
-                    if(next.paused!=settings.paused) { input.Cancel(); native.ClearButtonEvents(); buttonHeld=false; }
-                    settings = next;
-                    if (native.RefreshWorkArea())
-                    {
-                        Screen.SetResolution((int)native.WorkArea.width, (int)native.WorkArea.height, FullScreenMode.Windowed); rebuild = true;
-                    }
-                    if (rebuild) RebuildPet(keepPosition);
-                    else if (modeChanged) { surfaces.Mode = settings.climbingMode; motion.RefreshSurfaceSupport(); }
-                    motion.Roam = settings.roam; motion.AutonomousJumps = settings.jumps;
-                    if(cancelFeed) CancelFeeding(); else if(feed && !settings.paused) BeginFeeding();
-                    input.ClickToExplore = settings.clickToExplore;
-                    if (petAudio != null) { petAudio.Enabled = settings.sound && !settings.paused; if (vocalize && !settings.paused) petAudio.Vocalize(); }
+                    refresh=.25f; DesktopSettings next;
+                    try { next=LoadSettings(); } catch(IOException) { next=settings; }
+                    if(!next.running || !native.ControllerAlive) { Application.Quit(); return; }
+                    bool vocalize=next.vocalizeRequest!=settings.vocalizeRequest;
+                    bool feed=next.feedRequest!=settings.feedRequest, cancel=next.cancelFeedRequest!=settings.cancelFeedRequest;
+                    if(next.paused!=settings.paused) { CancelPointer(); native.ClearButtonEvents(); }
+                    settings=next; bool resized=native.RefreshWorkArea();
+                    if(resized) Screen.SetResolution((int)native.WorkArea.width,(int)native.WorkArea.height,FullScreenMode.Windowed);
+                    SyncPets(resized);
+                    if(cancel) CancelFeeding(); else if(feed && !settings.paused) BeginFeeding();
+                    if(vocalize && !settings.paused && pets.Count>0) pets[0].Audio?.Vocalize();
                 }
-                if(settings.paused)
+                if(settings.paused) { native.ClearButtonEvents(); native.SetClickThrough(true); RefreshWindows(); DrawFrame(0,true); return; }
+                var point=World(native.Cursor);
+                foreach(var p in pets) if(!p.Feeding.Frozen) p.Motion.ObserveCursor(p.Local(point));
+                if(food.Owner==FoodOwner.Placing) { PlaceFoodInput(point); RefreshWindows(); DrawFrame(dt,false); return; }
+                if(native.TryReadMenuRequest(out var menuPoint))
                 {
-                    native.ClearButtonEvents(); buttonHeld=false; native.SetClickThrough(true);
-                    RefreshWindows();
-                    pet.Draw(motion.Interpolation); view.Refresh(pet); RefreshFoodVisual(); desktopRenderer.Render(native.WorkArea,settings.scale);
-                    return;
-                }
-                var cursor = native.Cursor;
-                var point = DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale);
-                if(PlaceFoodInput(point)) return;
-                if(feeding.Frozen) { native.ClearButtonEvents(); native.SetClickThrough(true); petAudio?.Advance(Time.unscaledDeltaTime); AdvanceFeeding(Time.unscaledDeltaTime); pet.Draw(motion.Interpolation); view.Refresh(pet); RefreshFoodVisual(); desktopRenderer.Render(native.WorkArea,settings.scale); return; }
-                motion.ObserveCursor(point);
-                if (native.TryReadMenuRequest(out var menuPoint))
-                {
-                    // A native modal menu pauses this pet only; discard its input on dismissal.
-                    menuOpen = true;
+                    var selected=HitPet(World(menuPoint)); if(selected==null) return;
+                    menuOpen=true;
                     try
                     {
-                        input.Cancel(); buttonHeld = false;
-                        var action = native.ShowPetMenu(menuPoint, settings);
-                        if (action == DesktopMenuAction.Feed) BeginFeeding();
-                        else if (action == DesktopMenuAction.Settings) native.ShowController();
-                        else if (action != DesktopMenuAction.None)
+                        CancelPointer(); var action=native.ShowPetMenu(menuPoint,selected.Config.MenuSettings());
+                        if(action==DesktopMenuAction.Feed) BeginFeeding();
+                        else if(action==DesktopMenuAction.Settings) native.ShowController();
+                        else if(action!=DesktopMenuAction.None)
                         {
-                            string request = settingsFile + ".menu-" + DateTime.UtcNow.Ticks + "-" + Guid.NewGuid().ToString("N");
-                            string temp = request + ".tmp";
-                            File.WriteAllText(temp, ((int)action).ToString()); File.Move(temp, request);
+                            string request=settingsFile+".menu-"+DateTime.UtcNow.Ticks+"-"+Guid.NewGuid().ToString("N");
+                            File.WriteAllText(request+".tmp",selected.Config.key+"|"+(int)action); File.Move(request+".tmp",request);
                         }
                     }
-                    finally { menuOpen = false; native.ClearButtonEvents(); }
+                    finally { menuOpen=false; native.ClearButtonEvents(); }
                     return;
                 }
-                while (native.TryReadButton(out var button))
+                while(native.TryReadButton(out var button))
                 {
-                    var eventPoint = DesktopCoordinates.ToWorld(button.Position, native.WorkArea, settings.scale);
-                    if (button.Down)
+                    var eventPoint=World(button.Position);
+                    if(button.Down)
                     {
-                        buttonHeld = true; pressTime = button.Time; holdElapsed = 0;
-                        if (native.WorkArea.Contains(button.Position) && (motion.Contains(eventPoint) || (!button.ControllerFocused && !surfaces.IsWindowChrome(eventPoint, settings.scale) && !native.IsWindowControl(button.Position))))
-                            { if(feeding.Active && !motion.Contains(eventPoint)) continue; input.Press(eventPoint); }
+                        CancelPointer(); buttonHeld=true; pressTime=button.Time; holdElapsed=0;
+                        if(!native.WorkArea.Contains(button.Position)) continue;
+                        // Mouth-held food is part of its pet. Loose food gets first refusal.
+                        foodPressed=HitFood(eventPoint);
+                        if(foodPressed) continue;
+                        pointerPet=HitPet(eventPoint);
+                        if(pointerPet!=null) pointerPet.Input.Press(pointerPet.Local(eventPoint));
+                        else if(!button.ControllerFocused && !native.IsWindowControl(button.Position))
+                        {
+                            var nearest=NearestPet(eventPoint);
+                            if(nearest!=null && !nearest.Surfaces.IsWindowChrome(nearest.Local(eventPoint),nearest.Config.scale)) nearest.Motion.ExploreClick(nearest.Local(eventPoint));
+                        }
                     }
                     else
                     {
-                        AdvanceHold(eventPoint, button.Time);
-                        input.Release(eventPoint, native.WorkArea.Contains(button.Position)); buttonHeld = false;
+                        AdvanceHold(eventPoint,button.Time);
+                        pointerPet?.Input.Release(pointerPet.Local(eventPoint),native.WorkArea.Contains(button.Position)); pointerPet=null;
+                        if(food.Owner==FoodOwner.Cursor) food.Drop(OfferPoint(eventPoint));
+                        foodPressed=buttonHeld=false;
                     }
                 }
-                AdvanceHold(point, unchecked((uint)Environment.TickCount));
-                // The native button callback owns pet presses; other application drags pass through.
-                native.SetClickThrough(!input.CapturesPointer && (buttonHeld || !motion.Contains(point)));
-                using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Windows)) RefreshWindows();
-                if (input.Hover(point, Time.unscaledDeltaTime, buttonHeld, petAudio != null && petAudio.CanPettingCall)) petAudio.PettingCall();
-                AdvanceFeeding(Time.unscaledDeltaTime);
-                using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Frame))
-                {
-                    petAudio?.Advance(Time.unscaledDeltaTime);
-                    using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Motion)) if(!feeding.Frozen) motion.Advance(Time.unscaledDeltaTime);
-                    using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Effects)) jumpEffects.Advance(Time.unscaledDeltaTime);
-                    using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Draw)) pet.Draw(motion.Interpolation);
-                    using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Mesh)) view.Refresh(pet);
-                    RefreshFoodVisual(); desktopRenderer.Render(native.WorkArea, settings.scale);
-                }
-                DesktopFrameProfile.EndFrame();
+                AdvanceHold(point,unchecked((uint)Environment.TickCount));
+                native.SetClickThrough(pointerPet==null && food.Owner!=FoodOwner.Cursor && (buttonHeld || (HitPet(point)==null && !HitFood(point))));
+                RefreshWindows();
+                var hovered=HitPet(point);
+                foreach(var p in pets)
+                    if(p.Input.Hover(p.Local(point),dt,buttonHeld || hovered!=p || p.Feeding.UsingRoute || p.Motion.RivalTarget.HasValue,p.Audio!=null && p.Audio.CanPettingCall)) p.Audio.PettingCall();
+                AdvanceFeeding(dt); AdvanceScuffles(dt); DrawFrame(dt,false);
             }
-            catch (Exception e) { Debug.LogException(e); Application.Quit(); }
+            catch(Exception e) { Debug.LogException(e); Application.Quit(); }
         }
-        void AdvanceHold(Vector2 point, uint now)
+        void AdvanceHold(Vector2 point,uint now)
         {
-            if (!buttonHeld) return;
-            float elapsed = unchecked(now - pressTime) / 1000f;
-            input.Hold(point, Mathf.Max(0, elapsed - holdElapsed)); holdElapsed = elapsed;
+            if(!buttonHeld) return; float elapsed=unchecked(now-pressTime)/1000f;
+            if(foodPressed && elapsed>=PetInteraction.GrabDelay && food.Available) food.TakeCursor();
+            if(food.Owner==FoodOwner.Cursor) food.Move(Clamp(point));
+            pointerPet?.Input.Hold(pointerPet.Local(point),Mathf.Max(0,elapsed-holdElapsed)); holdElapsed=elapsed;
+        }
+        void DrawFrame(float dt,bool paused)
+        {
+            foreach(var p in pets) p.Advance(dt,paused);
+            RefreshFoodVisual(); PublishFeedingStatus(); desktopRenderer.Render(native.WorkArea,1); DesktopFrameProfile.EndFrame();
         }
         void OnDestroy()
         {
-            foodView?.Dispose(); desktopRenderer?.Dispose(); native?.Dispose(); input?.Cancel(); petAudio?.Dispose(); jumpEffects?.Dispose(); view?.Dispose(); pet?.Dispose(); context?.Dispose();
+            foodView?.Dispose(); desktopRenderer?.Dispose(); native?.Dispose();
+            foreach(var p in pets) p.Dispose(); pets.Clear(); context?.Dispose();
         }
     }
 }

@@ -5,84 +5,131 @@ namespace CyanPreview
 {
     public sealed partial class DesktopApp
     {
-        readonly PetFeeding feeding=new PetFeeding();
+        readonly SharedFood food=new SharedFood();
         FoodMorselView foodView;
         string feedingStatus;
-        void ResetFeeding()
-        {
-            feeding.Cancel(); denSurfaces.Close(); if(view!=null) { view.Visible=true; }
-            foodView?.Dispose(); foodView=new FoodMorselView(transform); PublishFeedingStatus();
-        }
         void BeginFeeding()
-        { if(feeding.Begin()) { motion.BeginIdleHold(); input.Cancel(); buttonHeld=false; native.ClearButtonEvents(); PublishFeedingStatus(); } }
+        {
+            if(pets.Exists(p=>p.Feeding.UsingRoute) || !food.Begin()) return;
+            CancelPointer(); native.ClearButtonEvents();
+            foreach(var p in pets) { p.Motion.BeginIdleHold(); p.Input.Cancel(); }
+        }
         void CancelFeeding()
         {
-            feeding.RequestReturn();
-            motion.Behavior.TaskTarget=feeding.Target; motion.Behavior.HoldPosition=feeding.UsingRoute;
-            if(!feeding.Active) motion.Behavior.Rest();
-            foodView.Show(false,Vector2.zero); PublishFeedingStatus();
+            food.Cancel(); CancelPointer();
+            foreach(var p in pets)
+            {
+                p.Feeding.RequestReturn(); p.FollowingFood=false;
+                p.Motion.Behavior.TaskTarget=p.Feeding.Target; p.Motion.Behavior.HoldPosition=p.Feeding.UsingRoute;
+                if(!p.Feeding.Active) p.Motion.Behavior.Rest();
+            }
+            foodView.Show(false,Vector2.zero);
         }
-        bool PlaceFoodInput(Vector2 point)
+        void PlaceFoodInput(Vector2 point)
         {
-            if(feeding.Stage!=FeedingStage.Placing) return false;
-            if(native.EscapePressed) { CancelFeeding(); native.ClearButtonEvents(); return true; }
-            feeding.Preview(point,surfaces); native.SetClickThrough(false);
+            if(native.EscapePressed) { CancelFeeding(); native.ClearButtonEvents(); return; }
+            food.Move(Clamp(point)); native.SetClickThrough(false);
             while(native.TryReadButton(out var button))
             {
                 if(!button.Down && native.WorkArea.Contains(button.Position))
                 {
-                    feeding.Preview(DesktopCoordinates.ToWorld(button.Position,native.WorkArea,settings.scale),surfaces);
-                    if(feeding.Place(feeding.Food,surfaces.Bounds,motion.HeadToTailLength))
-                    {
-                        motion.Behavior.TaskTarget=null; motion.Behavior.HoldPosition=false;
-                        motion.ExploreClick(feeding.ChooseInspectionPoint(motion.Position,surfaces));
-                        motion.LookAt(feeding.Food); petAudio?.Vocalize();
-                    }
+                    food.Place(OfferPoint(World(button.Position)));
+                    foreach(var p in pets) p.Motion.Behavior.HoldPosition=false;
                     native.ClearButtonEvents(); break;
                 }
             }
-            RefreshWindows(); motion.ObserveCursor(point);
-            motion.Advance(Time.unscaledDeltaTime);
-            petAudio?.Advance(Time.unscaledDeltaTime); jumpEffects.Advance(Time.unscaledDeltaTime);
-            foodView.Show(feeding.FoodVisible,feeding.Food); PublishFeedingStatus();
-            pet.Draw(motion.Interpolation); view.Refresh(pet); RefreshFoodVisual(); desktopRenderer.Render(native.WorkArea,settings.scale);
-            return true;
         }
-        void AdvanceFeeding(float seconds)
+        Vector2 OfferPoint(Vector2 point)
         {
-            var previous=feeding.Stage;
-            feeding.Advance(seconds,motion.Position,motion.MouthPosition,motion.State==PetMotionState.Grabbed,surfaces.Bounds,motion.State==PetMotionState.Crawling,feeding.UsingRoute?motion.OccupiedBounds:(Rect?)null);
-            motion.Behavior.TaskTarget=feeding.Target;
-            if(previous!=FeedingStage.Carrying && feeding.Stage==FeedingStage.Carrying) petAudio?.FoodPickupCall();
-            if(feeding.Stage==FeedingStage.Investigating || feeding.Stage==FeedingStage.Approaching) motion.LookAt(feeding.Food);
-            if(previous!=FeedingStage.None && feeding.Stage==FeedingStage.None) motion.Behavior.Rest();
-            if(feeding.Frozen) jumpEffects.Advance(seconds);
-            if(feeding.UsingRoute && !denSurfaces.Active) denSurfaces.Open(feeding.DenDistance);
-            else if(!feeding.UsingRoute && denSurfaces.Active) { denSurfaces.Close(); motion.ReleaseSupport(); }
-            motion.Behavior.HoldPosition=feeding.UsingRoute;
-            if(feeding.Stage==FeedingStage.Entering || feeding.Stage==FeedingStage.Emerging)
+            point=Clamp(point); Vector2 best=point; float distance=float.MaxValue;
+            foreach(var p in pets)
             {
-                var target=feeding.Stage==FeedingStage.Entering?feeding.Den:feeding.ReturnPoint;
-                motion.LookAt(target);
-                if(Vector2.Distance(motion.Position,target)>35) motion.TryTaskJump(target);
+                var candidate=(p.Surfaces.Nearest(p.Local(point),out var normal)+normal*10)*p.Config.scale;
+                float d=(candidate-point).sqrMagnitude;
+                if(d<distance) { distance=d; best=candidate; }
             }
-            motion.AutonomousJumps=settings.jumps && !feeding.UsingRoute;
-
-            PublishFeedingStatus();
+            return Clamp(best);
+        }
+        void ResetInterest(DesktopPet p)
+        {
+            p.Feeding.Cancel(); p.FollowingFood=false; p.Motion.Behavior.TaskTarget=null;
+            p.Motion.Behavior.HoldPosition=false; p.Motion.Behavior.Rest();
+        }
+        void AdvanceFeeding(float dt)
+        {
+            // Ownership decisions run serially; a second mouth can never claim an already-held morsel.
+            foreach(var p in pets)
+            {
+                var f=p.Feeding; var m=p.Motion; string key=p.Config.key;
+                if(food.Holder==key && food.Owner==FoodOwner.Pet && m.State==PetMotionState.Grabbed)
+                { food.Drop(Clamp(p.WorldMouth)); ResetInterest(p); }
+                bool owner=food.Holder==key;
+                if(!owner && !f.UsingRoute)
+                {
+                    if(food.Available)
+                    {
+                        if(p.FoodRevision!=food.Revision)
+                        {
+                            ResetInterest(p); p.FoodRevision=food.Revision;
+                            f.Begin(); f.Place(p.Local(food.Position),p.Surfaces.Bounds,m.HeadToTailLength);
+                            m.ExploreClick(f.ChooseInspectionPoint(m.Position,p.Surfaces)); m.LookAt(f.Food); p.Audio?.Vocalize();
+                        }
+                    }
+                    else if(food.Owner==FoodOwner.Pet || food.Owner==FoodOwner.Cursor)
+                    {
+                        if(f.Active) ResetInterest(p);
+                        p.FollowingFood=true;
+                        var target=food.Position; var away=(p.WorldPosition-target).normalized;
+                        if(away.sqrMagnitude<.1f) away=Vector2.right;
+                        // Followers investigate the carrier's vicinity, never its off-screen den.
+                        m.Behavior.TaskTarget=p.Local(Clamp(target+away*75)); m.LookAt(p.Local(target));
+                    }
+                    else if(f.Active || p.FollowingFood) ResetInterest(p);
+                }
+                var previous=f.Stage;
+                f.Advance(dt,m.Position,m.MouthPosition,m.State==PetMotionState.Grabbed,p.Surfaces.Bounds,m.State==PetMotionState.Crawling,f.UsingRoute?m.OccupiedBounds:(Rect?)null);
+                if(previous!=FeedingStage.Carrying && f.Stage==FeedingStage.Carrying)
+                {
+                    if(food.Take(key)) { owner=true; p.Audio?.FoodPickupCall(); }
+                    else ResetInterest(p);
+                }
+                if(owner && food.Owner==FoodOwner.Pet)
+                {
+                    food.Move(p.WorldMouth);
+                    if(f.Stage==FeedingStage.Entering)
+                    {
+                        food.EnterDen(key);
+                        foreach(var other in pets) if(other!=p && !other.Feeding.UsingRoute) ResetInterest(other);
+                    }
+                    else if(!f.Active) food.Drop(Clamp(p.WorldMouth));
+                }
+                if(f.Active) m.Behavior.TaskTarget=f.Target;
+                if(f.Stage==FeedingStage.Investigating || f.Stage==FeedingStage.Approaching) m.LookAt(f.Food);
+                if(previous!=FeedingStage.None && f.Stage==FeedingStage.None)
+                { m.Behavior.Rest(); if(owner && food.Owner==FoodOwner.Den) food.Cancel(); }
+                if(f.UsingRoute && !p.Den.Active) p.Den.Open(f.DenDistance);
+                else if(!f.UsingRoute && p.Den.Active) { p.Den.Close(); m.ReleaseSupport(); }
+                m.Behavior.HoldPosition=f.UsingRoute;
+                if(f.Stage==FeedingStage.Entering || f.Stage==FeedingStage.Emerging)
+                {
+                    var target=f.Stage==FeedingStage.Entering?f.Den:f.ReturnPoint;
+                    m.LookAt(target); if(Vector2.Distance(m.Position,target)>35) m.TryTaskJump(target);
+                }
+                m.AutonomousJumps=p.Config.jumps && !f.UsingRoute;
+            }
         }
         void RefreshFoodVisual()
         {
-            if(feeding.Stage==FeedingStage.Carrying || feeding.Stage==FeedingStage.Entering) view.HoldFood(foodView,pet);
-            else foodView.Show(feeding.FoodVisible,feeding.Food);
+            var owner=pets.Find(p=>p.Config.key==food.Holder);
+            if(owner!=null && (owner.Feeding.Stage==FeedingStage.Carrying || owner.Feeding.Stage==FeedingStage.Entering)) owner.View.HoldFood(foodView,owner.Pet);
+            else foodView.Show(food.Owner==FoodOwner.Placing || food.Owner==FoodOwner.Loose || food.Owner==FoodOwner.Cursor,food.Position);
         }
         void PublishFeedingStatus()
         {
-            string status=feeding.Stage==FeedingStage.None?"":feeding.Status;
-            if(status==feedingStatus) return;
-            feedingStatus=status;
-            try { File.WriteAllText(settingsFile+".feeding",status); }
-            catch(IOException) { }
-            Debug.Log("FEEDING_STAGE "+feeding.Stage);
+            var owner=pets.Find(p=>p.Config.key==food.Holder);
+            string status=food.Owner==FoodOwner.None?"":food.Owner==FoodOwner.Placing?"Click to place food · Escape cancels":food.Owner==FoodOwner.Cursor?"Release to offer the morsel":owner!=null?owner.Config.name+" · "+owner.Feeding.Status:"Shared food · hold for 0.1s to drag";
+            if(status==feedingStatus) return; feedingStatus=status;
+            try { File.WriteAllText(settingsFile+".feeding",status); } catch(IOException) { }
         }
     }
 }

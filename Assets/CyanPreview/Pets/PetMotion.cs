@@ -510,7 +510,9 @@ namespace CyanPreview
         }
         void UpdateGraphics()
         {
-            Set(pet.Lizard, "animation", pet.Context.Static("Lizard+Animation", State == PetMotionState.Charging ? "PrepareToJump" : "Standard"));
+            Set(pet.Lizard, "animation", pet.Context.Static("Lizard+Animation", State == PetMotionState.Charging ? "PrepareToJump" : RivalTarget.HasValue ? "FightingStance" : "Standard"));
+            Set(pet.Lizard,"lastJawOpen",Get(pet.Lizard,"jawOpen"));
+            Set(pet.Lizard,"jawOpen",RivalTarget.HasValue?(RivalBiting?.15f:.65f):0f);
             Set(pet.Lizard, "timeInAnimation", chargeDuration - chargeTicks);
             Set(pet.Lizard, "timeToRemainInAnimation", chargeDuration);
             Set(graphics, "lastVoiceVisualization", Get(graphics, "voiceVisualization"));
@@ -525,6 +527,7 @@ namespace CyanPreview
             var forward = (draw[0, 0] - draw[1, 0]).normalized;
             var target = draw[0, 0] + forward * 100;
             if (State == PetMotionState.Charging || (State == PetMotionState.Airborne && propelled)) target = jumpTarget;
+            else if (RivalTarget.HasValue) target=RivalTarget.Value;
             else if (lookTarget.HasValue && Vector2.Distance(HeadPosition, lookTarget.Value) <= 180) target = lookTarget.Value;
             else if (Behavior.InterestPoint.HasValue && lookTarget.HasValue) target = lookTarget.Value;
             else if (Behavior.ExplorationTarget.HasValue) target = Behavior.ExplorationTarget.Value;

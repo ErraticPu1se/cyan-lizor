@@ -59,7 +59,7 @@ namespace CyanPreview
                 if(!string.IsNullOrEmpty(presetWarning)) GUILayout.Label(presetWarning,theme.Small);
                 if(presets!=null)
                 {
-                    GUILayout.Label("One desktop pet at a time. Changes save automatically.",theme.Small);
+                    GUILayout.Label("Select a preset for your primary pet. Changes save automatically.",theme.Small);
                     foreach(var item in presets.Data.pets.ToArray())
                     {
                         if(GUILayout.Button(item.name+" · "+item.appearanceId,item.key==presets.Data.selected?theme.Selected:GUI.skin.button))

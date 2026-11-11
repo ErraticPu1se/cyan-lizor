@@ -112,7 +112,7 @@ namespace CyanPreview
             reference.Pose(phase,depth); reference.Draw(); view.Refresh(reference);
         }
         void Fail(Exception e) { error=e.Message; Debug.LogException(e); }
-        DesktopSettings DesktopConfiguration() => new DesktopSettings {id=reference.Identity,cache=cache,scale=desktopScale,
+        DesktopSettings PrimaryConfiguration() => new DesktopSettings {id=reference.Identity,cache=cache,scale=desktopScale,
             paused=trayState.Paused,climbingMode=desktopClimbingMode,clickToExplore=desktopClicks,sound=desktopSounds,vocalizeRequest=desktopVocalizeRequest,feedRequest=desktopFeedRequest,cancelFeedRequest=desktopCancelFeedRequest,roam=desktopRoam,jumps=autonomousJumps};
         System.Collections.IEnumerator InitializeTray()
         {
@@ -202,10 +202,11 @@ namespace CyanPreview
             {
                 try
                 {
-                    while(desktop.TryReadMenu(out var action))
+                    while(desktop.TryReadMenu(out var petKey,out var action))
                     {
-                        if(action==DesktopMenuAction.Stop) { desktop.Stop(); break; }
-                        var updated=DesktopConfiguration(); updated.ApplyMenu(action);
+                        if(action==DesktopMenuAction.Stop) { RemoveActivePet(petKey); continue; }
+                        if(petKey!="primary") { extraPets.Find(p=>p.key==petKey)?.ApplyMenu(action); continue; }
+                        var updated=PrimaryConfiguration(); updated.ApplyMenu(action);
                         desktopScale=updated.scale; desktopRoam=updated.roam; desktopClicks=updated.clickToExplore;
                         desktopSounds=updated.sound; desktopClimbingMode=updated.climbingMode;
                     }
@@ -265,6 +266,7 @@ namespace CyanPreview
             if(!string.IsNullOrEmpty(preferenceWarning)) GUILayout.Label(preferenceWarning,theme.Small);
             if(!Ready) DrawSetup();
             DrawPresets();
+            DrawActivePets();
             DrawFeeding();
             GUILayout.BeginVertical(theme.Card);
             GUILayout.Label("Your lizard",theme.Heading);
@@ -347,7 +349,7 @@ namespace CyanPreview
             if(GUILayout.Button(desktop.Active?"Stop desktop pet":"Start desktop pet",theme.Primary,GUILayout.Width(166),GUILayout.Height(36)))
             {
                 if(desktop.Active) desktop.Stop();
-                else try { desktop.Start(DesktopConfiguration()); } catch(Exception e) { Fail(e); }
+                else try { primaryPresent=true; desktop.Start(DesktopConfiguration()); } catch(Exception e) { Fail(e); }
             }
             GUI.enabled=true; GUILayout.EndHorizontal();
             GUILayout.Label(desktop.Active?(tray!=null && tray.Available?"Close this window to keep Lizor in the tray.":"Keep this panel open while your pet is running."):StartBlocker??"Ready. Start your desktop pet when you like.",theme.Small);
