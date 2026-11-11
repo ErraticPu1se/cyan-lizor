@@ -8,7 +8,7 @@ Developed by ErraticPu1se. Any resemblance between that name and another iterato
 
 ## Download
 
-**[Download the Windows preview ZIP](https://github.com/ErraticPu1se/cyan-lizor/releases/download/v0.2.0-preview.1/CyanLizor-0.2.0-preview.1-win-x64.zip)** · [Release notes](https://github.com/ErraticPu1se/cyan-lizor/releases/tag/v0.2.0-preview.1)
+**[Download the Windows preview ZIP](https://github.com/ErraticPu1se/cyan-lizor/releases/download/v0.2.0-preview.2/CyanLizor-0.2.0-preview.2-win-x64.zip)** · [Release notes](https://github.com/ErraticPu1se/cyan-lizor/releases/tag/v0.2.0-preview.2)
 
 Download the packaged **CyanLizor** ZIP.
 
@@ -30,22 +30,27 @@ Unity Hub, Python, and Docker are not required to run the packaged application.
 1. Extract the **entire ZIP** into a writable folder.
 2. Keep all included files and folders together.
 3. Run **CyanLizor.exe**.
-4. Select the Rain World installation folder containing `RainWorld_Data`.
+4. Check the automatically detected Rain World folder. If it is not found, click **Browse** or paste the installation folder containing `RainWorld_Data`.
 5. Click **Prepare local game assets** and wait for completion.
 6. Under **Your lizard**, enter an ID and click **Apply ID**.
 7. Click **Start desktop pet**.
 
 Preparation reads your game installation without modifying it. Game graphics and sounds are not included in the download.
 
+Automatic detection checks Steam libraries, including additional library locations. Other installations can be selected manually. If **Start desktop pet** is unavailable, the panel explains what still needs attention.
+
 Keep the control panel open while the pet is active. The compact dark-grey and cyan panel includes an animated preview and an always-visible Start/Stop control.
 
 Use **Stop desktop pet**, or close the control panel, to stop it.
+
+Your appearance ID, game folder, size, climbing mode, roaming, propulsion, click exploration, and sound preferences are remembered between launches. The lizard still waits for you to press Start.
 
 ## Behavior and interaction
 
 - Enter an ID to select the lizard’s generated appearance.
 - Adjust its desktop size. **Medium (1.2×)** is the default and reset size.
 - Allow it to roam, rest, crawl, and propel itself.
+- Optimized memory usage.
 - Choose **Edges only** to climb desktop borders and visible window edges.
 - Choose **Edges + backgrounds** to also climb the desktop background and window interiors.
 - Move the cursor nearby to attract its attention.
@@ -109,6 +114,6 @@ The desktop log is located at:
 %USERPROFILE%\AppData\LocalLow\ErraticPu1se\Cyan Lizor Preview\desktop-player.log
 ```
 
-[Developer build instructions](docs/development.md) · [Source for this release](https://github.com/ErraticPu1se/cyan-lizor/tree/v0.2.0-preview.1)
+[Developer build instructions](docs/development.md) · [Source for this release](https://github.com/ErraticPu1se/cyan-lizor/tree/v0.2.0-preview.2)
 
 An unofficial project inspired by **Rain World**, created by Videocult and published by Akupara Games. This project does not distribute game assemblies, extracted graphics, audio, or decompiled sources. Third-party dependency notices accompany the download.

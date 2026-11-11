@@ -1,6 +1,6 @@
 # Development
 
-To build the published Windows preview, check out tag `v0.2.0-preview.1` before following these instructions.
+To build the published Windows preview, check out tag `v0.2.0-preview.2` before following these instructions.
 
 ## Build from source
 
@@ -80,4 +80,4 @@ The setup panel explains why Start is disabled: assets have not been prepared, p
 
 `SetupChecks` covers preference storage round trips, partial/corrupt/unsupported data, invalid scale and mode values, multiple/duplicate/missing Steam libraries, legacy library syntax, quoted/Unicode paths, wrong data subfolders, removed installations, and launch-blocker states. The Windows player was also checked for automatic detection, native folder-picker cancellation, successful preparation, and size/mode restoration after restarting.
 
-See [setup preview performance measurements](performance-setup-preview.md) for the local CPU, GPU, and memory samples. These source changes are not included in the existing v0.2.0-preview.1 release ZIP.
+See [setup preview performance measurements](performance-setup-preview.md) for the local CPU, GPU, and memory samples. Setup and preference improvements are included in v0.2.0-preview.2. See [desktop rendering optimization](performance-desktop-rendering.md) for the subsequent profiling and verification.

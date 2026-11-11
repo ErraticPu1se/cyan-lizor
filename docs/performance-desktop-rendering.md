@@ -60,4 +60,4 @@ Set `CYAN_DESKTOP_PROFILE=1` in the launching process environment before opening
 
 ## Limits
 
-No long-duration leak/battery test or second-laptop measurement was performed. Native dragging and window interactions rely on the existing automated regression suite; exhaustive hands-on checks across third-party windows remain pending. The new build is local; the public release ZIP has not been replaced.
+No long-duration leak/battery test or second-laptop measurement was performed. Native dragging and window interactions rely on the existing automated regression suite; exhaustive hands-on checks across third-party windows remain pending. The optimized build is included in v0.2.0-preview.2.
