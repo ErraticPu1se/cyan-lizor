@@ -1,6 +1,6 @@
 # Cyan Lizor
 
-An unofficial Windows desktop pet featuring a cyan lizard from Rain World.
+now you can have your lizard companian with you on desktop.
 
 ## Download
 
@@ -12,7 +12,6 @@ Download the named **CyanLizor** ZIP, not GitHub's **Source code** archives or *
 
 - **Windows x64** and your own installed copy of **Rain World v1.11.8**.
 - The game does not need to be running, but its installation must remain available. The app checks the game build's fingerprint; unsupported builds are rejected.
-- No Unity Hub, Python, or Docker needed to run the download.
 
 ## Get started
 
@@ -22,7 +21,6 @@ Download the named **CyanLizor** ZIP, not GitHub's **Source code** archives or *
 4. Under **Your lizard**, enter an ID and click **Apply ID**, then **Start desktop pet**.
 5. Keep the control panel open. **Stop desktop pet**, or close the panel, to stop the pet.
 
-Preparation reads your game installation without modifying it. Game graphics and sounds are not included in the download.
 
 ## What you can do
 
@@ -32,6 +30,7 @@ Preparation reads your game installation without modifying it. Game graphics and
 - Move the cursor nearby for head attention; hold the pet for **0.1 seconds** to grab it, then release to drop.
 - Enable **Explore where I click** and **Allow cyan propulsion**: nearby clicks invite direct hops; farther clicks invite longer hops that stop short of the cursor. Very short distances use crawling, and jumps require a valid trajectory.
 - Hear cyan calls and jump sounds, with head glow and propulsion particles. Calls have a **10-second cooldown**; idle calls wait **30–60 seconds of idle time**. Sound can be muted.
+- now by hovering your cursor above it for **0.7** second for it to make love sound.
 
 ## Right-click controls
 
