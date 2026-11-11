@@ -1,6 +1,6 @@
 # Development
 
-To build the published Windows preview, check out tag `v0.1.0-preview.1` before following these instructions. The release is built from commit `9dc7a56`.
+To build the published Windows preview, check out tag `v0.2.0-preview.1` before following these instructions.
 
 ## Build from source
 
