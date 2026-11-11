@@ -17,7 +17,15 @@ namespace CyanPreview
         PanelTheme theme;
         readonly DesktopLauncher desktop = new DesktopLauncher();
         string id="12345", cache, status="Choose your prepared local reference folder.", error;
-        string gameFolder=@"C:\Program Files (x86)\Steam\steamapps\common\Rain World";
+        string gameFolder="", appliedId, setupMessage, preferenceWarning, savedPreferences;
+        const string PreferencesKey = "CompanionPreferences.v1";
+        float preferenceClock;
+        Task<System.Collections.Generic.List<string>> detection;
+        Task<string> folderPicker;
+        string detectionInput;
+        bool initialized;
+        string StartBlocker => GameInstallation.StartBlocker(Ready, importer!=null, Application.isEditor, !string.IsNullOrEmpty(error))
+            ?? (id!=appliedId ? "Apply your appearance ID before starting the pet." : null);
         Process importer;
         Task<string> importerOutput, importerError;
         float phase, depth=.7f, desktopScale=DesktopSettings.DefaultScale, previewClock;
@@ -51,6 +59,11 @@ namespace CyanPreview
             previewTexture.Create(); previewCamera.targetTexture=previewTexture;
             cache=PlayerPrefs.GetString("ReferenceCache",Path.Combine(Path.GetDirectoryName(Application.dataPath),"local-data"));
             id=PlayerPrefs.GetString("LastId","12345");
+            var preferences=CompanionPreferences.Read(PlayerPrefs.GetString(PreferencesKey,""),out preferenceWarning);
+            gameFolder=preferences.gameFolder; desktopScale=preferences.scale; desktopClimbingMode=preferences.climbingMode;
+            desktopClicks=preferences.clickToExplore; desktopSounds=preferences.sound; desktopRoam=preferences.roam; autonomousJumps=preferences.jumps;
+            savedPreferences=JsonUtility.ToJson(preferences); initialized=true;
+            DetectInstallation();
             view=new SpriteMeshView(transform);
             if(File.Exists(Path.Combine(cache,"reference.json"))) LoadReference();
         }
@@ -59,7 +72,7 @@ namespace CyanPreview
             try
             {
                 if(reference != null) throw new InvalidOperationException("Restart the app to change reference installations.");
-                context?.Dispose(); context=new ReferenceContext(cache); reference=context.CreatePet();
+                context?.Dispose(); context=null; context=new ReferenceContext(cache); reference=context.CreatePet();
                 PlayerPrefs.SetString("ReferenceCache",cache); Generate();
             }
             catch(Exception e) { Fail(e); }
@@ -70,7 +83,7 @@ namespace CyanPreview
             {
                 reference.Generate(id); phase=0; RefreshPreview();
                 status=reference.Identity+"  ·  "+reference.Species.DisplayName+"  ·  "+reference.Manifest.gameVersion;
-                error=null; PlayerPrefs.SetString("LastId",id); PlayerPrefs.Save();
+                error=null; appliedId=id; PlayerPrefs.SetString("LastId",id); PlayerPrefs.Save();
             }
             catch(Exception e) { Fail(e); }
         }
@@ -81,8 +94,44 @@ namespace CyanPreview
         void Fail(Exception e) { error=e.Message; Debug.LogException(e); }
         DesktopSettings DesktopConfiguration() => new DesktopSettings {id=reference.Identity,cache=cache,scale=desktopScale,
             climbingMode=desktopClimbingMode,clickToExplore=desktopClicks,sound=desktopSounds,vocalizeRequest=desktopVocalizeRequest,roam=desktopRoam,jumps=autonomousJumps};
+        void DetectInstallation()
+        {
+            if(detection!=null) return;
+            detectionInput=gameFolder; string saved=gameFolder;
+            setupMessage="Looking in Steam libraries…";
+            detection=Task.Run(()=>GameInstallation.Detect(saved));
+        }
+        void SavePreferences()
+        {
+            if(!initialized) return;
+            var preferences=new CompanionPreferences { gameFolder=gameFolder, scale=desktopScale, climbingMode=desktopClimbingMode,
+                sound=desktopSounds, roam=desktopRoam, jumps=autonomousJumps, clickToExplore=desktopClicks };
+            string json=JsonUtility.ToJson(preferences);
+            if(json==savedPreferences) return;
+            try { PlayerPrefs.SetString(PreferencesKey,json); PlayerPrefs.Save(); savedPreferences=json; }
+            catch(Exception e) { preferenceWarning="Could not save preferences: "+e.Message; }
+        }
         void Update()
         {
+            if(detection!=null && detection.IsCompleted)
+            {
+                if(detection.IsFaulted) setupMessage="Automatic detection failed. Browse to your game folder.";
+                else if(detection.Result.Count==0) setupMessage="No installation found in Steam libraries. Use Browse for another location.";
+                else
+                {
+                    if(gameFolder==detectionInput) gameFolder=detection.Result[0];
+                    setupMessage=detection.Result.Count>1?"Multiple installations found. Check the selected folder or use Browse.":"Game folder found. Prepare assets below to check version compatibility.";
+                }
+                detection=null;
+            }
+            if(folderPicker!=null && folderPicker.IsCompleted)
+            {
+                if(folderPicker.IsFaulted) error="Folder picker: "+folderPicker.Exception.GetBaseException().Message;
+                else if(folderPicker.Result!=null) { gameFolder=folderPicker.Result; setupMessage=null; }
+                folderPicker=null;
+            }
+            preferenceClock+=Time.unscaledDeltaTime;
+            if(preferenceClock>=.5f) { preferenceClock=0; SavePreferences(); }
             if(desktop.Active)
             {
                 try
@@ -139,6 +188,7 @@ namespace CyanPreview
                 if(GUILayout.Button("Dismiss")) error=null;
                 GUILayout.EndVertical();
             }
+            if(!string.IsNullOrEmpty(preferenceWarning)) GUILayout.Label(preferenceWarning,theme.Small);
             if(!Ready) DrawSetup();
             GUILayout.BeginVertical(theme.Card);
             GUILayout.Label("Your lizard",theme.Heading);
@@ -146,10 +196,11 @@ namespace CyanPreview
             GUILayout.Label("Appearance ID",theme.Small);
             GUILayout.BeginHorizontal(); GUI.SetNextControlName("CreatureId");
             id=GUILayout.TextField(id,64,GUILayout.Height(34));
-            GUI.enabled=reference!=null;
+            GUI.enabled=reference!=null && ReferenceBridge.TryParseId(id,out _,out _);
             if(GUILayout.Button("Apply ID",theme.Primary,GUILayout.Width(94),GUILayout.Height(34))) Generate();
             GUI.enabled=true; GUILayout.EndHorizontal();
             GUILayout.Label("Seed number or ID.spawner.number",theme.Small);
+            if(!ReferenceBridge.TryParseId(id,out _,out _)) GUILayout.Label("Enter a whole-number seed or ID.spawner.number.",theme.Small);
             GUILayout.Space(10);
             GUILayout.Label("Desktop size  "+desktopScale.ToString("0.00")+"×");
             GUILayout.BeginHorizontal();
@@ -216,14 +267,14 @@ namespace CyanPreview
             GUILayout.BeginArea(new Rect(left,footer,width,108));
             GUILayout.BeginHorizontal(); GUILayout.Label(desktop.Active?"Desktop pet is running":"Desktop pet is stopped",theme.Small);
             GUILayout.FlexibleSpace();
-            GUI.enabled=desktop.Active || (Ready && !Application.isEditor);
+            GUI.enabled=desktop.Active || StartBlocker==null;
             if(GUILayout.Button(desktop.Active?"Stop desktop pet":"Start desktop pet",theme.Primary,GUILayout.Width(166),GUILayout.Height(36)))
             {
                 if(desktop.Active) desktop.Stop();
                 else try { desktop.Start(DesktopConfiguration()); } catch(Exception e) { Fail(e); }
             }
             GUI.enabled=true; GUILayout.EndHorizontal();
-            GUILayout.Label(Application.isEditor?"Desktop mode needs the Windows build.":!Ready?"Prepare your game assets to start.":"Keep this panel open while your pet is running.",theme.Small);
+            GUILayout.Label(desktop.Active?"Keep this panel open while your pet is running.":StartBlocker??"Ready. Start your desktop pet when you like.",theme.Small);
             GUILayout.Space(5);
             GUILayout.Label("An unofficial desktop companion inspired by Rain World. Rain World belongs to Videocult and Akupara Games.",theme.Small);
             GUILayout.EndArea();
@@ -232,12 +283,22 @@ namespace CyanPreview
         {
             GUILayout.BeginVertical(theme.Card);
             GUILayout.Label("RAIN WORLD INSTALLATION",theme.Heading);
+            GUILayout.Label("Select the folder containing RainWorld_Data. Requires Rain World v1.11.8.",theme.Small);
+            GUI.enabled=importer==null && folderPicker==null;
             gameFolder=GUILayout.TextField(gameFolder,GUILayout.Height(34));
-            GUI.enabled=importer==null;
+            GUILayout.BeginHorizontal();
+            if(GUILayout.Button("Browse…",GUILayout.Height(32))) folderPicker=WindowsFolderPicker.Browse();
+            GUI.enabled=importer==null && folderPicker==null && detection==null;
+            if(GUILayout.Button("Detect again",GUILayout.Height(32))) DetectInstallation();
+            GUILayout.EndHorizontal(); GUI.enabled=true;
+            if(!string.IsNullOrEmpty(setupMessage)) GUILayout.Label(setupMessage,theme.Small);
+            bool validFolder=GameInstallation.IsInstallation(gameFolder);
+            if(!validFolder) GUILayout.Label("Choose the game folder, not RainWorld.exe or RainWorld_Data. You can paste a quoted folder path.",theme.Small);
+            GUI.enabled=importer==null && folderPicker==null && validFolder;
             if(GUILayout.Button("Prepare local game assets",theme.Primary,GUILayout.Height(34))) ImportReference();
             GUI.enabled=true;
-            if(importer!=null) GUILayout.Label("Preparing your local reference…",theme.Small);
-            GUILayout.Label("Prepared reference folder",theme.Small); cache=GUILayout.TextField(cache??"",GUILayout.Height(32));
+            if(importer!=null) GUILayout.Label("Preparing your local reference… Please wait.",theme.Small);
+            GUI.enabled=importer==null; GUILayout.Label("Already prepared assets? Reference folder",theme.Small); cache=GUILayout.TextField(cache??"",GUILayout.Height(32));
             GUI.enabled=importer==null;
             if(GUILayout.Button("Load prepared reference")) LoadReference();
             GUI.enabled=true; GUILayout.EndVertical();
@@ -266,7 +327,8 @@ namespace CyanPreview
         {
             try
             {
-                if (!File.Exists(Path.Combine(gameFolder, "RainWorld_Data", "Managed", "Assembly-CSharp.dll")))
+                gameFolder=GameInstallation.Normalize(gameFolder);
+                if (!GameInstallation.IsInstallation(gameFolder))
                     throw new DirectoryNotFoundException("Choose the Rain World installation folder.");
                 string exe = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Tools", "CyanReferenceImporter.exe");
                 if (!File.Exists(exe)) throw new FileNotFoundException("Importer is not packaged here. In development, run tools/prepare_reference.py; see README.");
@@ -298,7 +360,7 @@ namespace CyanPreview
         }
         void OnDestroy()
         {
-            desktop.Dispose(); importer?.Dispose(); view?.Dispose(); reference?.Dispose(); context?.Dispose(); theme?.Dispose();
+            SavePreferences(); desktop.Dispose(); importer?.Dispose(); view?.Dispose(); reference?.Dispose(); context?.Dispose(); theme?.Dispose();
             if(previewCamera!=null) previewCamera.targetTexture=null;
             if(previewTexture!=null) { previewTexture.Release(); Destroy(previewTexture); }
         }

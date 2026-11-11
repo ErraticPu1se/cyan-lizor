@@ -97,6 +97,7 @@ namespace CyanPreview.Editor
 
         public static void Verify()
         {
+            SetupChecks.Run();
             if (!ReferenceBridge.TryParseId("ID.7.12345", out var spawner, out var seed) || spawner != 7 || seed != 12345)
                 throw new Exception("Full ID parser failed");
             foreach (var invalid in new[] { "", "ID.a.2", "1.2.3", "2147483648", "ID.1.2.3" })
