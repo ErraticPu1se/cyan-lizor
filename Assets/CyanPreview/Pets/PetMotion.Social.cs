@@ -4,6 +4,7 @@ namespace CyanPreview
 {
     public sealed partial class PetMotion
     {
+        public Vector2? DiagnosticDriveTarget => hasDestination ? destination : (Vector2?)null;
         public Vector2? RivalTarget { get; set; }
         public float RivalJaw { get; set; }
         public int BodyCount => chunks.Length;

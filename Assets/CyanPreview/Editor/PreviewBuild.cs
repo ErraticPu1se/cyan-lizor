@@ -139,6 +139,7 @@ namespace CyanPreview.Editor
                 MultiplePetChecks.Motion(context);
                 MultiplePetChecks.SharedFeeding(context);
                 ContactBiteChecks.Run(context);
+                PickupDiagnosticsChecks.Run(context);
                 RenderOptimizationChecks.Run(context);
                 InteractionUpgradeChecks.Run(context);
                 LandingRecoveryChecks.Run(context);

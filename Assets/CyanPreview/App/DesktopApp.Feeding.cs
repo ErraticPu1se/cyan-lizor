@@ -101,7 +101,7 @@ namespace CyanPreview
                 {
                     if(food.Take(key))
                     {
-                        owner=true; p.Audio?.FoodPickupCall();
+                        owner=true; p.Audio?.FoodPickupCall(); diagnostics?.Pickup(pets,food);
                         // Apply to every loser now, including those visited earlier in this frame.
                         foreach(var other in pets) if(other!=p && !other.Feeding.UsingRoute)
                         { ResetInterest(other); other.FollowingFood=true; other.Motion.AutonomousJumps=false; }

@@ -21,6 +21,7 @@ namespace CyanPreview
         int delay, snap, recovery, preparation, lunge, closeAttempts;
         readonly int preparationTicks;
         public float Jaw { get; private set; }
+        public int CooldownTicks => delay;
         public bool Snapping => snap>0;
         public bool Recovering => recovery>0;
         public bool Threatening => preparation>0;
