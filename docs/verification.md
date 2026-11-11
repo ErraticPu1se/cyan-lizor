@@ -269,3 +269,11 @@ Windows build succeeded (`research/unity-utility-build.log`). Native player chec
 showed changing decision scores and autonomous transition to roaming. Runtime log:
 `research/utility-player.log`. Build: `Builds/UtilityPreview/CyanLizor.exe` (ignored).
 Movable den and feeding/capture/carry/delivery are documented future work only.
+
+## Lizor tray preview (2026-11-11)
+
+Full `PreviewBuild.Verify` passed, including `TRAY_LIFECYCLE_MIGRATION_SINGLE_INSTANCE_CHECKS_PASSED`; Windows player build passed. The first player smoke test caught an unsupported named managed Mutex constructor in standalone Unity Mono. Replaced it with native CreateMutex and repeated the full verification and player build.
+
+Live player checks: existing appearance ID, reference path, and complete CompanionPreferences JSON matched the old registry values byte-for-byte; the old values also matched the pre-test snapshot. Pause/Resume updated both panel and desktop IPC without changing saved sound/roaming settings. Closing the panel kept controller and pet alive. Launching again restored the original controller without an extra pet. Quit while paused removed both owned processes; relaunch loaded the same settings with no persistent pause. The user confirmed the actual Liz tray context menu and double-click restore work.
+
+Not exercised live: restarting Windows Explorer, Windows sign-out, or a second computer. Close fallback/shutdown policy and multiple icon sizes have automated coverage. The test build is `Builds/TrayPreview/Lizor.exe`; production builds now use `Builds/LizorWindows/Lizor.exe`. No release was published for this change.

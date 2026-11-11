@@ -19,6 +19,7 @@ namespace CyanPreview
         public float scale = DefaultScale;
         public bool sound = true;
         public int vocalizeRequest;
+        public bool paused;
         public bool running = true, windowEdges, clickToExplore, roam = true, jumps = true;
         public void ApplyMenu(DesktopMenuAction action)
         {
@@ -88,7 +89,7 @@ namespace CyanPreview
             if (Active) return;
             process?.Dispose(); stopping = false; UpdateSettings(settings);
             process = Process.Start(new ProcessStartInfo {
-                FileName = Path.Combine(Path.GetDirectoryName(Application.dataPath), "CyanLizor.exe"),
+                FileName = Process.GetCurrentProcess().MainModule.FileName,
                 Arguments = "--desktop-pet --desktop-settings \"" + file + "\" -logFile \"" + Path.Combine(Application.persistentDataPath, "desktop-player.log") + "\"",
                 UseShellExecute = false, WindowStyle = ProcessWindowStyle.Hidden
             });
@@ -96,13 +97,19 @@ namespace CyanPreview
         public void Stop()
         {
             stopping = true;
+            if (!Active) return;
             if (File.Exists(file))
             {
                 var settings = JsonUtility.FromJson<DesktopSettings>(File.ReadAllText(file));
                 settings.running = false; UpdateSettings(settings);
             }
         }
-        public void Dispose() { Stop(); process?.Dispose(); }
+        public void Dispose()
+        {
+            try { Stop(); if(Active && !process.WaitForExit(1500)) process.Kill(); }
+            catch(Exception e) { Debug.LogWarning("Desktop pet shutdown: "+e.Message); }
+            finally { process?.Dispose(); process=null; }
+        }
     }
     public sealed class DesktopApp : MonoBehaviour
     {
@@ -148,7 +155,7 @@ namespace CyanPreview
             {
                 if (!native.Initialize()) throw new InvalidOperationException("Owned overlay window not found.");
                 desktopRenderer = new DesktopAlphaRenderer(native.WindowHandle, cameraView, transform);
-                native.HitTest = cursor => motion.Contains(DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale));
+                native.HitTest = cursor => !settings.paused && motion.Contains(DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale));
                 ready = true; RefreshWindows();
                 Debug.Log("DESKTOP_OVERLAY_READY " + native.WorkArea);
             }
@@ -176,7 +183,7 @@ namespace CyanPreview
             }
             motion.StateChanged += state => Debug.Log("DESKTOP_STATE " + state + " " + motion.Position);
             jumpEffects = new CyanJumpEffects(transform, motion, pet.EffectColor, pet.Seed);
-            try { petAudio = new CyanPetAudio(transform, context, motion, jumpEffects, pet.Seed) { Enabled = settings.sound }; }
+            try { petAudio = new CyanPetAudio(transform, context, motion, jumpEffects, pet.Seed) { Enabled = settings.sound && !settings.paused }; }
             catch (Exception e) { Debug.LogWarning("Desktop pet audio unavailable: " + e.Message); }
             input = new PetInteraction(motion) { ClickToExplore = settings.clickToExplore };
             cameraView.orthographicSize = area.height / (2 * settings.scale);
@@ -205,6 +212,7 @@ namespace CyanPreview
                     var keepPosition = motion.Position * settings.scale / next.scale;
                     bool modeChanged = next.climbingMode != settings.climbingMode;
                     bool vocalize = next.vocalizeRequest != settings.vocalizeRequest;
+                    if(next.paused!=settings.paused) { input.Cancel(); native.ClearButtonEvents(); buttonHeld=false; }
                     settings = next;
                     if (native.RefreshWorkArea())
                     {
@@ -214,7 +222,14 @@ namespace CyanPreview
                     else if (modeChanged) { surfaces.Mode = settings.climbingMode; motion.RefreshSurfaceSupport(); }
                     motion.Roam = settings.roam; motion.AutonomousJumps = settings.jumps;
                     input.ClickToExplore = settings.clickToExplore;
-                    if (petAudio != null) { petAudio.Enabled = settings.sound; if (vocalize) petAudio.Vocalize(); }
+                    if (petAudio != null) { petAudio.Enabled = settings.sound && !settings.paused; if (vocalize && !settings.paused) petAudio.Vocalize(); }
+                }
+                if(settings.paused)
+                {
+                    native.ClearButtonEvents(); buttonHeld=false; native.SetClickThrough(true);
+                    RefreshWindows();
+                    pet.Draw(motion.Interpolation); view.Refresh(pet); desktopRenderer.Render(native.WorkArea,settings.scale);
+                    return;
                 }
                 var cursor = native.Cursor;
                 var point = DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale);

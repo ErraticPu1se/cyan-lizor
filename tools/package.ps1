@@ -2,9 +2,9 @@ param([string]$Version = '0.1.0-preview')
 $ErrorActionPreference = 'Stop'
 if ($Version -notmatch '^[A-Za-z0-9._-]+$') { throw 'Invalid version label.' }
 $projectRoot = Split-Path $PSScriptRoot -Parent
-$buildRoot = Join-Path $projectRoot 'Builds\Windows'
+$buildRoot = Join-Path $projectRoot 'Builds\LizorWindows'
 $importer = Join-Path $projectRoot 'Builds\Importer\CyanReferenceImporter.exe'
-if (!(Test-Path -LiteralPath (Join-Path $buildRoot 'CyanLizor.exe'))) { throw 'Build the Windows player first.' }
+if (!(Test-Path -LiteralPath (Join-Path $buildRoot 'Lizor.exe'))) { throw 'Build the Windows player first.' }
 if (!(Test-Path -LiteralPath $importer)) { throw 'Build the reference importer first.' }
 $toolsRoot = Join-Path $buildRoot 'Tools'
 New-Item -ItemType Directory -Force -Path $toolsRoot | Out-Null
@@ -21,6 +21,6 @@ $forbidden = Get-ChildItem -LiteralPath $buildRoot -Recurse | Where-Object {
     $_.Name -like 'Lizard*.png'
 }
 if ($forbidden) { throw ('Game reference files found in release: ' + ($forbidden.Name -join ', ')) }
-$zip = Join-Path $projectRoot ('Builds\CyanLizor-' + $Version + '-win-x64.zip')
+$zip = Join-Path $projectRoot ('Builds\Lizor-' + $Version + '-win-x64.zip')
 Compress-Archive -Path (Join-Path $buildRoot '*') -DestinationPath $zip -Force
 Get-FileHash -LiteralPath $zip -Algorithm SHA256
