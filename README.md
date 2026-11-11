@@ -8,7 +8,7 @@ Developed by **ErraticPu1se**. Any resemblance between that name and another ite
 
 ## Download
 
-**[Download the Windows preview ZIP](https://github.com/ErraticPu1se/cyan-lizor/releases/download/v0.1.0-preview.2/CyanLizor-0.1.0-pet-menu-win-x64.zip)** · [Release notes](https://github.com/ErraticPu1se/cyan-lizor/releases/tag/v0.1.0-preview.2)
+**[Download the Windows preview ZIP](https://github.com/ErraticPu1se/cyan-lizor/releases/download/v0.2.0-preview.1/CyanLizor-0.2.0-preview.1-win-x64.zip)** · [Release notes](https://github.com/ErraticPu1se/cyan-lizor/releases/tag/v0.2.0-preview.1)
 
 Download the packaged **CyanLizor** ZIP.
 
@@ -23,6 +23,8 @@ Rain World does not need to be running. Its installation must remain available.
 
 The app verifies the installed game build before preparing local assets. Unsupported builds are rejected.
 
+Unity Hub, Python, and Docker are not required to run the packaged application.
+
 ## Setup
 
 1. Extract the **entire ZIP** into a writable folder.
@@ -33,34 +35,42 @@ The app verifies the installed game build before preparing local assets. Unsuppo
 6. Under **Your lizard**, enter an ID and click **Apply ID**.
 7. Click **Start desktop pet**.
 
-Keep the control panel open while the pet is active.
+Preparation reads your game installation without modifying it. Game graphics and sounds are not included in the download.
+
+Keep the control panel open while the pet is active. The compact dark-grey and cyan panel includes an animated preview and an always-visible Start/Stop control.
 
 Use **Stop desktop pet**, or close the control panel, to stop it.
 
 ## Behavior and interaction
 
 - Enter an ID to select the lizard’s generated appearance.
-- Adjust its desktop size.
+- Adjust its desktop size. **Medium (1.2×)** is the default and reset size.
 - Allow it to roam, rest, crawl, and propel itself.
-- Enable **Climb backgrounds and window edges** to let it grip and follow visible windows.
+- Choose **Edges only** to climb desktop borders and visible window edges.
+- Choose **Edges + backgrounds** to also climb the desktop background and window interiors.
 - Move the cursor nearby to attract its attention.
 - Hold the lizard for **0.1 seconds** to grab it. Release to drop it.
-- Hover directly above it for **0.7 seconds** to receive an affectionate call.
+- Hover or gently move over a resting lizard for **0.7 seconds** to receive an affectionate call.
 - Enable **Explore where I click** to give it destinations.
 - Enable **Allow cyan propulsion** to permit directed jumps.
 
 Nearby clicks invite direct hops. Distant clicks invite longer hops that stop short of the cursor. Very short distances use crawling. Invalid trajectories are rejected.
 
-The lizard produces calls and propulsion sounds, accompanied by head glow and particles.
+Attached lizards follow their supporting window when it moves or resizes, including when resting on its interior. Closing or minimizing that window releases the lizard. Removing its support has consequences.
 
-Calls have a **10-second cooldown**. Idle calls occur after **30–60 seconds** without activity. Sound may be muted.
+The body and tail react while being dragged. After release, it falls about one body length before reaching for a nearby window edge or desktop border. If nothing is within reach, it keeps falling. Landing briefly absorbs the impact and restores its footing before normal movement resumes.
+
+The lizard produces calls, propulsion sounds, and landing impacts, accompanied by head glow and particles.
+
+Ordinary calls have a **10-second cooldown**. Idle calls occur after **30–60 seconds** of idle time. Affection calls have a separate **3-second cooldown** during continued petting. Grabbing and open menus do not count as petting. Calls do not overlap. Sound may be muted.
 
 ## Right-click menu
 
 Right-click the lizard to:
 
 - Open **Settings**.
-- Select **Small (1.0×)**, **Medium (1.5×)**, or **Large (2.0×)**.
+- Select **Small (1.0×)**, **Medium (1.2×)**, **Large (1.5×)**, or **Extra large (2.0×)**.
+- Choose **Edges only** or **Edges + backgrounds** climbing.
 - Toggle roaming.
 - Toggle click exploration.
 - Toggle sound.
@@ -98,3 +108,7 @@ The desktop log is located at:
 ```text
 %USERPROFILE%\AppData\LocalLow\ErraticPu1se\Cyan Lizor Preview\desktop-player.log
 ```
+
+[Developer build instructions](docs/development.md) · [Source for this release](https://github.com/ErraticPu1se/cyan-lizor/tree/v0.2.0-preview.1)
+
+An unofficial project inspired by **Rain World**, created by Videocult and published by Akupara Games. This project does not distribute game assemblies, extracted graphics, audio, or decompiled sources. Third-party dependency notices accompany the download.

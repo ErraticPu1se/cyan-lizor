@@ -19,8 +19,8 @@ namespace CyanPreview.Editor
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene("Assets/Scenes/Preview.unity", true) };
             PlayerSettings.companyName = "ErraticPu1se";
             PlayerSettings.productName = "Cyan Lizor Preview";
-            PlayerSettings.bundleVersion = "0.1.0";
-            PlayerSettings.defaultScreenWidth = 1440;
+            PlayerSettings.bundleVersion = "0.2.0-preview.1";
+            PlayerSettings.defaultScreenWidth = 540;
             PlayerSettings.defaultScreenHeight = 900;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
             PlayerSettings.resizableWindow = true;
@@ -123,10 +123,14 @@ namespace CyanPreview.Editor
                     throw new Exception("Prior generations changed the result");
                 VerifyIndependentPets(context, reference);
                 DesktopChecks.Run(context);
+                ClimbingModeChecks.Run(context);
+                FallCatchChecks.Run(context);
                 UtilityChecks.Run(context);
                 CompanionChecks.Run(context);
                 TargetingChecks.Run(context);
                 DesktopEffectsChecks.Run(context);
+                InteractionUpgradeChecks.Run(context);
+                LandingRecoveryChecks.Run(context);
                 JumpEffectChecks.Run(context);
                 PetInteractionChecks.Run(context);
                 VerifyAutonomousRoaming(context);

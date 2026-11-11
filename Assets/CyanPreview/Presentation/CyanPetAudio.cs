@@ -11,11 +11,13 @@ namespace CyanPreview
         readonly PetMotion motion;
         readonly CyanJumpEffects effects;
         readonly AudioSource charge, voice;
+        readonly AudioSource[] impacts = new AudioSource[3];
+        readonly AudioClip regularVoice, affectionVoice;
         readonly AudioSource[] launch = new AudioSource[3];
         readonly AudioClip[] charges = new AudioClip[3], clangs = new AudioClip[3];
         readonly float[] samples = new float[128];
         readonly System.Random voiceRandom;
-        float idleVoice, bubbleTime, vocalCooldown;
+        float idleVoice, bubbleTime, vocalCooldown, affectionCooldown, impactCooldown;
         public const float VocalCooldownSeconds = 10;
         PetIntent lastIntent;
         bool enabled = true, disposed;
@@ -26,7 +28,7 @@ namespace CyanPreview
             {
                 if (disposed || enabled == value) return;
                 enabled = value;
-                if (!value) { charge.Stop(); voice.Stop(); foreach (var source in launch) source.Stop(); motion.VoiceIntensity = 0; }
+                if (!value) { charge.Stop(); voice.Stop(); foreach (var source in launch) source.Stop(); foreach (var source in impacts) if (source != null) source.Stop(); motion.VoiceIntensity = 0; }
             }
         }
         public CyanPetAudio(Transform parent, ReferenceContext context, PetMotion motion, CyanJumpEffects effects, int seed)
@@ -44,8 +46,19 @@ namespace CyanPreview
                 launch[0].clip = context.LoadSound("Flip3C"); launch[2].clip = context.LoadSound("CoralBreakA_7");
                 // shortcut: deterministic A/B/C voice selection, not the game's voice personality generator.
                 voice.clip = context.LoadSound("LizardVoiceCyan" + "ABC"[(int)((uint)seed % 3)]);
+                regularVoice = voice.clip;
+                var affection = motion.Species.AffectionSound(seed);
+                if (affection != null)
+                    try { affectionVoice = context.LoadSound(affection); }
+                    catch (System.IO.IOException e) { Debug.LogWarning("Affection sound unavailable: " + e.Message); }
                 voice.volume = .4f;
-                motion.StateChanged += StateChanged; motion.JumpLaunched += Launched;
+                var impactNames = motion.Species.ImpactSounds;
+                if (impactNames != null)
+                    for (int i = 0; i < impacts.Length; i++)
+                    {
+                        impacts[i] = Source(); impacts[i].clip = context.LoadSound(impactNames[i]);
+                    }
+                motion.StateChanged += StateChanged; motion.JumpLaunched += Launched; motion.Landed += Landed;
             }
             catch { Release(root); throw; }
         }
@@ -75,10 +88,34 @@ namespace CyanPreview
             foreach (var source in launch) source.Play();
         }
         float NextIdleDelay() => 30 + (float)voiceRandom.NextDouble() * 30;
-        public bool Vocalize()
+        public bool CanPettingCall => !disposed && enabled && affectionVoice != null && affectionCooldown <= 0 && !voice.isPlaying;
+        public bool PettingCall()
+        {
+            if (!CanPettingCall) return false;
+            voice.clip = affectionVoice; voice.volume = .55f; voice.Play();
+            affectionCooldown = PettingContact.CooldownSeconds; vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay();
+            Debug.Log("PETTING_AFFECTION_PLAYED " + affectionVoice.name);
+            return true;
+        }
+        void Landed(float speed) { Impact(speed); }
+        public bool Impact(float speed)
+        {
+            if (disposed || !enabled || impacts[0] == null || impactCooldown > 0 || float.IsNaN(speed) || float.IsInfinity(speed) || speed <= 1.5f) return false;
+            // Lizard.TerrainImpact blends light/heavy contact between speeds 6 and 14.
+            float heavy = Mathf.InverseLerp(6, 14, speed);
+            impacts[0].volume = .1f * (1 - heavy); impacts[0].pitch = .9f;
+            impacts[1].volume = .4f * heavy; impacts[1].pitch = .7f;
+            impacts[2].volume = .2f * heavy; impacts[2].pitch = 1;
+            foreach (var source in impacts) if (source.volume > 0) source.Play();
+            impactCooldown = .15f;
+            return true;
+        }
+        public bool Vocalize() => PlayVoice(regularVoice, .4f);
+        bool PlayVoice(AudioClip clip, float volume)
         {
             // Drop repeat requests; never queue calls or extend the cooldown.
-            if (!enabled || disposed || vocalCooldown > 0 || voice.isPlaying) return false;
+            if (!enabled || disposed || clip == null || vocalCooldown > 0 || voice.isPlaying) return false;
+            voice.clip = clip; voice.volume = volume;
             voice.Play(); vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay();
             return true;
         }
@@ -87,6 +124,8 @@ namespace CyanPreview
             if (disposed) return;
             seconds = float.IsNaN(seconds) || float.IsInfinity(seconds) ? 0 : Mathf.Clamp(seconds, 0, .25f);
             vocalCooldown = Mathf.Max(0, vocalCooldown - seconds);
+            affectionCooldown = Mathf.Max(0, affectionCooldown - seconds);
+            impactCooldown = Mathf.Max(0, impactCooldown - seconds);
             var intent = motion.Behavior.Intent;
             if (intent == PetIntent.Investigating && lastIntent != intent) Vocalize();
             lastIntent = intent;
@@ -109,8 +148,8 @@ namespace CyanPreview
         public void Dispose()
         {
             if (disposed) return; disposed = true;
-            motion.StateChanged -= StateChanged; motion.JumpLaunched -= Launched;
-            motion.VoiceIntensity = 0; charge.Stop(); voice.Stop(); foreach (var source in launch) source.Stop();
+            motion.StateChanged -= StateChanged; motion.JumpLaunched -= Launched; motion.Landed -= Landed;
+            motion.VoiceIntensity = 0; charge.Stop(); voice.Stop(); foreach (var source in launch) source.Stop(); foreach (var source in impacts) if (source != null) source.Stop();
             Release(root);
         }
     }

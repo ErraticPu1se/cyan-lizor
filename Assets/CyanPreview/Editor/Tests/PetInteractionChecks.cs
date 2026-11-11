@@ -104,7 +104,7 @@ namespace CyanPreview.Editor
                 input.Hold(origin, .06f);
                 Require(motion.State == PetMotionState.Grabbed, "Long press did not grab");
                 var dragged = origin + new Vector2(-20, 20);
-                input.Hold(dragged, .025f);
+                input.Hold(dragged, .025f); motion.Advance(.025f);
                 Require(Vector2.Distance(motion.Position, dragged) < .01f, "Grab did not follow cursor");
                 motion.AutonomousJumps = true;
                 for (int i = 0; i < 500; i++) motion.Advance(.025f);
@@ -124,7 +124,7 @@ namespace CyanPreview.Editor
                 input.Press(beforeFastGrab);
                 Require(input.CapturesPointer, "Pending hold did not retain pointer ownership");
                 var fastTarget = beforeFastGrab + new Vector2(-20, 20);
-                input.Hold(fastTarget, .11f);
+                input.Hold(fastTarget, .11f); motion.Advance(.025f);
                 Require(motion.State == PetMotionState.Grabbed && Vector2.Distance(motion.Position, fastTarget) < .01f,
                     "Moving cursor before hold threshold lost the grab");
                 input.Release(fastTarget, false);

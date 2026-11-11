@@ -10,16 +10,23 @@ namespace CyanPreview.Editor
         public static void Run(ReferenceContext context)
         {
             var menuSettings = new DesktopSettings();
-            foreach (var action in new[] { DesktopMenuAction.Small, DesktopMenuAction.Medium, DesktopMenuAction.Large })
+            Require(menuSettings.scale == 1.2f, "Launch size is not Medium 1.2x");
+            foreach (var action in new[] { DesktopMenuAction.Small, DesktopMenuAction.Medium, DesktopMenuAction.Large, DesktopMenuAction.ExtraLarge })
             {
                 menuSettings.ApplyMenu(action);
-                Require(menuSettings.scale == (action == DesktopMenuAction.Small ? 1 : action == DesktopMenuAction.Medium ? 1.5f : 2), "Menu size preset is wrong");
+                Require(menuSettings.scale == (action == DesktopMenuAction.Small ? 1 : action == DesktopMenuAction.Medium ? 1.2f : action == DesktopMenuAction.Large ? 1.5f : 2), "Menu size preset is wrong");
             }
             bool initialRoam = menuSettings.roam, initialSound = menuSettings.sound, initialClicks = menuSettings.clickToExplore;
             foreach (var action in new[] { DesktopMenuAction.Roaming, DesktopMenuAction.Sound, DesktopMenuAction.ExploreClicks })
             { menuSettings.ApplyMenu(action); menuSettings.ApplyMenu(action); }
             Require(menuSettings.roam == initialRoam && menuSettings.sound == initialSound && menuSettings.clickToExplore == initialClicks,
                 "Repeated menu toggles lost settings");
+            var beforeClimb = JsonUtility.ToJson(menuSettings);
+            menuSettings.ApplyMenu(DesktopMenuAction.Climbing);
+            Require(menuSettings.climbingMode == ClimbingMode.EdgesOnly, "Menu did not select edges only");
+            menuSettings.ApplyMenu(DesktopMenuAction.Climbing);
+            Require(JsonUtility.ToJson(menuSettings) == beforeClimb, "Climbing toggle changed unrelated settings");
+            Require((int)DesktopMenuAction.Stop == 8, "New action changed existing menu wire IDs");
             bool invalidMenu = false;
             try { menuSettings.ApplyMenu((DesktopMenuAction)999); } catch (ArgumentOutOfRangeException) { invalidMenu = true; }
             Require(invalidMenu && menuSettings.scale == 2, "Invalid menu action changed settings");
@@ -32,7 +39,7 @@ namespace CyanPreview.Editor
                 var mapped = DesktopCoordinates.ToWorld(work, work, scale);
                 Require(mapped.center == Vector2.zero && mapped.size == work.size / scale, "DPI/size mapping failed");
             }
-            var surfaces = new DesktopSurfaces(new Rect(-500, -300, 1000, 600)) { UseWindowEdges = true };
+            var surfaces = new DesktopSurfaces(new Rect(-500, -300, 1000, 600)) { Mode = ClimbingMode.EdgesAndBackgrounds };
             var back = new DesktopWindow(1, new Rect(-100, -100, 200, 200));
             var cover = new DesktopWindow(2, new Rect(-120, -120, 240, 240));
             surfaces.UpdateWindows(new[] { back });
@@ -41,9 +48,9 @@ namespace CyanPreview.Editor
             Require(surfaces.WindowAtEdge(new Vector2(100, 0), out _, out _) == 2, "Covered window edge remained active");
             surfaces.UpdateWindows(new DesktopWindow[0]);
             Require(surfaces.WindowAtEdge(new Vector2(100, 0), out _, out _) == 0, "Closed/minimized window retained edge");
-            surfaces.UpdateWindows(new[] { back }); surfaces.UseWindowEdges = false;
+            surfaces.UpdateWindows(new DesktopWindow[0]); surfaces.Mode = ClimbingMode.EdgesOnly;
             Require(surfaces.Nearest(Vector2.zero, out _) == new Vector2(0, -300), "Frame-only mode used a window");
-            surfaces.UseWindowEdges = true;
+            surfaces.Mode = ClimbingMode.EdgesAndBackgrounds; surfaces.UpdateWindows(new[] { back });
             var edgePosition = new Vector2(86, 0);
             var moved = new DesktopWindow(1, new Rect(-20, -60, 200, 200));
             Require(surfaces.UpdateWindows(new[] { moved }, edgePosition, true) == new Vector2(80, 40), "Window translation lost attachment");
@@ -60,7 +67,7 @@ namespace CyanPreview.Editor
             surfaces.UpdateWindows(new[] { back });
             var offscreen = new DesktopWindow(1, new Rect(450, -100, 200, 200));
             Require(surfaces.UpdateWindows(new[] { offscreen }, edgePosition, true) == Vector2.zero, "Off-screen window pulled pet outside work area");
-            surfaces.UseWindowEdges = false;
+            surfaces.Mode = ClimbingMode.EdgesOnly;
             using (var pet = context.CreatePet())
             {
                 pet.Generate("42"); var motion = new PetMotion(pet, surfaces, 42) { Roam = false };

@@ -38,6 +38,7 @@ namespace CyanPreview.Editor
                 pet.Generate("12345");
                 var motion = new PetMotion(pet, new BackgroundSurfaces(bounds), 5) { Roam = false };
                 motion.BeginGrab(motion.Position); motion.DragTo(new Vector2(0, 100));
+                motion.Advance(.025f);
                 var anchor = motion.Position;
                 var chunks = (Array)Get(pet.Lizard, "bodyChunks");
                 for (int i = 0; i < 120; i++)
@@ -136,7 +137,7 @@ namespace CyanPreview.Editor
                     var selected = (Vector2)Get(chunks.GetValue(held), "pos");
                     input.Press(selected); input.Hold(selected, .1f);
                     Require(motion.State == PetMotionState.Grabbed, "Exact hold threshold failed");
-                    input.Hold(cursor, .025f);
+                    input.Hold(cursor, .025f); motion.Advance(.025f);
                     var anchor = (Vector2)Get(chunks.GetValue(held), "pos");
                     for (int step = 0; step < 30; step++)
                     {

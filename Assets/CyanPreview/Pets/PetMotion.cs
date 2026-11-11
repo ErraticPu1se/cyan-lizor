@@ -28,12 +28,13 @@ namespace CyanPreview
         int jumpWait = 320, poseTicks;
         readonly Vector2[] restingPose = new Vector2[3];
         bool resting;
-        Vector2 grabOffset, grabAnchor;
+        Vector2 grabOffset, grabAnchor, grabVelocity;
         int grabbedChunk, heldTicks;
         float turnDirection = 1;
         bool propelled;
         float jumpPower;
         public event Action<Vector2, Vector2, float> JumpLaunched;
+        public event Action<float> Landed;
         public event Action<Vector2, Vector2, float> JumpSmoke;
         public bool AutonomousJumps { get; set; }
         float accumulator;
@@ -46,6 +47,8 @@ namespace CyanPreview
         Vector2? lookTarget;
         bool hasDestination, clickInvestigation;
         public PetBehavior Behavior { get; }
+        public LandingRecovery Recovery { get; }
+        public FallCatchProgress FallCatch { get; }
         public bool Roam { get => Behavior.Roam; set => Behavior.Roam = value; }
         public PetMotionState State { get; private set; }
         public float Interpolation => Mathf.Clamp01(accumulator / TickSeconds);
@@ -62,6 +65,7 @@ namespace CyanPreview
             Behavior = new PetBehavior(seed, pet.Personality);
             jumpRandom = new System.Random(seed ^ 21761);
             capabilities = pet.Species.Movement;
+            Recovery = new LandingRecovery(pet.Species.Landing);
             var body = (Array)Get(pet.Lizard, "bodyChunks");
             for (int i = 0; i < 3; i++) chunks[i] = body.GetValue(i);
             connections = (Array)Get(pet.Lizard, "bodyChunkConnections");
@@ -73,6 +77,10 @@ namespace CyanPreview
                 Set(chunks[i], "lastPos", Get(chunks[i], "pos"));
                 Set(chunks[i], "vel", Vector2.zero);
             }
+            float bodyLength = Vector2.Distance((Vector2)Get(chunks[0], "pos"),(Vector2)Get(chunks[1], "pos"))
+                + Vector2.Distance((Vector2)Get(chunks[1], "pos"),(Vector2)Get(chunks[2], "pos"))
+                + (float)Get(chunks[0], "rad") + (float)Get(chunks[2], "rad");
+            FallCatch = new FallCatchProgress(bodyLength);
             for (int i = 0; i < 4; i++)
             {
                 feet[i] = CreateFoot(i);
@@ -95,6 +103,7 @@ namespace CyanPreview
             finally { UnityEngine.Random.state = state; }
         }
         public void LookAt(Vector2? point) { lookTarget = point; }
+        public LizardSpecies Species => pet.Species;
         public void ObserveCursor(Vector2? point)
         {
             // Nearby pointer attention changes the pose without creating a movement goal.
@@ -110,7 +119,7 @@ namespace CyanPreview
             var origin = surfaces.Nearest(Position, out _);
             var target = surfaces.Nearest(point, out _);
             float distance = Vector2.Distance(origin, target);
-            if (distance > nearbyReach) target = surfaces.Approach(origin, target, nearbyReach + (distance - nearbyReach) * .65f);
+            if (distance > nearbyReach) target = surfaces.Nearest(Vector2.MoveTowards(origin, target, nearbyReach + (distance - nearbyReach) * .65f), out _);
             Behavior.Target(target);
             clickInvestigation = true;
         }
@@ -128,20 +137,22 @@ namespace CyanPreview
             for (int i = 1; i < chunks.Length; i++)
                 if (Vector2.Distance(point, (Vector2)Get(chunks[i], "pos")) < Vector2.Distance(point, (Vector2)Get(chunks[grabbedChunk], "pos"))) grabbedChunk = i;
             grabAnchor = (Vector2)Get(chunks[grabbedChunk], "pos");
-            grabOffset = grabAnchor - point; heldTicks = 0; propelled = false;
+            grabOffset = grabAnchor - point; grabVelocity = Vector2.zero; heldTicks = 0; propelled = false;
             Behavior.Rest(); ChangeState(PetMotionState.Grabbed);
             for (int i = 0; i < 4; i++) { planted[i] = seeking[i] = false; gripAge[i] = 0; }
         }
         public void DragTo(Vector2 point)
         {
             if (State != PetMotionState.Grabbed) return;
+            // Cursor updates set a target; physics owns body and tail momentum.
+            if (float.IsNaN(point.x) || float.IsNaN(point.y) || float.IsInfinity(point.x) || float.IsInfinity(point.y))
+                throw new ArgumentOutOfRangeException(nameof(point));
             grabAnchor = surfaces.Constrain(point + grabOffset, 8, out _);
-            var delta = grabAnchor - (Vector2)Get(chunks[grabbedChunk], "pos");
-            ShiftWithSurface(delta);
         }
         public void ShiftWithSurface(Vector2 delta, bool resetVelocity = true)
         {
             if (float.IsNaN(delta.x) || float.IsNaN(delta.y) || float.IsInfinity(delta.x) || float.IsInfinity(delta.y)) throw new ArgumentOutOfRangeException(nameof(delta));
+            Recovery.Shift(delta);
             for (int i = 0; i < restingPose.Length; i++) restingPose[i] += delta;
             foreach (var chunk in chunks) { TranslatePart(chunk, delta); if (resetVelocity) Set(chunk, "vel", Vector2.zero); }
             // Carry the complete pose, including interpolation history. Feet must
@@ -176,12 +187,27 @@ namespace CyanPreview
         public void EndGrab()
         {
             if (State != PetMotionState.Grabbed) return;
+            Set(chunks[grabbedChunk], "vel", grabVelocity);
+            foreach (var chunk in chunks) Set(chunk, "vel", Vector2.ClampMagnitude((Vector2)Get(chunk, "vel"), 18));
             cooldown = 0; flightTicks = 0; Behavior.Rest();
             ChangeState(PetMotionState.Airborne);
         }
+        public void ReleaseSupport()
+        {
+            if (State != PetMotionState.Crawling && State != PetMotionState.Charging) return;
+            for (int i = 0; i < planted.Length; i++) planted[i] = seeking[i] = false;
+            flightTicks = 0; propelled = false; Behavior.Rest(); ChangeState(PetMotionState.Airborne);
+        }
+        public void RefreshSurfaceSupport()
+        {
+            Recovery.Cancel();
+            for (int i = 0; i < planted.Length; i++) { planted[i] = seeking[i] = false; gripAge[i] = 0; }
+            if (Vector2.Distance(Position, surfaces.Nearest(Position, out var normal)) > 30 || (!capabilities.ClimbWalls && normal.y < .5f)) ReleaseSupport();
+            else if (State == PetMotionState.Charging) { ChangeState(PetMotionState.Crawling); Behavior.Rest(); }
+        }
         public bool JumpTo(Vector2 point, float power = .25f)
         {
-            if (State != PetMotionState.Crawling || cooldown > 0 || GripCount == 0 || capabilities.LaunchMax <= 0) return false;
+            if (State != PetMotionState.Crawling || Recovery.Active || cooldown > 0 || GripCount == 0 || capabilities.LaunchMax <= 0) return false;
             var direction = point - Position;
             if (direction.sqrMagnitude < 1) return false;
             surfaces.Nearest(Position, out var normal);
@@ -201,7 +227,12 @@ namespace CyanPreview
             chargeTicks = chargeDuration = power > .75f ? 45 : power > .25f ? 30 : 15;
             ChangeState(PetMotionState.Charging);
         }
-        void ChangeState(PetMotionState state) { State = state; StateChanged?.Invoke(state); }
+        void ChangeState(PetMotionState state)
+        {
+            FallCatch.Reset(((Vector2)Get(chunks[1], "pos")).y);
+            if (state != PetMotionState.Crawling) Recovery.Cancel();
+            State = state; StateChanged?.Invoke(state);
+        }
         public void Advance(float seconds)
         {
             if (pet.Graphics != graphics) throw new InvalidOperationException("Create a new movement controller after generating a pet.");
@@ -214,6 +245,12 @@ namespace CyanPreview
             if (State == PetMotionState.Grabbed)
             {
                 heldTicks++;
+                var dragDelta = grabAnchor - (Vector2)Get(chunks[grabbedChunk], "pos");
+                // Carry only excess displacement on extreme cursor warps to bound joint stretch.
+                var impulse = Vector2.ClampMagnitude(dragDelta, 24);
+                grabVelocity = impulse;
+                if (dragDelta.magnitude > 24) ShiftWithSurface(dragDelta - impulse, false);
+                Set(chunks[grabbedChunk], "vel", impulse);
                 for (int i = 0; i < chunks.Length; i++)
                 {
                     var p = (Vector2)Get(chunks[i], "pos");
@@ -247,16 +284,19 @@ namespace CyanPreview
                 }
                 UpdateGraphics(); return;
             }
+            float bodySpeed = 0;
+            foreach (var chunk in chunks) bodySpeed = Mathf.Max(bodySpeed, ((Vector2)Get(chunk, "vel")).magnitude);
+            Recovery.Advance(TickSeconds, GripCount, bodySpeed);
             if (cooldown > 0) cooldown--;
             var exploration = Behavior.ExplorationTarget;
-            if ((!clickInvestigation || AutonomousJumps) && State == PetMotionState.Crawling && cooldown == 0 && GripCount > 0 && exploration.HasValue
+            if ((!clickInvestigation || AutonomousJumps) && State == PetMotionState.Crawling && !Recovery.Active && cooldown == 0 && GripCount > 0 && exploration.HasValue
                 && Vector2.Distance(Position, exploration.Value) > (clickInvestigation ? 35 : Mathf.Lerp(190, 120, pet.Personality.Bravery))
                 && PetJumpPlanner.TryPlanToTarget(Position, exploration.Value, surfaces, capabilities, out var targetedJump))
             {
                 launchVelocity = targetedJump.Velocity;
                 BeginJump(targetedJump.Landing, targetedJump.Power);
             }
-            if (AutonomousJumps && Roam && Behavior.Intent == PetIntent.Roaming && State == PetMotionState.Crawling && --jumpWait <= 0 && GripCount > 0)
+            if (AutonomousJumps && Roam && Behavior.Intent == PetIntent.Roaming && State == PetMotionState.Crawling && !Recovery.Active && --jumpWait <= 0 && GripCount > 0)
             {
                 jumpWait = jumpRandom.Next(240, 481) + Mathf.RoundToInt((1 - pet.Personality.Bravery) * 160);
                 if (PetJumpPlanner.TryPlan(Position, surfaces, capabilities, jumpRandom, out var candidate))
@@ -279,7 +319,7 @@ namespace CyanPreview
             Set(Get(pet.Lizard, "AI"), "runSpeed", Behavior.RunSpeed);
             bool airborne = State == PetMotionState.Airborne;
             poseTicks++;
-            bool atRest = State == PetMotionState.Crawling && !hasDestination;
+            bool atRest = State == PetMotionState.Crawling && !hasDestination && !Recovery.Active;
             if (atRest && !resting) for (int i = 0; i < 3; i++) restingPose[i] = (Vector2)Get(chunks[i], "pos");
             resting = atRest;
             if (airborne)
@@ -293,6 +333,8 @@ namespace CyanPreview
             var tangent = (ahead - edge).normalized;
             if (!capabilities.ClimbWalls && normal.y < .5f) tangent = Vector2.down;
             bool landed = false;
+            float impactSpeed = 0;
+            Vector2 impactNormal = Vector2.zero, impactPoint = Position;
             for (int i = 0; i < 3; i++)
             {
                 var p = (Vector2)Get(chunks[i], "pos");
@@ -309,12 +351,18 @@ namespace CyanPreview
                 else
                 {
                     var support = surfaces.Nearest(p, out var inward);
-                    float clearance = State == PetMotionState.Charging ? 9 : 14;
+                    float clearance = State == PetMotionState.Charging ? 9 : 14 - Recovery.Compression * (i == 1 ? 1 : .6f);
+                    if (Recovery.Active && Recovery.Normal != Vector2.zero)
+                    {
+                        inward = Recovery.Normal;
+                        support = p - inward * Vector2.Dot(p - Recovery.ContactPoint, inward);
+                    }
                     var supportForce = Vector2.ClampMagnitude(support + inward * clearance - p, 6) * .18f;
-                    v *= .75f;
+                    v *= Recovery.VelocityRetention;
                     v += supportForce;
                     if (State == PetMotionState.Crawling && hasDestination)
                     {
+                        var beforeDrive = v;
                         // Head leads, the middle follows its route, and the rear is pulled
                         // by the original chunk connections instead of a rigid pose.
                         var forward = (Position - (Vector2)Get(chunks[1], "pos")).normalized;
@@ -344,6 +392,7 @@ namespace CyanPreview
                                 alignment = Mathf.Lerp(.5f, 1, (Vector2.Dot((leadTarget - p).normalized, (target - p).normalized) + 1) * .5f);
                         }
                         if (i < 2) v += (target - p).normalized * capabilities.CrawlSpeed * (Behavior.RunSpeed / .5f) * (i == 0 ? .55f : .35f) * alignment * Mathf.InverseLerp(.3f, .9f, facing);
+                        v = beforeDrive + (v - beforeDrive) * Recovery.DriveScale;
                     }
                     if (resting)
                     {
@@ -370,20 +419,31 @@ namespace CyanPreview
                 p = surfaces.Constrain(p, 8, out var hit);
                 if (hit != Vector2.zero)
                 {
+                    float speed = -Vector2.Dot(v, hit);
+                    if (speed > impactSpeed) { impactSpeed = speed; impactNormal = hit; impactPoint = p - hit * 8; }
                     v -= hit * Mathf.Min(0, Vector2.Dot(v, hit));
-                    if (cooldown < 15 && (capabilities.ClimbWalls || hit.y > .5f)) landed = true;
+                    if (cooldown < 15 && (hit.y > .5f || (propelled && capabilities.ClimbWalls))) landed = true;
                 }
                 Set(chunks[i], "pos", p); Set(chunks[i], "vel", v);
             }
             foreach (var connection in connections) Call(connection, "Update");
             foreach (var chunk in chunks) Set(chunk, "pos", surfaces.Constrain((Vector2)Get(chunk, "pos"), 8, out _));
-            if (airborne && propelled && surfaces.SupportsFreeClimbing && flightTicks > 5 && Vector2.Distance(Position, jumpTarget) < 25)
+            if (airborne && !propelled)
+                FallCatch.Advance(TickSeconds, ((Vector2)Get(chunks[1], "pos")).y, ((Vector2)Get(chunks[1], "vel")).y);
+            if (airborne && propelled && capabilities.ClimbWalls && flightTicks > 5 && Vector2.Distance(Position, jumpTarget) < 25
+                && (surfaces.SupportsFreeClimbing || (Vector2.Distance(jumpTarget, surfaces.Nearest(jumpTarget, out _)) <= 10
+                    && Vector2.Distance(Position, surfaces.Nearest(Position, out _)) <= 18)))
                 landed = true;
             if (airborne && landed)
             {
+                if (impactSpeed > 1.5f) Landed?.Invoke(impactSpeed);
                 ChangeState(PetMotionState.Crawling);
+                // Terrain impacts use the contact plane; a background catch has no solid normal.
+                float recoverySpeed = impactSpeed > 0 ? impactSpeed : ((Vector2)Get(chunks[1], "vel")).magnitude;
+                Recovery.Begin(recoverySpeed, impactNormal, impactPoint);
                 if (!Behavior.ExplorationTarget.HasValue) Behavior.Rest();
-                foreach (var chunk in chunks) Set(chunk, "vel", (Vector2)Get(chunk, "vel") * .35f);
+                foreach (var chunk in chunks) Set(chunk, "vel", (Vector2)Get(chunk, "vel") * .5f);
+                for (int i = 0; i < feet.Length; i++) { planted[i] = seeking[i] = false; gripAge[i] = 0; }
             }
             for (int i = 0; i < 4; i++)
             {
@@ -396,20 +456,40 @@ namespace CyanPreview
                 if (localForward.sqrMagnitude < .01f) localForward = tangent;
                 float extension = Vector2.Distance(anchors[i], shoulder);
                 bool trailing = Vector2.Dot(shoulder - anchors[i], localForward) > 0;
-                bool release = planted[i] && trailing && extension > reach - 2 && (gripAge[i ^ 1] > 2 || extension > reach + 3);
-                if (release || flying || (!planted[i] && extension > reach + 3)) { planted[i] = seeking[i] = false; gripAge[i] = 0; }
+                bool release = !Recovery.Active && planted[i] && trailing && extension > reach - 2 && (gripAge[i ^ 1] > 2 || extension > reach + 3);
+                if (release || flying || extension > reach + 3) { planted[i] = seeking[i] = false; gripAge[i] = 0; }
                 if (!planted[i] && !seeking[i])
                 {
                     var spread = normal == Vector2.zero ? new Vector2(-localForward.y, localForward.x) * (i % 2 == 0 ? 14 : -14) : Vector2.zero;
-                    anchors[i] = surfaces.Nearest(shoulder + localForward * (i % 2 == 0 ? 16 : 10) + spread, out _);
+                    anchors[i] = surfaces.Nearest(shoulder + localForward * (Recovery.Active ? 0 : i % 2 == 0 ? 16 : 10) + spread, out _);
                     seeking[i] = true;
                 }
                 Vector2 hunt = anchors[i];
-                if (flying) hunt = shoulder - localForward * 8 + normal * (i % 2 == 0 ? 10 : -10);
+                bool reachingToCatch = false;
+                Vector2 catchNormal = Vector2.zero;
+                if (flying)
+                {
+                    hunt = shoulder - localForward * 8 + normal * (i % 2 == 0 ? 10 : -10);
+                    if (!propelled && capabilities.ClimbWalls && FallCatch.Ready && surfaces is IEdgeCatchSurfaces catchSurfaces
+                        && catchSurfaces.TryCatchEdge(shoulder, reach, out var catchPoint, out catchNormal))
+                    { hunt = anchors[i] = catchPoint; reachingToCatch = true; }
+                }
+                // LizardLimb increases hunt speed by its connection velocity when reaching.
+                Set(feet[i], "huntSpeed", 6f + (reachingToCatch ? ((Vector2)Get(chunks[i < 2 ? 0 : 2], "vel")).magnitude : 0));
                 Set(feet[i], "absoluteHuntPos", hunt);
                 Call(feet[i], "Update");
                 Call(feet[i], "ConnectToPoint", shoulder, reach, false, 0f, Get(chunks[i < 2 ? 0 : 2], "vel"), 0f, 0f);
-                if (!flying && Vector2.Distance((Vector2)Get(feet[i], "pos"), anchors[i]) < 2) planted[i] = true;
+                if (reachingToCatch && Vector2.Distance((Vector2)Get(feet[i], "pos"), hunt) < 2
+                    && Vector2.Distance(shoulder, hunt) <= reach)
+                {
+                    float speed = ((Vector2)Get(chunks[1], "vel")).magnitude;
+                    ChangeState(PetMotionState.Crawling);
+                    Recovery.Begin(speed,catchNormal,hunt);
+                    foreach (var chunk in chunks) Set(chunk,"vel",(Vector2)Get(chunk,"vel") * .5f);
+                    Behavior.Rest(); resting = false;
+                    planted[i] = true; seeking[i] = false;
+                }
+                if (!flying && Vector2.Distance(shoulder, anchors[i]) <= reach && Vector2.Distance((Vector2)Get(feet[i], "pos"), anchors[i]) < 2) planted[i] = true;
                 if (planted[i]) gripAge[i]++;
             }
             UpdateGraphics();
