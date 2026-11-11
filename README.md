@@ -83,7 +83,7 @@ Right-clicks outside the lizard remain available to other applications. Naturall
 ## Planned additions
 
 - Feeding
-- Multiple simultaneous pets
+- Multiple simultaneous pets (they might fight with each other)
 - Additional lizard species
 
 They are planned. They are not present in this preview.
