@@ -27,3 +27,13 @@
 - For future multi-pet support, verify interleaved generation is deterministic, duplicate appearance IDs remain independent, and removing one pet does not invalidate another's textures or rendering.
 - Never commit or package game assemblies, extracted sprites, reference caches, decompiled research, credentials, or machine-local settings.
 - Source lives in this repository; generated builds remain ignored. Preserve the user's license and unrelated changes.
+
+## Mac preparation branch
+
+For `prototype/macos-standalone` and branches derived from it, read `MAC_HANDOFF.md` first.
+The approved first Mac scope is three fixed cyan presets (9320, 7205, 3616), one active pet,
+and no Rain World installation/runtime dependency. This preparation is not a runnable Mac
+port. Preserve the Windows backend and settings; use a separate bootstrap/assembly boundary.
+The existing shared ReferenceContext ownership rules apply to the Windows reference backend,
+not as a requirement to retain the game DLL in the standalone backend. Document any Mac-only
+engine/backend upgrade decision before changing the pin. Do not merge into main automatically.

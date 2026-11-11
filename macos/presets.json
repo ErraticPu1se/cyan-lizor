@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "status": "planning-only",
+  "maxActivePets": 1,
+  "species": "cyan",
+  "presets": [
+    {
+      "key": "cyan-9320",
+      "appearanceId": "9320",
+      "name": "3 droplets",
+      "assetStatus": "not-exported"
+    },
+    {
+      "key": "cyan-7205",
+      "appearanceId": "7205",
+      "name": "你长的很像我的一个故人",
+      "assetStatus": "not-exported"
+    },
+    {
+      "key": "cyan-3616",
+      "appearanceId": "3616",
+      "name": "big fluffy tail",
+      "assetStatus": "not-exported"
+    }
+  ]
+}

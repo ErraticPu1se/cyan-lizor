@@ -19,3 +19,7 @@ research/decompiled/
 *.exe
 *.zip
 
+
+# Personal Mac reference captures/asset transfers are never published.
+macos/private-assets/
+.DS_Store
