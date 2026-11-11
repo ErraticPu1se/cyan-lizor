@@ -38,7 +38,7 @@ namespace CyanPreview.Editor
             jaw.Cancel(); Check(jaw.Jaw==0 && !jaw.Snapping,"Cancelled jaw remained open/snapping");
 
             var sequence=new PetBite(7,tuning);
-            for(int i=0;i<20;i++) Check(sequence.Advance(.025f,true,true,true,true)==BiteDecision.None,"Bit before preparation completed");
+            for(int i=0;i<20;i++) Check(sequence.Advance(.025f,true,true,true,false)==BiteDecision.None,"Bit before preparation completed");
             Check(sequence.Threatening && !sequence.Lunging,"Threat phase missing");
             Check(sequence.EngagementRange>tuning.LungeRange+20,"Crouch has no range margin");
             sequence.Advance(.025f,true,true,true,false,false);
@@ -51,6 +51,21 @@ namespace CyanPreview.Editor
             sequence.ReceiveHit();
             for(int i=0;i<30;i++) Check(sequence.Advance(.025f,true,true,true,true)==BiteDecision.None,"Recovery attacked again");
             Check(sequence.Recovering,"Post-lunge recovery ended prematurely");
+
+            var close=new PetBite(11,tuning); bool closeHit=false;
+            for(int i=0;i<24;i++)
+            {
+                var result=close.Advance(.025f,true,true,false,true,false);
+                closeHit|=result==BiteDecision.Hit;
+                Check(!close.Lunging && !close.Propelling,"Close contact unnecessarily launched a lunge");
+            }
+            Check(closeHit,"Body contact required head-facing alignment or a lunge");
+            var losingContact=new PetBite(12,tuning);
+            for(int i=0;i<10;i++) losingContact.Advance(.025f,true,true,false,true,false);
+            for(int i=0;i<30;i++) Check(losingContact.Advance(.025f,true,true,false,false,false)!=BiteDecision.Hit,"Lost mouth contact still hit");
+            var zeroChance=new PetBite(13,new BiteTuning(25,0,90,1.4f,0,12)); bool closeMiss=false;
+            for(int i=0;i<30;i++) { var r=zeroChance.Advance(.025f,true,true,true,true); Check(r!=BiteDecision.Hit,"Zero-chance bite hit"); closeMiss|=r==BiteDecision.Miss; }
+            Check(closeMiss && !zeroChance.Lunging,"Close-range failed snaps never resolved");
 
             var root=new GameObject("Contact bite integration"); var host=root.AddComponent<DesktopApp>();
             var native=new WindowsDesktop(System.Diagnostics.Process.GetCurrentProcess().Id);
@@ -67,6 +82,9 @@ namespace CyanPreview.Editor
                 Call(host,"ConfigureRival",a,b,true,false); Check(!a.Motion.Behavior.HoldPosition,"Approach stopped before mouth contact");
                 Call(host,"ConfigureRival",a,b,true,true); Check(a.Motion.Behavior.HoldPosition,"Contact stance kept walking through victim");
                 Check(PetContacts.BiteContact(a,b,out var near)==2 && near,"Bite failed to detect scaled rear body chunk");
+                Check(PetContacts.TargetPoint(a,b)==new Vector2(25,0),"Body target ignored rear chunk beside the mouth");
+                Call(host,"ConfigureRival",a,b,true,true);
+                Check(a.Motion.Behavior.TaskTarget==a.Local(new Vector2(25,0)),"Movement still targets distant head instead of contacted body");
                 Pose(a,Vector2.zero,new Vector2(17,0),new Vector2(34,0));
                 Check(PetContacts.BiteContact(a,b,out near)==-1,"Backwards-facing bite hit");
                 Pose(a,Vector2.zero,new Vector2(-17,0),new Vector2(-34,0));

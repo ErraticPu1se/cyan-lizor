@@ -18,7 +18,7 @@ namespace CyanPreview
         readonly System.Random random;
         readonly BiteTuning tuning;
         float clock;
-        int delay, snap, recovery, preparation, lunge;
+        int delay, snap, recovery, preparation, lunge, closeAttempts;
         readonly int preparationTicks;
         public float Jaw { get; private set; }
         public bool Snapping => snap>0;
@@ -33,7 +33,7 @@ namespace CyanPreview
             random=new System.Random(seed); this.tuning=tuning;
             preparationTicks=(tuning?.PreparationTicks??35)+(int)(random.NextDouble()*12*(1-Mathf.Clamp01(aggression)));
         }
-        public void Cancel() { Jaw=0; preparation=0; lunge=0; snap=0; }
+        public void Cancel() { Jaw=0; preparation=0; lunge=0; snap=0; closeAttempts=0; }
         public void ReceiveHit() { recovery=tuning?.RecoveryTicks??40; Cancel(); }
         public BiteDecision Advance(float seconds,bool engaged,bool canBite,bool near,bool contact,bool aligned=true)
         {
@@ -51,12 +51,24 @@ namespace CyanPreview
                     else if(lunge==0) { decision=BiteDecision.Miss; Snap(); }
                     continue;
                 }
+                // AttemptBite is independent of Lounge: actual mouth contact can snap a ready jaw.
+                if(contact)
+                {
+                    preparation=0; Jaw=Mathf.Min(1,Jaw+.05f);
+                    if(Jaw>.9f)
+                    {
+                        if(random.NextDouble()<tuning.Chance) { decision=BiteDecision.Hit; Snap(false); }
+                        else if(++closeAttempts>=6) { decision=BiteDecision.Miss; Snap(false); }
+                    }
+                    continue;
+                }
+                closeAttempts=0;
                 if(!near || !aligned) { preparation=0; Jaw=Mathf.Max(0,Jaw-.05f); continue; }
                 preparation++; Jaw=Mathf.Min(1,Jaw+.05f);
                 if(preparation>=preparationTicks) { preparation=0; lunge=tuning.LungeTicks; }
             }
             return decision;
         }
-        void Snap() { Jaw=0; delay=tuning.DelayTicks; snap=5; lunge=0; preparation=0; recovery=tuning.RecoveryTicks; }
+        void Snap(bool afterLunge=true) { Jaw=0; delay=tuning.DelayTicks; snap=5; lunge=0; preparation=0; recovery=afterLunge?tuning.RecoveryTicks:0; closeAttempts=0; }
     }
 }

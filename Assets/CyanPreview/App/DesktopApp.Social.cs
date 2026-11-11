@@ -62,7 +62,7 @@ namespace CyanPreview
                     && a.Motion.State==PetMotionState.Crawling && b.Motion.State==PetMotionState.Crawling
                     && !a.Input.CapturesPointer && !b.Input.CapturesPointer && !engaged.Contains(a.Config.key) && !engaged.Contains(b.Config.key);
                 float scale=(a.Config.scale+b.Config.scale)*.5f;
-                fight.Advance(dt,settings.allowFighting,eligible,Vector2.Distance(a.WorldPosition,b.WorldPosition)/scale,
+                fight.Advance(dt,settings.allowFighting,eligible,Mathf.Min(Vector2.Distance(a.WorldPosition,PetContacts.TargetPoint(a,b)),Vector2.Distance(b.WorldPosition,PetContacts.TargetPoint(b,a)))/scale,
                     food.Owner==FoodOwner.Pet || food.Owner==FoodOwner.Loose,
                     (a.Pet.Personality.Aggression+b.Pet.Personality.Aggression)*.5f,
                     Mathf.Abs(a.Pet.Personality.Dominance-b.Pet.Personality.Dominance));
@@ -79,15 +79,16 @@ namespace CyanPreview
                 }
                 if(!fight.Active) continue;
                 engaged.Add(a.Config.key); engaged.Add(b.Config.key);
-                a.Motion.RivalTarget=a.Local(b.WorldPosition); b.Motion.RivalTarget=b.Local(a.WorldPosition);
+                var targetA=PetContacts.TargetPoint(a,b); var targetB=PetContacts.TargetPoint(b,a);
+                a.Motion.RivalTarget=a.Local(targetA); b.Motion.RivalTarget=b.Local(targetB);
                 int contactA=PetContacts.BiteContact(a,b,out bool nearA), contactB=PetContacts.BiteContact(b,a,out bool nearB);
-                nearA=Vector2.Distance(a.WorldPosition,b.WorldPosition)<a.Bite.EngagementRange*a.Config.scale;
-                nearB=Vector2.Distance(a.WorldPosition,b.WorldPosition)<b.Bite.EngagementRange*b.Config.scale;
+                nearA=Vector2.Distance(a.WorldPosition,targetA)<a.Bite.EngagementRange*a.Config.scale;
+                nearB=Vector2.Distance(b.WorldPosition,targetB)<b.Bite.EngagementRange*b.Config.scale;
                 bool canA=food.Holder!=a.Config.key && a.Motion.GripCount>0;
                 bool canB=food.Holder!=b.Config.key && b.Motion.GripCount>0;
                 // Decide both jaws from the same contact snapshot; order never chooses a winner.
-                var decisionA=a.Bite.Advance(dt,true,canA,nearA,contactA>=0,a.Motion.FacingRival(a.Local(b.WorldPosition)));
-                var decisionB=b.Bite.Advance(dt,true,canB,nearB,contactB>=0,b.Motion.FacingRival(b.Local(a.WorldPosition)));
+                var decisionA=a.Bite.Advance(dt,true,canA,nearA,contactA>=0,a.Motion.FacingRival(a.Local(targetA)));
+                var decisionB=b.Bite.Advance(dt,true,canB,nearB,contactB>=0,b.Motion.FacingRival(b.Local(targetB)));
                 ApplyBite(a,b,decisionA,contactA); ApplyBite(b,a,decisionB,contactB);
                 ConfigureRival(a,b,nearA,contactA>=0); ConfigureRival(b,a,nearB,contactB>=0);
                 socialStates[i].state=BiteStatus(a,fight); socialStates[j].state=BiteStatus(b,fight);
@@ -111,20 +112,21 @@ namespace CyanPreview
         static string BiteStatus(DesktopPet pet,PetScuffle fight) => pet.Bite.Snapping?"Bite":pet.Bite.Recovering?"Recoil":pet.Bite.Lunging?"Lunge":pet.Bite.Threatening?"Threat":fight.Phase.ToString();
         void ConfigureRival(DesktopPet pet,DesktopPet rival,bool near,bool contact)
         {
+            var target=pet.Local(PetContacts.TargetPoint(pet,rival));
             pet.Motion.RivalJaw=pet.Bite.Jaw; pet.Motion.RivalBiting=pet.Bite.Snapping;
             if(pet.Bite.Lunging && !pet.Motion.RivalLunging)
-                pet.Motion.RivalLungeDirection=(pet.Local(rival.WorldPosition)-pet.Motion.Position).normalized;
+                pet.Motion.RivalLungeDirection=(target-pet.Motion.Position).normalized;
             pet.Motion.RivalLunging=pet.Bite.Lunging;
             pet.Motion.RivalPropelling=pet.Bite.Propelling;
             pet.Motion.RivalRecovering=pet.Bite.Recovering;
             pet.Motion.RivalStance=pet.Bite.Threatening;
             pet.Motion.Behavior.HoldPosition=pet.Bite.Recovering || pet.Bite.Threatening || pet.Bite.Lunging || contact;
-            pet.Motion.Behavior.TaskTarget=pet.Local(rival.WorldPosition); pet.Motion.AutonomousJumps=false;
+            pet.Motion.Behavior.TaskTarget=target; pet.Motion.AutonomousJumps=false;
         }
         void ApplyBite(DesktopPet attacker,DesktopPet defender,BiteDecision decision,int contact)
         {
             if(decision==BiteDecision.None) return;
-            var target=contact>=0?defender.Motion.BodyPosition(contact)*defender.Config.scale:defender.WorldPosition;
+            var target=contact>=0?defender.Motion.BodyPosition(contact)*defender.Config.scale:PetContacts.TargetPoint(attacker,defender);
             if(decision==BiteDecision.Home) { attacker.Motion.BiteHoming(attacker.Local(target),attacker.Pet.Species.Biting.Homing); return; }
             if(!attacker.Motion.BiteToward(attacker.Local(target))) return;
             bool hit=decision==BiteDecision.Hit && contact>=0 && PetContacts.Available(defender);

@@ -22,6 +22,19 @@ namespace CyanPreview
             }
             return best;
         }
+        public static Vector2 TargetPoint(DesktopPet attacker,DesktopPet defender)
+        {
+            int contact=BiteContact(attacker,defender,out _);
+            if(contact>=0) return defender.Motion.BodyPosition(contact)*defender.Config.scale;
+            int best=0; float distance=float.MaxValue;
+            for(int i=0;i<defender.Motion.BodyCount;i++)
+            {
+                var point=defender.Motion.BodyPosition(i)*defender.Config.scale;
+                float gap=Vector2.Distance(attacker.WorldPosition,point)-defender.Motion.BodyRadius(i)*defender.Config.scale;
+                if(gap<distance) { best=i; distance=gap; }
+            }
+            return defender.Motion.BodyPosition(best)*defender.Config.scale;
+        }
         public static void Resolve(DesktopPet a,DesktopPet b,float seconds)
         {
             if(a==b || !Available(a) || !Available(b) || float.IsNaN(seconds)||float.IsInfinity(seconds)||seconds<=0) return;
