@@ -26,6 +26,7 @@ Preparation reads your game installation without modifying it. Game graphics and
 
 ## What you can do
 
+- Configure your pet in a compact dark-grey and cyan panel with a small animated preview, size presets, and an always-visible Start/Stop control.
 - Choose a cyan's appearance by ID and adjust its desktop size.
 - Watch it roam, rest, crawl, and propel itself, with personality-influenced decisions. Landings briefly absorb impact and regain footing before normal movement resumes.
 - Choose **Edges only** to climb desktop borders and visible window edges, or **Edges + backgrounds** to also climb the desktop background and window interiors. Attached pets follow window movement/resizing. Closing or minimizing the supporting window releases them; disabling background climbing releases unsupported pets without resetting them.

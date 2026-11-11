@@ -20,7 +20,7 @@ namespace CyanPreview.Editor
             PlayerSettings.companyName = "ErraticPu1se";
             PlayerSettings.productName = "Cyan Lizor Preview";
             PlayerSettings.bundleVersion = "0.1.0";
-            PlayerSettings.defaultScreenWidth = 1440;
+            PlayerSettings.defaultScreenWidth = 540;
             PlayerSettings.defaultScreenHeight = 900;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
             PlayerSettings.resizableWindow = true;
