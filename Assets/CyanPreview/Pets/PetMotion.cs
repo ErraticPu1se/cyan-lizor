@@ -220,6 +220,18 @@ namespace CyanPreview
             BeginJump(point, power);
             return true;
         }
+        public void BeginIdleHold()
+        {
+            Behavior.TaskTarget=null; Behavior.Rest(); Behavior.HoldPosition=true;
+            if(State==PetMotionState.Charging) ChangeState(PetMotionState.Crawling);
+        }
+        // Explicit host task; ordinary roam/click jump preferences remain unchanged.
+        public bool TryTaskJump(Vector2 point)
+        {
+            if(State!=PetMotionState.Crawling || Recovery.Active || cooldown>0 || GripCount==0) return false;
+            if(!PetJumpPlanner.TryPlanToTarget(Position,point,surfaces,capabilities,out var candidate)) return false;
+            launchVelocity=candidate.Velocity; BeginJump(candidate.Landing,candidate.Power); return true;
+        }
         void BeginJump(Vector2 point, float power)
         {
             jumpPower = Mathf.Clamp01(power);
@@ -298,7 +310,7 @@ namespace CyanPreview
                 launchVelocity = targetedJump.Velocity;
                 BeginJump(targetedJump.Landing, targetedJump.Power);
             }
-            if (AutonomousJumps && Roam && Behavior.Intent == PetIntent.Roaming && State == PetMotionState.Crawling && !Recovery.Active && --jumpWait <= 0 && GripCount > 0)
+            if (!Behavior.HoldPosition && AutonomousJumps && Roam && Behavior.Intent == PetIntent.Roaming && State == PetMotionState.Crawling && !Recovery.Active && --jumpWait <= 0 && GripCount > 0)
             {
                 jumpWait = jumpRandom.Next(240, 481) + Mathf.RoundToInt((1 - pet.Personality.Bravery) * 160);
                 if (PetJumpPlanner.TryPlan(Position, surfaces, capabilities, jumpRandom, out var candidate))

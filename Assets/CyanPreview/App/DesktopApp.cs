@@ -235,13 +235,13 @@ namespace CyanPreview
                 {
                     native.ClearButtonEvents(); buttonHeld=false; native.SetClickThrough(true);
                     RefreshWindows();
-                    pet.Draw(motion.Interpolation); view.Refresh(pet); desktopRenderer.Render(native.WorkArea,settings.scale);
+                    pet.Draw(motion.Interpolation); view.Refresh(pet); RefreshFoodVisual(); desktopRenderer.Render(native.WorkArea,settings.scale);
                     return;
                 }
                 var cursor = native.Cursor;
                 var point = DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale);
                 if(PlaceFoodInput(point)) return;
-                if(feeding.Frozen) { native.ClearButtonEvents(); native.SetClickThrough(true); petAudio?.Advance(Time.unscaledDeltaTime); AdvanceFeeding(Time.unscaledDeltaTime); pet.Draw(motion.Interpolation); view.Refresh(pet); desktopRenderer.Render(native.WorkArea,settings.scale); return; }
+                if(feeding.Frozen) { native.ClearButtonEvents(); native.SetClickThrough(true); petAudio?.Advance(Time.unscaledDeltaTime); AdvanceFeeding(Time.unscaledDeltaTime); pet.Draw(motion.Interpolation); view.Refresh(pet); RefreshFoodVisual(); desktopRenderer.Render(native.WorkArea,settings.scale); return; }
                 motion.ObserveCursor(point);
                 if (native.TryReadMenuRequest(out var menuPoint))
                 {
@@ -291,7 +291,7 @@ namespace CyanPreview
                     using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Effects)) jumpEffects.Advance(Time.unscaledDeltaTime);
                     using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Draw)) pet.Draw(motion.Interpolation);
                     using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Mesh)) view.Refresh(pet);
-                    desktopRenderer.Render(native.WorkArea, settings.scale);
+                    RefreshFoodVisual(); desktopRenderer.Render(native.WorkArea, settings.scale);
                 }
                 DesktopFrameProfile.EndFrame();
             }

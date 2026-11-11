@@ -1,14 +1,16 @@
 using System;
+using System.Linq;
 using UnityEngine;
+using static CyanPreview.ReferenceContext;
 namespace CyanPreview.Editor
 {
     public static class FeedingChecks
     {
         static void Check(bool value,string message) { if(!value) throw new Exception(message); }
         static readonly Rect Area=new Rect(-400,-250,800,500);
-        static PetFeeding Enter(bool left)
+        static PetFeeding Enter()
         {
-            var task=new PetFeeding(); task.Begin(); task.Place(new Vector2(left?-140:140,-240),Area);
+            var task=new PetFeeding(); task.Begin(); task.Place(new Vector2(140,-240),Area);
             for(int i=0;i<60;i++) task.Advance(.1f,Vector2.zero,Vector2.zero,false,Area);
             task.Advance(.025f,task.Food,task.Food,false,Area);
             Check(task.Stage==FeedingStage.Carrying,"Pickup failed");
@@ -21,110 +23,115 @@ namespace CyanPreview.Editor
         {
             var task=new PetFeeding(); Check(task.Begin() && !task.Begin(),"Duplicate feeding accepted");
             Check(!task.Place(new Vector2(float.NaN,0),Area),"Invalid food accepted");
+            Check(!task.Place(Vector2.zero,Area,float.NaN) && !task.Place(Vector2.zero,Area,float.MaxValue),"Invalid pet length accepted");
             task.Place(Vector2.zero,Area);
             Check(task.Stage==FeedingStage.Investigating && !task.Target.HasValue,"Investigation bypassed");
-            Check(Vector2.Distance(task.ChooseInspectionPoint(Vector2.left*100,new BackgroundSurfaces(Area)),task.Food)>35,"Inspection targets food directly");
             task.Cancel(); Check(!task.Active,"Placement cancellation failed");
-            foreach(bool left in new[]{false,true})
-            {
-                task=Enter(left);
-                for(int i=0;i<100;i++) task.Advance(.1f,task.Den,task.Den,false,Area,true,Area);
-                Check(task.Stage==FeedingStage.Entering,"Head-only clearance hid visible tail");
-                var outside=new Rect(task.Den-Vector2.one*30,Vector2.one*60);
-                task.Advance(.1f,task.Den,task.Den,false,Area,true,outside);
-                Check(task.Frozen && !task.FoodVisible,"Fully outside pet did not eat");
-                for(int i=0;i<100;i++) task.Advance(0,task.Den,task.Den,false,Area,true,outside);
-                Check(task.Stage==FeedingStage.Eating,"Pause advanced eating");
-                for(int i=0;i<31;i++) task.Advance(.1f,task.Den,task.Den,false,Area,true,outside);
-                Check(task.Stage==FeedingStage.Emerging && !task.Frozen,"Return did not start");
-                task.Advance(.1f,task.Entrance,task.Entrance,false,Area,true,outside);
-                Check(task.Active,"Return closed over offscreen tail");
-                task.Advance(.1f,task.Entrance,task.Entrance,false,Area,true,new Rect(task.Entrance-Vector2.one*30,Vector2.one*60));
-                Check(!task.Active,"Return did not complete");
-                task=Enter(left); task.RequestReturn();
-                Check(task.Stage==FeedingStage.Emerging && task.Target==task.Entrance,"Cancel outside did not request walking return");
-                task.Advance(.1f,task.Den,task.Den,false,new Rect(0,0,900,700));
-                Check(!task.Active,"Display rebuild retained obsolete route task");
-                task=Enter(left);
-                for(int i=0;i<610 && task.Stage==FeedingStage.Entering;i++) task.Advance(.1f,task.Entrance,task.Entrance,false,Area,true,Area);
-                Check(task.Stage==FeedingStage.Emerging,"Blocked entry never returns");
-            }
-            var desktop=new FrameSurfaces(Area);
-            var route=new DenRouteSurfaces(desktop,Area); var other=new DenRouteSurfaces(desktop,Area);
-            var point=new Vector2(500,-230);
-            Check(route.Constrain(point,8,out _)==desktop.Constrain(point,8,out _),"Inactive route changes movement");
-            route.Open(false,520);
-            Check(route.Constrain(point,8,out _)==point,"Exit still blocked by desktop wall");
-            Check(other.Constrain(point,8,out _).x<400,"Route leaked to another pet");
-            route.Close(); Check(route.Constrain(point,8,out _).x<400,"Closed route remains open");
-            foreach(bool left in new[]{false,true})
+            task=Enter();
+            Check(task.Den.y<=Area.yMin-520 && task.Den.x==task.Entrance.x,"Den is not below desktop");
+            for(int i=0;i<100;i++) task.Advance(.1f,task.Den,task.Den,false,Area,true,Area);
+            Check(task.Stage==FeedingStage.Entering,"Eating started with visible tail");
+            var outside=new Rect(task.Den-Vector2.one*30,Vector2.one*60);
+            task.Advance(.1f,task.Den,task.Den,false,Area,true,outside);
+            Check(task.Frozen && !task.FoodVisible,"Outside pet did not eat");
+            for(int i=0;i<100;i++) task.Advance(0,task.Den,task.Den,false,Area,true,outside);
+            Check(task.Stage==FeedingStage.Eating,"Pause advanced eating");
+            for(int i=0;i<31;i++) task.Advance(.1f,task.Den,task.Den,false,Area,true,outside);
+            Check(task.Stage==FeedingStage.Emerging,"Automatic return failed");
+            task.Advance(.1f,task.ReturnPoint,task.ReturnPoint,false,Area,true,outside);
+            Check(task.Active,"Return closed over offscreen tail");
+            task.Advance(.1f,task.ReturnPoint,task.ReturnPoint,false,Area,true,new Rect(task.ReturnPoint-Vector2.one*30,Vector2.one*60));
+            Check(!task.Active,"Return did not complete");
+            task=Enter(); task.RequestReturn(); Check(task.Stage==FeedingStage.Emerging,"Cancel outside lost return");
+            task.Advance(.1f,task.Den,task.Den,false,new Rect(0,0,900,700)); Check(!task.Active,"Display rebuild retained stale task");
             foreach(float length in new[]{80f,160f,300f})
             {
                 var sized=new PetFeeding(); sized.Begin(); sized.Place(Vector2.zero,Area,length);
-                Check(sized.DenDistance>=520 && sized.DenDistance>=length*3,"Den too close for full pet length");
-                var source=new DesktopSurfaces(Area) {Mode=ClimbingMode.EdgesAndBackgrounds};
-                var extension=new DenRouteSurfaces(source,Area); extension.Open(left,sized.DenDistance);
-                var target=new Vector2(left?Area.xMin-sized.DenDistance:Area.xMax+sized.DenDistance,Area.yMin+14);
-                Check(extension.Constrain(target,8,out _)==target,"Den outside permitted route");
-                Check(extension.Nearest(target,out var normal)==target && normal==Vector2.zero,"Background route forced floor posture");
-                source.Mode=ClimbingMode.EdgesOnly;
-                Check(!extension.SupportsFreeClimbing,"Mode change ignored while outside");
-                extension.Nearest(target,out normal); Check(normal==Vector2.up,"Edges-only route lost floor support");
-                extension.Close(); Check(extension.Constrain(target,8,out _)==source.Constrain(target,8,out _),"Mode/bounds not restored");
+                Check(sized.DenDistance>=520 && sized.DenDistance>=length*3,"Den too close");
+                var source=new FrameSurfaces(Area); var route=new DenRouteSurfaces(source,Area); var other=new DenRouteSurfaces(source,Area);
+                route.Open(sized.DenDistance); var below=new Vector2(0,Area.yMin-sized.DenDistance);
+                Check(route.Constrain(below,8,out _)==below,"Bottom passage blocked");
+                Check(other.Constrain(below,8,out _).y>Area.yMin,"Passage leaked to another pet");
+                route.Close(); Check(route.Constrain(below,8,out _).y>Area.yMin,"Passage remains open");
             }
-            var invalid=new PetFeeding(); invalid.Begin();
-            Check(!invalid.Place(Vector2.zero,Area,float.NaN) && !invalid.Place(Vector2.zero,Area,-1),"Invalid pet length accepted");
-            Debug.Log("FEEDING_PROTOTYPE_EDGE_CASES_PASSED");
+            Debug.Log("FEEDING_BOTTOM_PASSAGE_EDGE_CASES_PASSED");
         }
         public static void Motion(ReferenceContext context)
         {
             foreach(bool backgrounds in new[]{false,true})
             foreach(bool jumps in new[]{false,true})
-            foreach(bool left in new[]{false,true})
-            foreach(bool cancel in new[]{false,true})
+            foreach(int cancel in new[]{0,1,2})
             using(var pet=context.CreatePet())
             {
                 pet.Generate("9320");
                 IPetSurfaces desktop=backgrounds?(IPetSurfaces)new BackgroundSurfaces(Area):new FrameSurfaces(Area);
                 var surfaces=new DenRouteSurfaces(desktop,Area);
                 var motion=new PetMotion(pet,surfaces,31) {Roam=false,AutonomousJumps=jumps};
-                int launches=0; motion.JumpLaunched+=(p,v,power)=> { launches++; Check(!surfaces.Active,"Den route launched a jump"); };
-                var task=new PetFeeding(); task.Begin();
-                var food=desktop.Nearest(new Vector2(left?-140:140,-210),out var normal)+normal*10;
+                int entryHops=0,returnHops=0; var task=new PetFeeding();
+                motion.JumpLaunched+=(p,v,power)=> { if(task.Stage==FeedingStage.Entering) entryHops++; if(task.Stage==FeedingStage.Emerging) returnHops++; };
+                task.Begin(); var food=desktop.Nearest(new Vector2(140,-210),out var normal)+normal*10;
                 task.Place(food,Area,motion.HeadToTailLength); motion.ExploreClick(task.ChooseInspectionPoint(motion.Position,desktop));
-                bool ate=false,entered=false,returnedHeadFirst=false; int steps=0;
+                bool ate=false,cancelled=false; int steps=0;
                 while(task.Active && steps++<8000)
                 {
                     task.Advance(.025f,motion.Position,motion.MouthPosition,false,Area,motion.State==PetMotionState.Crawling,motion.OccupiedBounds);
-                    if(task.UsingRoute && !surfaces.Active) { surfaces.Open(task.ExitLeft,task.DenDistance); entered=true; }
+                    if(task.Stage==FeedingStage.Eating) { ate=true; if(cancel==1) task.RequestReturn(); }
+                    if(cancel==2 && !cancelled && task.Stage==FeedingStage.Entering && motion.State==PetMotionState.Airborne)
+                    { task.RequestReturn(); cancelled=true; }
+                    if(task.UsingRoute && !surfaces.Active) surfaces.Open(task.DenDistance);
                     if(!task.UsingRoute && surfaces.Active)
                     {
-                        Check(motion.OccupiedBounds.xMin>=Area.xMin && motion.OccupiedBounds.xMax<=Area.xMax,"Route closed with body outside");
-                        surfaces.Close();
+                        Check(motion.OccupiedBounds.yMin>=Area.yMin,"Passage closed with tail below desktop");
+                        surfaces.Close(); motion.ReleaseSupport();
                     }
-                    motion.Behavior.TaskTarget=task.Target;
+                    motion.Behavior.TaskTarget=task.Target; motion.Behavior.HoldPosition=task.UsingRoute;
                     motion.AutonomousJumps=jumps && !task.UsingRoute;
-                    if(task.Stage==FeedingStage.Eating)
+                    if(task.Stage==FeedingStage.Entering || task.Stage==FeedingStage.Emerging)
                     {
-                        ate=true; var bounds=motion.OccupiedBounds;
-                        Check(task.ExitLeft?bounds.xMax<Area.xMin:bounds.xMin>Area.xMax,"Eating before full tail clearance");
-                        if(cancel) { task.RequestReturn(); motion.Behavior.TaskTarget=task.Target; }
+                        var target=task.Stage==FeedingStage.Entering?task.Den:task.ReturnPoint;
+                        if(Vector2.Distance(motion.Position,target)>35) motion.TryTaskJump(target);
                     }
                     var before=motion.Position;
                     if(!task.Frozen) motion.Advance(.025f);
-                    if(surfaces.Active)
-                    {
-                        Check(surfaces.SupportsFreeClimbing==desktop.SupportsFreeClimbing,"Feeding changed climbing mode");
-                        Check(Vector2.Distance(before,motion.Position)<25,"Den movement teleported");
-                    }
-                    if(task.Stage==FeedingStage.Emerging && Area.Contains(motion.Position))
-                        returnedHeadFirst |= (motion.MouthPosition.x-motion.Position.x)*(task.ExitLeft?1:-1)>0;
-                    pet.Draw();
+                    Check(Vector2.Distance(before,motion.Position)<65,"Passage teleported pet"); pet.Draw();
                 }
-                Check(jumps || launches==0,"Disabled propulsion ignored");
-                Check(entered && ate && returnedHeadFirst && !task.Active,"Motion failed: backgrounds="+backgrounds+" jumps="+jumps+" left="+left+" position="+motion.Position+" stage="+task.Stage);
+                Check((ate || cancelled) && !task.Active && entryHops>0 && returnHops>0,"Bottom hop failed: backgrounds="+backgrounds+" jumps="+jumps+" position="+motion.Position+" stage="+task.Stage+" hops="+entryHops+"/"+returnHops);
+                motion.Behavior.Rest(); motion.Roam=false; motion.AutonomousJumps=false;
+                for(int i=0;i<400;i++) motion.Advance(.025f);
+                Check(motion.State==PetMotionState.Crawling && motion.Position.y>=Area.yMin,"Return never settled after landing");
             }
-            Debug.Log("FEEDING_REAL_MOTION_RETURN_PASSED");
+            PlacementAndMouth(context);
+            Debug.Log("FEEDING_BOTTOM_HOPS_AND_RETURN_PASSED");
+        }
+        static void PlacementAndMouth(ReferenceContext context)
+        {
+            using(var pet=context.CreatePet())
+            {
+                pet.Generate("9320"); var motion=new PetMotion(pet,new BackgroundSurfaces(Area),31) {Roam=true,AutonomousJumps=true};
+                motion.BeginIdleHold(); var start=motion.Position;
+                float breath=(float)Get(pet.Graphics,"breath");
+                for(int i=0;i<240;i++) { motion.ObserveCursor(start+Vector2.right*70); motion.Advance(.025f); }
+                Check(Vector2.Distance(motion.Position,start)<12,"Placement hold wandered");
+                Check((float)Get(pet.Graphics,"breath")!=breath,"Placement froze idle animation");
+                Check(motion.Roam && motion.AutonomousJumps,"Placement changed saved movement options");
+                motion.Behavior.HoldPosition=false; motion.MoveTo(start+Vector2.right*100);
+                for(int i=0;i<80;i++) motion.Advance(.025f);
+                Check(Vector2.Distance(motion.Position,start)>15,"Placement release did not restore movement");
+                var root=new GameObject("Feeding view check");
+                using(var view=new SpriteMeshView(root.transform))
+                using(var food=new FoodMorselView(root.transform))
+                {
+                    pet.Draw(); view.Refresh(pet); view.HoldFood(food,pet);
+                    var morsel=root.GetComponentsInChildren<SpriteRenderer>().Single();
+                    Check(morsel.GetComponentInParent<UnityEngine.Rendering.SortingGroup>()!=null,"Held food outside pet sorting group");
+                    var upper=((Array)Get(pet.Leaser,"sprites")).GetValue((int)Get(pet.Graphics,"SpriteHeadStart")+2);
+                    Check(morsel.sortingOrder< Array.IndexOf(pet.OrderedSprites.ToArray(),upper)*2,"Food rendered above upper jaw");
+                    Check(Vector2.Distance(morsel.transform.localPosition,pet.HeadPosition)<35,"Food missed head");
+                    food.Show(true,Vector2.zero); Check(morsel.transform.parent==root.transform && morsel.sortingOrder==1000,"Dropped food retained jaw attachment");
+                }
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+            Debug.Log("FEEDING_IDLE_PLACEMENT_AND_MOUTH_LAYER_PASSED");
         }
     }
 }

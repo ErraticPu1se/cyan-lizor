@@ -10,16 +10,16 @@ namespace CyanPreview
         FrameSurfaces route;
         BackgroundSurfaces background;
         public bool Active => route != null;
-        IPetSurfaces Current => !Active ? desktop : desktop.SupportsFreeClimbing ? (IPetSurfaces)background : route;
+        IPetSurfaces Current => !Active ? desktop : (IPetSurfaces)background;
         public bool SupportsFreeClimbing => Current.SupportsFreeClimbing;
         public DenRouteSurfaces(IPetSurfaces desktop, Rect bounds)
         { this.desktop = desktop ?? throw new ArgumentNullException(nameof(desktop)); this.bounds = bounds; }
-        public void Open(bool left, float denDistance)
+        public void Open(float denDistance)
         {
             if(float.IsNaN(denDistance) || float.IsInfinity(denDistance) || denDistance<=0)
                 throw new ArgumentOutOfRangeException(nameof(denDistance));
             var extended = bounds;
-            if(left) extended.xMin -= denDistance+200; else extended.xMax += denDistance+200;
+            extended.yMin -= denDistance+200;
             route = new FrameSurfaces(extended);
             background = new BackgroundSurfaces(extended);
         }

@@ -12,9 +12,9 @@ namespace CyanPreview
         public Vector2 InspectionPoint { get; private set; }
         public Vector2 Den { get; private set; }
         public float DenDistance { get; private set; }
-        public bool ExitLeft { get; private set; }
+        public Vector2 ReturnPoint { get; private set; }
         public bool UsingRoute => Stage==FeedingStage.Entering || Stage==FeedingStage.Eating || Stage==FeedingStage.Emerging;
-        public Vector2? Target => Stage==FeedingStage.Approaching ? Food : Stage==FeedingStage.Carrying || Stage==FeedingStage.Emerging ? Entrance : Stage==FeedingStage.Entering ? Den : (Vector2?)null;
+        public Vector2? Target => Stage==FeedingStage.Approaching ? Food : Stage==FeedingStage.Carrying ? Entrance : (Vector2?)null;
         public bool Active => Stage!=FeedingStage.None;
         public bool Frozen => Stage==FeedingStage.Eating;
         public bool FoodVisible => Stage==FeedingStage.Placing || Stage==FeedingStage.Investigating || Stage==FeedingStage.Approaching || Stage==FeedingStage.Carrying || Stage==FeedingStage.Entering;
@@ -28,7 +28,9 @@ namespace CyanPreview
         public bool Place(Vector2 position,Rect area,float petLength=160)
         {
             if(Stage!=FeedingStage.Placing || !Valid(area) || !Finite(position.x) || !Finite(position.y) || !Finite(petLength) || petLength<=0) return false;
-            DenDistance=Mathf.Max(520,petLength*3);
+            float distance=Mathf.Max(520,petLength*3);
+            if(!Finite(distance)) return false;
+            DenDistance=distance;
             bounds=area; Food=Clamp(position,area); InspectionPoint=Clamp(Food+Vector2.right*75,area); Change(FeedingStage.Investigating); return true;
         }
         public Vector2 ChooseInspectionPoint(Vector2 observer,IPetSurfaces surfaces)
@@ -64,10 +66,9 @@ namespace CyanPreview
             {
                 if(Vector2.Distance(head,Food)<35)
                 {
-                    ExitLeft=head.x<area.center.x;
-                    float inset=Mathf.Min(200,area.width*.35f);
-                    Entrance=new Vector2(ExitLeft?area.xMin+inset:area.xMax-inset,area.yMin+14);
-                    Den=new Vector2(ExitLeft?area.xMin-DenDistance:area.xMax+DenDistance,area.yMin+14);
+                    Entrance=new Vector2(Mathf.Clamp(head.x,area.xMin+60,area.xMax-60),area.yMin+14);
+                    Den=new Vector2(Entrance.x,area.yMin-DenDistance);
+                    ReturnPoint=new Vector2(Entrance.x,area.yMin+Mathf.Min(area.height*.6f,220));
                     Change(FeedingStage.Carrying);
                 }
                 else if(elapsed>60) Cancel();
@@ -81,16 +82,16 @@ namespace CyanPreview
             else if(Stage==FeedingStage.Entering)
             {
                 Food=mouth;
-                if(occupied.HasValue && (ExitLeft?occupied.Value.xMax<area.xMin:occupied.Value.xMin>area.xMax)
-                    && Vector2.Distance(head,Den)<30) Change(FeedingStage.Eating);
+                if(occupied.HasValue && occupied.Value.yMax<area.yMin
+                    && grounded && Vector2.Distance(head,Den)<35) Change(FeedingStage.Eating);
                 else if(elapsed>60) RequestReturn();
             }
             else if(Stage==FeedingStage.Eating)
             { if(elapsed>=3) Change(FeedingStage.Emerging); }
             else if(Stage==FeedingStage.Emerging)
             {
-                if(occupied.HasValue && occupied.Value.xMin>=area.xMin && occupied.Value.xMax<=area.xMax
-                    && Vector2.Distance(head,Entrance)<30) Cancel();
+                if(occupied.HasValue && occupied.Value.yMin>=area.yMin && grounded
+                    && Vector2.Distance(head,ReturnPoint)<45) Cancel();
             }
         }
         void Change(FeedingStage stage) { Stage=stage; elapsed=0; }

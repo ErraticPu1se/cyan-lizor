@@ -18,7 +18,8 @@ namespace CyanPreview
         float restScore = .35f, exploreScore, cueScore, friendScore;
         public Vector2? InterestPoint => interest;
         public Vector2? TaskTarget { get; set; }
-        public Vector2? ExplorationTarget => TaskTarget ?? (interest.HasValue && !arrived ? interest : null);
+        public bool HoldPosition { get; set; }
+        public Vector2? ExplorationTarget => HoldPosition ? null : TaskTarget ?? (interest.HasValue && !arrived ? interest : null);
         public bool Roam { get; set; } = true;
         public PetIntent Intent { get; private set; }
         public float RunSpeed { get; private set; }
@@ -50,6 +51,7 @@ namespace CyanPreview
         }
         public Vector2? Update(Vector2 position, IPetSurfaces surfaces, bool canArrive = true)
         {
+            if(HoldPosition) { Intent=PetIntent.Idle; RunSpeed=0; lastPosition=position; return null; }
             if(TaskTarget.HasValue)
             {
                 Intent=PetIntent.Task; RunSpeed=Mathf.Lerp(RunSpeed,.35f,.08f);

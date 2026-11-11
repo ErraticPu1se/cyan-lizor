@@ -40,6 +40,18 @@ namespace CyanPreview
         public bool HeadGlowEnabled { get; set; } = true;
         public void SetScale(float scale) => root.localScale = Vector3.one * scale;
 
+        public void HoldFood(FoodMorselView food,ReferenceBridge reference)
+        {
+            var sprites=reference.OrderedSprites.ToArray();
+            var heads=(Array)ReferenceContext.Get(reference.Leaser,"sprites");
+            int start=(int)ReferenceContext.Get(reference.Graphics,"SpriteHeadStart");
+            var upper=heads.GetValue(start+2); var head=heads.GetValue(start+3);
+            float angle=(float)ReferenceContext.Get(head,"rotation")*Mathf.Deg2Rad;
+            var direction=new Vector2(Mathf.Sin(angle),Mathf.Cos(angle));
+            var position=new Vector2((float)ReferenceContext.Get(head,"x"),(float)ReferenceContext.Get(head,"y"));
+            float size=Mathf.Abs((float)ReferenceContext.Get(head,"scaleY"));
+            food.Hold(root,position+direction*12*size,90-angle*Mathf.Rad2Deg,Array.IndexOf(sprites,upper)*2-1);
+        }
         public void Refresh(ReferenceBridge reference)
         {
             // shortcut: local light spill only; match room lighting once a desktop surface model exists.
@@ -79,7 +91,7 @@ namespace CyanPreview
                 }
                 var renderer = go.GetComponent<MeshRenderer>();
                 renderer.sharedMaterial = material;
-                renderer.sortingOrder = i;
+                renderer.sortingOrder = i*2;
                 Vector2[] points;
                 Vector2[] uv;
                 int[] indices;
