@@ -77,7 +77,7 @@ namespace CyanPreview.Editor
             using(var pet=context.CreatePet())
             {
                 pet.Generate("42");
-                var surfaces=new DesktopSurfaces(Bounds) { UseWindowEdges=true };
+                var surfaces=new DesktopSurfaces(Bounds) { Mode=ClimbingMode.EdgesAndBackgrounds };
                 var motion=new PetMotion(pet,surfaces) { Roam=false };
                 PutInFlight(pet,motion,new Vector2(0,-191),new Vector2(0,-15)); motion.Advance(.025f);
                 var before=motion.Recovery.ContactPoint;

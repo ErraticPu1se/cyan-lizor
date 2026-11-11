@@ -61,7 +61,8 @@ namespace CyanPreview
                 AddMenu(menu, DesktopMenuAction.Large, "Large (2.0x)", Mathf.Approximately(settings.scale, 2));
                 AppendMenu(menu, 0x800, UIntPtr.Zero, null);
                 AddMenu(menu, DesktopMenuAction.Roaming, "Roaming", settings.roam);
-                AddMenu(menu, DesktopMenuAction.Climbing, "Climb backgrounds and window edges", settings.windowEdges);
+                AddMenu(menu, DesktopMenuAction.EdgesOnly, "Climbing: Edges only", settings.climbingMode == ClimbingMode.EdgesOnly);
+                AddMenu(menu, DesktopMenuAction.EdgesAndBackgrounds, "Climbing: Edges + backgrounds", settings.climbingMode == ClimbingMode.EdgesAndBackgrounds);
                 AddMenu(menu, DesktopMenuAction.ExploreClicks, "Explore clicks", settings.clickToExplore);
                 AddMenu(menu, DesktopMenuAction.Sound, "Sound", settings.sound);
                 AppendMenu(menu, 0x800, UIntPtr.Zero, null);

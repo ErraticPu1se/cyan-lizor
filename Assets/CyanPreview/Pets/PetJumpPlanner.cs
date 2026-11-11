@@ -32,7 +32,8 @@ namespace CyanPreview
                 {
                     var next = position + velocity;
                     var bounded = surfaces.Constrain(next, 8, out var hit);
-                    bool arrived = surfaces.SupportsFreeClimbing && tick >= duration - 1 && Vector2.Distance(next, landing) < 22;
+                    bool arrived = tick >= duration - 1 && Vector2.Distance(next, landing) < 22
+                        && (surfaces.SupportsFreeClimbing || Vector2.Distance(next, surfaces.Nearest(next, out _)) <= 18);
                     if (hit != Vector2.zero || arrived)
                     {
                         if (tick >= 5 && Vector2.Distance(bounded, landing) < 30)

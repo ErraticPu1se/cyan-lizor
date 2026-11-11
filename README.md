@@ -28,7 +28,7 @@ Preparation reads your game installation without modifying it. Game graphics and
 
 - Choose a cyan's appearance by ID and adjust its desktop size.
 - Watch it roam, rest, crawl, and propel itself, with personality-influenced decisions. Landings briefly absorb impact and regain footing before normal movement resumes.
-- Enable **Climb backgrounds and window edges** to let it grip and follow visible window edges and interiors as they move or resize. Closing or minimizing its supporting window releases it.
+- Choose **Edges only** to climb desktop borders and visible window edges, or **Edges + backgrounds** to also climb the desktop background and window interiors. Attached pets follow window movement/resizing. Closing or minimizing the supporting window releases them; disabling background climbing releases unsupported pets without resetting them.
 - Move the cursor nearby for head attention; hold the pet for **0.1 seconds** to grab it, then release to drop. The body and tail react to dragging, with bounded momentum on release.
 - Hover or gently move over a resting lizard for about **0.7 seconds** for a cyan affection call. Continued petting has a **3-second cooldown** during continued contact; grabbing and menus do not count as petting. Affection has its own cooldown, so an ordinary call does not block petting after that call ends. Calls respect mute and never overlap.
 - Enable **Explore where I click** and **Allow cyan propulsion**: nearby clicks invite direct hops; farther clicks invite longer hops that stop short of the cursor. Very short distances use crawling, and jumps require a valid trajectory.
@@ -40,7 +40,7 @@ Right-click the desktop lizard to open its menu:
 
 - Open **Settings**.
 - Choose **Small (1.0×)**, **Medium (1.5×)**, or **Large (2.0×)**.
-- Toggle roaming, climbing on backgrounds/window edges, click exploration, or sound.
+- Choose **Edges only** or **Edges + backgrounds** climbing; toggle roaming, click exploration, or sound.
 - Stop the desktop pet.
 
 The pet pauses while the menu is open, and changes also appear in the control panel. Right-clicks outside the pet still work normally in other apps.

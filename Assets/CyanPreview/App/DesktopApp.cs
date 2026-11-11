@@ -7,12 +7,13 @@ using Debug = UnityEngine.Debug;
 
 namespace CyanPreview
 {
-    public enum DesktopMenuAction { None, Settings, Small, Medium, Large, Roaming, ExploreClicks, Sound, Stop, Climbing }
+    public enum DesktopMenuAction { None, Settings, Small, Medium, Large, Roaming, ExploreClicks, Sound, Stop, Climbing, EdgesOnly, EdgesAndBackgrounds }
 
     [Serializable]
     public sealed class DesktopSettings
     {
-        public int schema = 1, controllerPid;
+        public int schema = 2, controllerPid;
+        public ClimbingMode climbingMode = ClimbingMode.EdgesAndBackgrounds;
         public string id, cache;
         public float scale = .75f;
         public bool sound = true;
@@ -28,13 +29,22 @@ namespace CyanPreview
                 case DesktopMenuAction.Roaming: roam = !roam; break;
                 case DesktopMenuAction.ExploreClicks: clickToExplore = !clickToExplore; break;
                 case DesktopMenuAction.Sound: sound = !sound; break;
-                case DesktopMenuAction.Climbing: windowEdges = !windowEdges; break;
+                case DesktopMenuAction.Climbing: climbingMode = climbingMode == ClimbingMode.EdgesOnly ? ClimbingMode.EdgesAndBackgrounds : ClimbingMode.EdgesOnly; break;
+                case DesktopMenuAction.EdgesOnly: climbingMode = ClimbingMode.EdgesOnly; break;
+                case DesktopMenuAction.EdgesAndBackgrounds: climbingMode = ClimbingMode.EdgesAndBackgrounds; break;
                 default: throw new ArgumentOutOfRangeException(nameof(action));
             }
         }
+        public void UpgradeClimbingMode()
+        {
+            if (schema == 1) { climbingMode = windowEdges ? ClimbingMode.EdgesAndBackgrounds : ClimbingMode.EdgesOnly; schema = 2; }
+            if (schema != 2 || !Enum.IsDefined(typeof(ClimbingMode), climbingMode))
+                throw new InvalidDataException("Invalid climbing settings.");
+        }
         public void Validate()
         {
-            if (schema != 1 || controllerPid <= 0 || !ReferenceBridge.TryParseId(id, out _, out _)
+            UpgradeClimbingMode();
+            if (schema != 2 || controllerPid <= 0 || !ReferenceBridge.TryParseId(id, out _, out _)
                 || string.IsNullOrEmpty(cache) || !File.Exists(Path.Combine(cache, "reference.json"))
                 || float.IsNaN(scale) || float.IsInfinity(scale) || scale < .5f || scale > 2)
                 throw new InvalidDataException("Invalid desktop pet settings.");
@@ -154,7 +164,7 @@ namespace CyanPreview
             petAudio?.Dispose(); petAudio = null;
             jumpEffects?.Dispose(); jumpEffects = null;
             var area = native.WorkArea;
-            surfaces = new DesktopSurfaces(new Rect(-area.width / (2 * settings.scale), -area.height / (2 * settings.scale), area.width / settings.scale, area.height / settings.scale)) { UseWindowEdges = settings.windowEdges };
+            surfaces = new DesktopSurfaces(new Rect(-area.width / (2 * settings.scale), -area.height / (2 * settings.scale), area.width / settings.scale, area.height / settings.scale)) { Mode = settings.climbingMode };
             pet.Generate(settings.id); pet.Pose(0, .7f);
             motion = new PetMotion(pet, surfaces) { Roam = settings.roam, AutonomousJumps = settings.jumps };
             if (keepPosition.HasValue)
@@ -189,8 +199,9 @@ namespace CyanPreview
                     DesktopSettings next;
                     try { next = LoadSettings(); } catch (IOException) { next = settings; }
                     if (!next.running || !native.ControllerAlive) { Application.Quit(); return; }
-                    bool rebuild = next.id != settings.id || next.scale != settings.scale || next.windowEdges != settings.windowEdges;
+                    bool rebuild = next.id != settings.id || next.scale != settings.scale;
                     var keepPosition = motion.Position * settings.scale / next.scale;
+                    bool modeChanged = next.climbingMode != settings.climbingMode;
                     bool vocalize = next.vocalizeRequest != settings.vocalizeRequest;
                     settings = next;
                     if (native.RefreshWorkArea())
@@ -198,6 +209,7 @@ namespace CyanPreview
                         Screen.SetResolution((int)native.WorkArea.width, (int)native.WorkArea.height, FullScreenMode.Windowed); rebuild = true;
                     }
                     if (rebuild) RebuildPet(keepPosition);
+                    else if (modeChanged) { surfaces.Mode = settings.climbingMode; motion.RefreshSurfaceSupport(); }
                     motion.Roam = settings.roam; motion.AutonomousJumps = settings.jumps;
                     input.ClickToExplore = settings.clickToExplore;
                     if (petAudio != null) { petAudio.Enabled = settings.sound; if (vocalize) petAudio.Vocalize(); }

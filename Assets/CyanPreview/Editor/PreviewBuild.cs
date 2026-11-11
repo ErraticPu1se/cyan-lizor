@@ -123,6 +123,7 @@ namespace CyanPreview.Editor
                     throw new Exception("Prior generations changed the result");
                 VerifyIndependentPets(context, reference);
                 DesktopChecks.Run(context);
+                ClimbingModeChecks.Run(context);
                 UtilityChecks.Run(context);
                 CompanionChecks.Run(context);
                 TargetingChecks.Run(context);

@@ -114,7 +114,7 @@ namespace CyanPreview
             var origin = surfaces.Nearest(Position, out _);
             var target = surfaces.Nearest(point, out _);
             float distance = Vector2.Distance(origin, target);
-            if (distance > nearbyReach) target = surfaces.Approach(origin, target, nearbyReach + (distance - nearbyReach) * .65f);
+            if (distance > nearbyReach) target = surfaces.Nearest(Vector2.MoveTowards(origin, target, nearbyReach + (distance - nearbyReach) * .65f), out _);
             Behavior.Target(target);
             clickInvestigation = true;
         }
@@ -189,9 +189,16 @@ namespace CyanPreview
         }
         public void ReleaseSupport()
         {
-            if (State != PetMotionState.Crawling) return;
+            if (State != PetMotionState.Crawling && State != PetMotionState.Charging) return;
             for (int i = 0; i < planted.Length; i++) planted[i] = seeking[i] = false;
             flightTicks = 0; propelled = false; Behavior.Rest(); ChangeState(PetMotionState.Airborne);
+        }
+        public void RefreshSurfaceSupport()
+        {
+            Recovery.Cancel();
+            for (int i = 0; i < planted.Length; i++) { planted[i] = seeking[i] = false; gripAge[i] = 0; }
+            if (Vector2.Distance(Position, surfaces.Nearest(Position, out var normal)) > 30 || (!capabilities.ClimbWalls && normal.y < .5f)) ReleaseSupport();
+            else if (State == PetMotionState.Charging) { ChangeState(PetMotionState.Crawling); Behavior.Rest(); }
         }
         public bool JumpTo(Vector2 point, float power = .25f)
         {
@@ -415,7 +422,9 @@ namespace CyanPreview
             }
             foreach (var connection in connections) Call(connection, "Update");
             foreach (var chunk in chunks) Set(chunk, "pos", surfaces.Constrain((Vector2)Get(chunk, "pos"), 8, out _));
-            if (airborne && propelled && surfaces.SupportsFreeClimbing && flightTicks > 5 && Vector2.Distance(Position, jumpTarget) < 25)
+            if (airborne && propelled && capabilities.ClimbWalls && flightTicks > 5 && Vector2.Distance(Position, jumpTarget) < 25
+                && (surfaces.SupportsFreeClimbing || (Vector2.Distance(jumpTarget, surfaces.Nearest(jumpTarget, out _)) <= 10
+                    && Vector2.Distance(Position, surfaces.Nearest(Position, out _)) <= 18)))
                 landed = true;
             if (airborne && landed)
             {

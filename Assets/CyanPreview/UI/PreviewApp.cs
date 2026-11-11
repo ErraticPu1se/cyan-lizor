@@ -22,7 +22,8 @@ namespace CyanPreview
         CyanPetAudio petAudio;
         bool soundEnabled = true, showDecisions;
         readonly DesktopLauncher desktop = new DesktopLauncher();
-        bool desktopWindowEdges, desktopClicks;
+        bool desktopClicks;
+        ClimbingMode desktopClimbingMode = ClimbingMode.EdgesAndBackgrounds;
         bool desktopSounds = true, desktopRoam = true;
         bool lizardOpen = true, movementOpen, interactionOpen, soundOpen, advancedOpen;
         int desktopVocalizeRequest;
@@ -126,7 +127,7 @@ namespace CyanPreview
             Debug.LogException(e);
         }
         DesktopSettings DesktopConfiguration() => new DesktopSettings { id = reference.Identity, cache = cache, scale = desktopScale,
-            windowEdges = desktopWindowEdges, clickToExplore = desktopClicks, sound = desktopSounds, vocalizeRequest = desktopVocalizeRequest, roam = desktopRoam, jumps = autonomousJumps };
+            climbingMode = desktopClimbingMode, clickToExplore = desktopClicks, sound = desktopSounds, vocalizeRequest = desktopVocalizeRequest, roam = desktopRoam, jumps = autonomousJumps };
         void Update()
         {
             if (desktop.Active)
@@ -138,7 +139,7 @@ namespace CyanPreview
                         if (action == DesktopMenuAction.Stop) { desktop.Stop(); break; }
                         var updated = DesktopConfiguration(); updated.ApplyMenu(action);
                         desktopScale = updated.scale; desktopRoam = updated.roam;
-                        desktopClicks = updated.clickToExplore; desktopSounds = updated.sound; desktopWindowEdges = updated.windowEdges;
+                        desktopClicks = updated.clickToExplore; desktopSounds = updated.sound; desktopClimbingMode = updated.climbingMode;
                     }
                     desktop.UpdateSettings(DesktopConfiguration());
                 }
@@ -230,8 +231,9 @@ namespace CyanPreview
                 desktopRoam = GUILayout.Toggle(desktopRoam, " Roam independently");
                 autonomousJumps = GUILayout.Toggle(autonomousJumps, " Allow cyan propulsion");
                 if (motion != null) motion.AutonomousJumps = autonomousJumps && surfaceMode != 2;
-                desktopWindowEdges = GUILayout.Toggle(desktopWindowEdges, " Climb backgrounds and window edges");
-                GUILayout.Label(desktopWindowEdges ? "Climbs freely and grips visible window edges." : "Stays on the monitor frame and avoids windows.", small);
+                GUILayout.Label("Climbing mode", small);
+                desktopClimbingMode = (ClimbingMode)GUILayout.SelectionGrid((int)desktopClimbingMode, new[] { "Edges only", "Edges + backgrounds" }, 1);
+                GUILayout.Label(desktopClimbingMode == ClimbingMode.EdgesOnly ? "Climbs desktop borders and visible window edges." : "Also climbs desktop backgrounds and window interiors.", small);
             }
             if (Section("Interaction", ref interactionOpen))
             {

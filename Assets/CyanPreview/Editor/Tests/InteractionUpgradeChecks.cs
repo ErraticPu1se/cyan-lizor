@@ -30,7 +30,7 @@ namespace CyanPreview.Editor
             for(int i=0;i<2;i++) jitter.Advance(.25f,true);
             Check(!jitter.Advance(.1f,false), "Outside sprite triggered petting");
             Check(jitter.Advance(.25f,true), "Brief sprite motion reset all contact");
-            var surface = new DesktopSurfaces(new Rect(-500,-300,1000,600)) { UseWindowEdges = true };
+            var surface = new DesktopSurfaces(new Rect(-500,-300,1000,600)) { Mode = ClimbingMode.EdgesAndBackgrounds };
             var window = new DesktopWindow(7, new Rect(-100,-100,200,200));
             surface.UpdateWindows(new[] { window });
             Check(surface.IsWindowChrome(new Vector2(80,90),1), "Close button region invited exploration");

@@ -4,6 +4,8 @@ using UnityEngine;
 
 namespace CyanPreview
 {
+    public enum ClimbingMode { EdgesOnly, EdgesAndBackgrounds }
+
     public struct DesktopWindow
     {
         public long Id;
@@ -16,8 +18,13 @@ namespace CyanPreview
         readonly FrameSurfaces frame;
         readonly BackgroundSurfaces background;
         readonly List<DesktopWindow> windows = new List<DesktopWindow>();
-        public bool UseWindowEdges { get; set; }
-        public bool SupportsFreeClimbing => UseWindowEdges;
+        ClimbingMode mode;
+        public ClimbingMode Mode
+        {
+            get => mode;
+            set { if (!Enum.IsDefined(typeof(ClimbingMode), value)) throw new ArgumentOutOfRangeException(nameof(value)); mode = value; }
+        }
+        public bool SupportsFreeClimbing => Mode == ClimbingMode.EdgesAndBackgrounds;
         public Rect Bounds => frame.Bounds;
         public int WindowCount => windows.Count;
         public bool SupportLost { get; private set; }
@@ -59,14 +66,17 @@ namespace CyanPreview
         }
         public long WindowAtSurface(Vector2 point)
         {
-            if (!UseWindowEdges) return 0;
-            foreach (var window in windows) if (window.Bounds.Contains(point)) return window.Id;
+            if (SupportsFreeClimbing)
+                foreach (var window in windows) if (window.Bounds.Contains(point)) return window.Id;
             return WindowAtEdge(point, out _, out _);
         }
         public long WindowAtEdge(Vector2 point, out Vector2 edge, out Vector2 normal)
         {
-            edge = point; normal = Vector2.zero; float best = 30; long id = 0;
-            if (!UseWindowEdges) return 0;
+            return FindWindowEdge(point, 30, out edge, out normal);
+        }
+        long FindWindowEdge(Vector2 point, float limit, out Vector2 edge, out Vector2 normal)
+        {
+            edge = point; normal = Vector2.zero; float best = limit; long id = 0;
             for (int i = 0; i < windows.Count; i++)
             {
                 var candidate = new FrameSurfaces(windows[i].Bounds).Nearest(point, out var inward);
@@ -92,21 +102,36 @@ namespace CyanPreview
         }
         public Vector2 Nearest(Vector2 point, out Vector2 inward)
         {
-            if (!UseWindowEdges) return frame.Nearest(point, out inward);
-            if (WindowAtEdge(point, out var edge, out inward) != 0) return edge;
-            return background.Nearest(point, out inward);
+            if (SupportsFreeClimbing)
+            {
+                if (WindowAtEdge(point, out var nearby, out inward) != 0) return nearby;
+                return background.Nearest(point, out inward);
+            }
+            var border = frame.Nearest(point, out inward);
+            if (FindWindowEdge(point, Vector2.Distance(point, border), out var edge, out var normal) == 0) return border;
+            inward = normal; return edge;
         }
         public Vector2 Constrain(Vector2 point, float radius, out Vector2 normal) => frame.Constrain(point, radius, out normal);
         public Vector2 Advance(Vector2 point, float distance)
         {
-            if (!UseWindowEdges) return frame.Advance(point, distance);
             long id = WindowAtEdge(point, out _, out _);
             foreach (var window in windows) if (window.Id == id)
-                return Constrain(new FrameSurfaces(window.Bounds).Advance(point, distance), 8, out _);
-            return background.Advance(point, distance);
+                return VisibleStep(point, new FrameSurfaces(window.Bounds).Advance(point, distance), id);
+            return SupportsFreeClimbing ? background.Advance(point, distance) : frame.Advance(point, distance);
         }
         public Vector2 Approach(Vector2 point, Vector2 target, float distance)
-            => UseWindowEdges ? Vector2.MoveTowards(point, target, distance) : frame.Approach(point, target, distance);
+        {
+            if (SupportsFreeClimbing) return Vector2.MoveTowards(point, target, distance);
+            long id = WindowAtEdge(point, out _, out _);
+            foreach (var window in windows)
+                if (window.Id == id) return VisibleStep(point, new FrameSurfaces(window.Bounds).Approach(point, target, distance), id);
+            return frame.Approach(point, target, distance);
+        }
+        Vector2 VisibleStep(Vector2 origin, Vector2 next, long id)
+        {
+            // Stop at occlusion rather than walking onto a hidden edge.
+            return Bounds.Contains(next) && WindowAtEdge(next, out _, out _) == id ? next : origin;
+        }
     }
     public static class DesktopCoordinates
     {
