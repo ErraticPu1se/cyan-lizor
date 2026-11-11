@@ -10,12 +10,14 @@ namespace CyanPreview
         public Vector2 Food { get; private set; }
         public Vector2 Entrance { get; private set; }
         public Vector2 InspectionPoint { get; private set; }
-        public Vector2? Target => Stage==FeedingStage.Approaching ? Food : Stage==FeedingStage.Carrying ? Entrance : (Vector2?)null;
+        public Vector2 Den { get; private set; }
+        public bool ExitLeft { get; private set; }
+        public bool UsingRoute => Stage==FeedingStage.Entering || Stage==FeedingStage.Eating || Stage==FeedingStage.Emerging;
+        public Vector2? Target => Stage==FeedingStage.Approaching ? Food : Stage==FeedingStage.Carrying || Stage==FeedingStage.Emerging ? Entrance : Stage==FeedingStage.Entering ? Den : (Vector2?)null;
         public bool Active => Stage!=FeedingStage.None;
-        public bool Frozen => Stage==FeedingStage.Entering || Stage==FeedingStage.Eating || Stage==FeedingStage.Emerging;
+        public bool Frozen => Stage==FeedingStage.Eating;
         public bool FoodVisible => Stage==FeedingStage.Placing || Stage==FeedingStage.Investigating || Stage==FeedingStage.Approaching || Stage==FeedingStage.Carrying || Stage==FeedingStage.Entering;
         public string Status => Stage==FeedingStage.Placing ? "Place food with a click · Escape cancels" : Stage.ToString();
-        public float TransitionProgress => Mathf.Clamp01(elapsed/1.6f);
         Rect bounds;
         float elapsed;
         public bool Begin()
@@ -33,8 +35,11 @@ namespace CyanPreview
             InspectionPoint=Vector2.Distance(observer,left)<Vector2.Distance(observer,right)?left:right;
             return InspectionPoint;
         }
+        // Reset is used only when the host also rebuilds motion (display/size change or disposal).
         public void Cancel() { Change(FeedingStage.None); }
-        public void Advance(float seconds,Vector2 head,Vector2 mouth,bool grabbed,Rect area,bool grounded=true)
+        public void RequestReturn()
+        { if(UsingRoute) Change(FeedingStage.Emerging); else Cancel(); }
+        public void Advance(float seconds,Vector2 head,Vector2 mouth,bool grabbed,Rect area,bool grounded=true, Rect? occupied=null)
         {
             if(!Active || Stage==FeedingStage.Placing || !Finite(seconds) || seconds<=0) return;
             if(!Valid(area)) { Cancel(); return; }
@@ -57,7 +62,10 @@ namespace CyanPreview
             {
                 if(Vector2.Distance(head,Food)<35)
                 {
-                    Entrance=new Vector2(Mathf.Clamp(head.x,area.xMin+24,area.xMax-24),area.yMin+14);
+                    ExitLeft=head.x<area.center.x;
+                    float inset=Mathf.Min(200,area.width*.35f);
+                    Entrance=new Vector2(ExitLeft?area.xMin+inset:area.xMax-inset,area.yMin+14);
+                    Den=new Vector2(ExitLeft?area.xMin-260:area.xMax+260,area.yMin+14);
                     Change(FeedingStage.Carrying);
                 }
                 else if(elapsed>60) Cancel();
@@ -71,13 +79,16 @@ namespace CyanPreview
             else if(Stage==FeedingStage.Entering)
             {
                 Food=mouth;
-                if(elapsed>=1.6f) Change(FeedingStage.Eating);
+                if(occupied.HasValue && (ExitLeft?occupied.Value.xMax<area.xMin:occupied.Value.xMin>area.xMax)
+                    && Vector2.Distance(head,Den)<30) Change(FeedingStage.Eating);
+                else if(elapsed>60) RequestReturn();
             }
             else if(Stage==FeedingStage.Eating)
             { if(elapsed>=3) Change(FeedingStage.Emerging); }
             else if(Stage==FeedingStage.Emerging)
             {
-                if(elapsed>=1.6f) Cancel();
+                if(occupied.HasValue && occupied.Value.xMin>=area.xMin && occupied.Value.xMax<=area.xMax
+                    && Vector2.Distance(head,Entrance)<30) Cancel();
             }
         }
         void Change(FeedingStage stage) { Stage=stage; elapsed=0; }

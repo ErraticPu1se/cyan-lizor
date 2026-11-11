@@ -126,6 +126,7 @@ namespace CyanPreview
         CyanPetAudio petAudio;
         PetInteraction input;
         DesktopSurfaces surfaces;
+        DenRouteSurfaces denSurfaces;
         Camera cameraView;
         DesktopAlphaRenderer desktopRenderer;
         float refresh;
@@ -176,7 +177,8 @@ namespace CyanPreview
             var area = native.WorkArea;
             surfaces = new DesktopSurfaces(new Rect(-area.width / (2 * settings.scale), -area.height / (2 * settings.scale), area.width / settings.scale, area.height / settings.scale)) { Mode = settings.climbingMode };
             pet.Generate(settings.id); pet.Pose(0, .7f);
-            motion = new PetMotion(pet, surfaces) { Roam = settings.roam, AutonomousJumps = settings.jumps };
+            denSurfaces = new DenRouteSurfaces(surfaces,surfaces.Bounds);
+            motion = new PetMotion(pet, denSurfaces) { Roam = settings.roam, AutonomousJumps = settings.jumps };
             if (keepPosition.HasValue)
             {
                 var restingPoint = surfaces.Nearest(keepPosition.Value, out var inward) + inward * 14;
@@ -192,6 +194,7 @@ namespace CyanPreview
         }
         void RefreshWindows()
         {
+            if(denSurfaces.Active) { surfaces.UpdateWindows(native.Snapshot(settings.scale)); return; }
             var delta = surfaces.UpdateWindows(native.Snapshot(settings.scale), motion.Position,
                 motion.State == PetMotionState.Crawling && motion.GripCount > 0 && !input.CapturesPointer);
             if (surfaces.SupportLost) motion.ReleaseSupport();

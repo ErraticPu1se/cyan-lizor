@@ -8,17 +8,20 @@ namespace CyanPreview
         readonly PetFeeding feeding=new PetFeeding();
         FoodMorselView foodView;
         string feedingStatus;
-        DenPath denPath;
         void ResetFeeding()
         {
-            feeding.Cancel(); denPath=null; if(view!=null) { view.Visible=true; }
+            feeding.Cancel(); denSurfaces.Close(); if(view!=null) { view.Visible=true; }
             foodView?.Dispose(); foodView=new FoodMorselView(transform); PublishFeedingStatus();
         }
         void BeginFeeding()
         { if(feeding.Begin()) { input.Cancel(); buttonHeld=false; native.ClearButtonEvents(); PublishFeedingStatus(); } }
         void CancelFeeding()
-        { if(feeding.Frozen) { motion.PoseDen(DenPath.Emerge(feeding.Entrance,surfaces.Bounds),1); motion.FinishDenTransition(); }
-            feeding.Cancel(); denPath=null; motion.Behavior.TaskTarget=null; motion.Behavior.Rest(); view.Visible=true; foodView.Show(false,Vector2.zero); PublishFeedingStatus(); }
+        {
+            feeding.RequestReturn();
+            motion.Behavior.TaskTarget=feeding.Target;
+            if(!feeding.Active) motion.Behavior.Rest();
+            foodView.Show(false,Vector2.zero); PublishFeedingStatus();
+        }
         bool PlaceFoodInput(Vector2 point)
         {
             if(feeding.Stage!=FeedingStage.Placing) return false;
@@ -46,18 +49,15 @@ namespace CyanPreview
         void AdvanceFeeding(float seconds)
         {
             var previous=feeding.Stage;
-            feeding.Advance(seconds,motion.Position,motion.MouthPosition,motion.State==PetMotionState.Grabbed,surfaces.Bounds,motion.State==PetMotionState.Crawling);
+            feeding.Advance(seconds,motion.Position,motion.MouthPosition,motion.State==PetMotionState.Grabbed,surfaces.Bounds,motion.State==PetMotionState.Crawling,motion.OccupiedBounds);
             motion.Behavior.TaskTarget=feeding.Target;
             if(previous!=FeedingStage.Carrying && feeding.Stage==FeedingStage.Carrying) petAudio?.FoodPickupCall();
             if(feeding.Stage==FeedingStage.Investigating || feeding.Stage==FeedingStage.Approaching) motion.LookAt(feeding.Food);
             if(previous!=FeedingStage.None && feeding.Stage==FeedingStage.None) motion.Behavior.Rest();
             if(feeding.Frozen) jumpEffects.Advance(seconds);
-            if(previous!=feeding.Stage && feeding.Stage==FeedingStage.Entering) denPath=motion.BeginDenEntry(feeding.Entrance);
-            if(previous!=feeding.Stage && feeding.Stage==FeedingStage.Emerging) denPath=DenPath.Emerge(feeding.Entrance,surfaces.Bounds);
-            if(denPath!=null && (feeding.Stage==FeedingStage.Entering || feeding.Stage==FeedingStage.Emerging)) motion.PoseDen(denPath,feeding.TransitionProgress);
-            if(previous==FeedingStage.Emerging && feeding.Stage==FeedingStage.None)
-            { motion.PoseDen(denPath,1); motion.FinishDenTransition(); denPath=null; }
-            view.Visible=feeding.Stage!=FeedingStage.Eating;
+            if(feeding.UsingRoute && !denSurfaces.Active) denSurfaces.Open(feeding.ExitLeft);
+            else if(!feeding.UsingRoute && denSurfaces.Active) denSurfaces.Close();
+            motion.AutonomousJumps=settings.jumps && !feeding.UsingRoute;
             foodView.Show(feeding.FoodVisible,feeding.Stage==FeedingStage.Entering || feeding.Stage==FeedingStage.Carrying?motion.MouthPosition:feeding.Food);
             PublishFeedingStatus();
         }
