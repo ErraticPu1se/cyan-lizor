@@ -391,3 +391,12 @@ ConfigureRival now preserves the carrier's feeding destination and removes its a
 
 The previously failing assertions pass, including carrier escape-route ownership, pursuit during contact, and a real body-motion loop advancing toward a moving carrier. Recovery is still enforced and normal control returns on food drop. Full Verify passed, including food ownership/drop, independent audio, held-pet, movement and effects checks. Preset-file hash and LastId/ReferenceCache/CompanionPreferences match pre-change snapshots. Visual reproduction on the user's desktop remains pending.
 Windows build passed (research/unity-carrier-freeze-build.log); full tests: research/unity-carrier-freeze-tests.log. Separate package: Builds/CarrierPursuitPreview/Lizor.exe. The running player was left untouched.
+
+## Carrier charging/airborne target retention (2026-11-11)
+
+Reproduced target loss before the fix: the host regression failed with "Carrier Charging cancelled challenger target" (research/unity-air-carrier-before.log). AdvanceScuffles required both participants to be Crawling, so charging immediately interrupted the encounter and removed the challenger target.
+
+CanRemainInScuffle now distinguishes a target from an attacker: a current food carrier can remain a rival while Charging or Airborne, provided it is not cursor-held or using the den route. The challenger still requires Crawling and footing to attempt a bite; the occupied-mouth carrier cannot attack. Manual scuffle startup remains restricted to grounded pets. Ownership loss removes the airborne-carrier exception; den entry, pause, fighting-off, held pets and encounter timeout retain their cancellation rules.
+
+Full Verify passed. Regression checks drive the host across Charging, Airborne and Crawling, asserting retained body targets and no carrier attack; den entry ends pursuit and airborne ownership loss removes special eligibility. Existing food-drop/contact, non-lethal, held-pet, feeding, movement and effects checks also passed. Saved-preset hash and LastId/ReferenceCache/CompanionPreferences match pre-change snapshots. This reproduces and fixes the code transition; visual confirmation of the reported desktop sequence remains pending.
+Windows build passed. Logs: research/unity-air-carrier-tests.log and research/unity-air-carrier-build.log. Separate package: Builds/AirborneCarrierPreview/Lizor.exe; existing running player left untouched.

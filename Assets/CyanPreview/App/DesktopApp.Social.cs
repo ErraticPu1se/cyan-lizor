@@ -42,6 +42,14 @@ namespace CyanPreview
             b.Motion.BeginIdleHold(); b.Motion.Behavior.HoldPosition=false;
             manualPair=key; manualMessage="Approaching: "+a.Config.name+" and "+b.Config.name;
         }
+        bool CanRemainInScuffle(DesktopPet pet)
+        {
+            if(!PetContacts.Available(pet)) return false;
+            if(pet.Motion.State==PetMotionState.Crawling) return true;
+            // The carrier remains a target during escape; this does not grant attack permission.
+            return food.Owner==FoodOwner.Pet && food.Holder==pet.Config.key
+                && (pet.Motion.State==PetMotionState.Charging || pet.Motion.State==PetMotionState.Airborne);
+        }
         PetSocialStatus[] socialStates;
         void AdvanceScuffles(float dt)
         {
@@ -59,7 +67,7 @@ namespace CyanPreview
                 var a=pets[i]; var b=pets[j]; string key=a.Config.key+"|"+b.Config.key;
                 if(!scuffles.TryGetValue(key,out var fight)) { fight=new PetScuffle(); scuffles.Add(key,fight); }
                 bool eligible=!settings.paused && (manualPair==null || key==manualPair || (!ManualMember(a) && !ManualMember(b))) && food.Owner!=FoodOwner.Placing && !a.Feeding.UsingRoute && !b.Feeding.UsingRoute
-                    && a.Motion.State==PetMotionState.Crawling && b.Motion.State==PetMotionState.Crawling
+                    && CanRemainInScuffle(a) && CanRemainInScuffle(b)
                     && !a.Input.CapturesPointer && !b.Input.CapturesPointer && !engaged.Contains(a.Config.key) && !engaged.Contains(b.Config.key);
                 float scale=(a.Config.scale+b.Config.scale)*.5f;
                 fight.Advance(dt,settings.allowFighting,eligible,Mathf.Min(Vector2.Distance(a.WorldPosition,PetContacts.TargetPoint(a,b)),Vector2.Distance(b.WorldPosition,PetContacts.TargetPoint(b,a)))/scale,
@@ -84,8 +92,8 @@ namespace CyanPreview
                 int contactA=PetContacts.BiteContact(a,b,out bool nearA), contactB=PetContacts.BiteContact(b,a,out bool nearB);
                 nearA=Vector2.Distance(a.WorldPosition,targetA)<a.Bite.EngagementRange*a.Config.scale;
                 nearB=Vector2.Distance(b.WorldPosition,targetB)<b.Bite.EngagementRange*b.Config.scale;
-                bool canA=food.Holder!=a.Config.key && a.Motion.GripCount>0;
-                bool canB=food.Holder!=b.Config.key && b.Motion.GripCount>0;
+                bool canA=food.Holder!=a.Config.key && a.Motion.State==PetMotionState.Crawling && a.Motion.GripCount>0;
+                bool canB=food.Holder!=b.Config.key && b.Motion.State==PetMotionState.Crawling && b.Motion.GripCount>0;
                 // Decide both jaws from the same contact snapshot; order never chooses a winner.
                 var decisionA=a.Bite.Advance(dt,true,canA,nearA,contactA>=0,a.Motion.FacingRival(a.Local(targetA)));
                 var decisionB=b.Bite.Advance(dt,true,canB,nearB,contactB>=0,b.Motion.FacingRival(b.Local(targetB)));

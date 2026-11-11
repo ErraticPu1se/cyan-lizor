@@ -117,6 +117,32 @@ namespace CyanPreview.Editor
                 // SyncPets clears encounters whenever a participant is removed or rebuilt.
                 encounters.Clear(); Call(host,"AdvanceScuffles",.025f);
                 Check(Get(host,"manualPair")==null && ((string)Get(host,"manualMessage")).Contains("removed"),"Roster change left manual encounter pending");
+                encounters.Clear(); hostSettings.scuffleRequest++;
+                food.Begin(); food.Place(list[1].WorldPosition); food.Take(list[1].Config.key);
+                list[1].Feeding.Begin(); list[1].Feeding.Place(list[1].Motion.Position,list[1].Surfaces.Bounds,list[1].Motion.HeadToTailLength);
+                list[1].Feeding.Advance(.025f,list[1].Motion.Position,list[1].Motion.MouthPosition,false,list[1].Surfaces.Bounds);
+                Call(host,"ProcessScuffleRequest");
+                foreach(var carrierState in new[]{PetMotionState.Charging,PetMotionState.Airborne,PetMotionState.Crawling})
+                {
+                    Call(list[1].Motion,"ChangeState",carrierState);
+                    Call(host,"AdvanceScuffles",.025f);
+                    Check(list[0].Motion.RivalTarget.HasValue && Get(host,"manualPair")!=null,"Carrier "+carrierState+" cancelled challenger target");
+                    Check(list[0].Motion.Behavior.TaskTarget==list[0].Local(PetContacts.TargetPoint(list[0],list[1])),"Carrier transition lost body pursuit target");
+                    Check(!list[1].Bite.Lunging && !list[1].Motion.RivalBiting,"Mouth-occupied carrier attacked during transition");
+                }
+                list[1].Feeding.Advance(.025f,list[1].Feeding.Entrance,list[1].Motion.MouthPosition,false,list[1].Surfaces.Bounds,true);
+                Check(list[1].Feeding.UsingRoute,"Den-entry fixture did not commit its route");
+                Call(host,"AdvanceScuffles",.025f);
+                Check(!list[0].Motion.RivalTarget.HasValue && Get(host,"manualPair")==null,"Carrier den entry retained pursuit");
+                list[1].Feeding.Cancel(); encounters.Clear(); hostSettings.scuffleRequest++;
+                Call(host,"ProcessScuffleRequest");
+                Call(list[1].Motion,"ChangeState",PetMotionState.Airborne);
+                Call(host,"AdvanceScuffles",.025f);
+                Check(list[0].Motion.RivalTarget.HasValue,"Airborne carrier could not resume after reset");
+                food.Drop(list[1].WorldMouth); Call(host,"AdvanceScuffles",.025f);
+                Check(!list[0].Motion.RivalTarget.HasValue,"Airborne non-carrier retained special pursuit eligibility");
+                Call(list[1].Motion,"ChangeState",PetMotionState.Crawling);
+                food.Cancel(); foreach(var p in list) Call(host,"ResetInterest",p);
                 hostSettings.allowFighting=false; encounters.Clear();
                 food.Begin(); food.Place(new Vector2(300,0));
                 for(int i=0;i<60;i++) Call(host,"AdvanceFeeding",.1f);
