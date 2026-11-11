@@ -10,6 +10,7 @@ namespace CyanPreview.Editor
         static void Require(bool value, string message) { if (!value) throw new Exception(message); }
         public static void Run(ReferenceContext context)
         {
+            BufferReuse();
             var root = new GameObject("Crop regression");
             var renderers = new List<Renderer>();
             var mesh = new Mesh(); var empty = new Mesh();
@@ -112,6 +113,8 @@ namespace CyanPreview.Editor
                             foreach(var renderer in root.GetComponentsInChildren<Renderer>()) renderer.gameObject.layer=30;
                             Require(DesktopAlphaRenderer.VisibleBounds(root.transform,renderers,out var bounds,new Rect(-640,-360,1280,720)),"Comparison pet has no visible bounds");
                             var crop=DesktopAlphaRenderer.CaptureRect(bounds,work,1);
+                            int smaller=0;
+                            crop=DesktopAlphaRenderer.ReuseCaptureRect(crop,work,new Vector2Int(512,512),ref smaller);
                             var fullPixels=Capture(camera,new RectInt(0,0,1280,720),work);
                             var cropPixels=Capture(camera,crop,work);
                             int mismatch=0, escaped=0, visible=0;
@@ -134,6 +137,31 @@ namespace CyanPreview.Editor
                 }
             }
             finally { RenderTexture.active=originalActive; UnityEngine.Object.DestroyImmediate(cameraObject); UnityEngine.Object.DestroyImmediate(root); }
+        }
+        static void BufferReuse()
+        {
+            var area=new Rect(-1920,-200,1920,1080); var capacity=Vector2Int.zero;
+            int small=0, changes=0, oldChanges=0; Vector2Int old=Vector2Int.zero;
+            long beforeBytes=0,afterBytes=0;
+            for(int i=0;i<600;i++)
+            {
+                var request=new RectInt(-1000,-100,960+(i%2)*32,640+(i%3)*32);
+                var exact=new Vector2Int(request.width,request.height);
+                if(exact!=old) { oldChanges++; beforeBytes+=(long)exact.x*exact.y*4; old=exact; }
+                var result=DesktopAlphaRenderer.ReuseCaptureRect(request,area,capacity,ref small);
+                var next=new Vector2Int(result.width,result.height);
+                if(next!=capacity) { changes++; afterBytes+=(long)next.x*next.y*4; }
+                capacity=next;
+                Require(result.xMin<=request.xMin && result.xMax>=request.xMax && result.yMin<=request.yMin && result.yMax>=request.yMax,"Reused buffer clipped bounds");
+                Require(result.xMin>=area.xMin && result.xMax<=area.xMax && result.yMin>=area.yMin && result.yMax<=area.yMax,"Buffer escaped negative-origin work area");
+            }
+            Require(changes<5 && oldChanges>500,"Oscillating crops still churn buffers");
+            var tiny=new RectInt(-1900,-180,32,32); RectInt shrunk=default;
+            for(int i=0;i<120;i++) shrunk=DesktopAlphaRenderer.ReuseCaptureRect(tiny,area,capacity,ref small);
+            Require(shrunk.width==128 && shrunk.height==128,"Large buffer did not shrink after sustained small bounds");
+            var resized=DesktopAlphaRenderer.ReuseCaptureRect(new RectInt(0,0,32,32),new Rect(0,0,80,60),capacity,ref small);
+            Require(resized.width<=80 && resized.height<=60,"Display shrink retained oversized buffer");
+            Debug.Log("BUFFER_REUSE_STRESS oldResizes="+oldChanges+" newResizes="+changes+" oldManagedBytes="+beforeBytes+" newManagedBytes="+afterBytes);
         }
         static Color32[] Capture(Camera camera,RectInt rect,Rect work)
         {
