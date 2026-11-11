@@ -14,7 +14,7 @@ namespace CyanPreview
         public float DenDistance { get; private set; }
         public Vector2 ReturnPoint { get; private set; }
         public bool UsingRoute => Stage==FeedingStage.Entering || Stage==FeedingStage.Eating || Stage==FeedingStage.Emerging;
-        public Vector2? Target => Stage==FeedingStage.Approaching ? Food : Stage==FeedingStage.Carrying ? Entrance : (Vector2?)null;
+        public Vector2? Target => Stage==FeedingStage.Investigating ? InspectionPoint : Stage==FeedingStage.Approaching ? Food : Stage==FeedingStage.Carrying ? Entrance : (Vector2?)null;
         public bool Active => Stage!=FeedingStage.None;
         public bool Frozen => Stage==FeedingStage.Eating;
         public bool FoodVisible => Stage==FeedingStage.Placing || Stage==FeedingStage.Investigating || Stage==FeedingStage.Approaching || Stage==FeedingStage.Carrying || Stage==FeedingStage.Entering;
@@ -35,7 +35,9 @@ namespace CyanPreview
         }
         public Vector2 ChooseInspectionPoint(Vector2 observer,IPetSurfaces surfaces)
         {
-            var left=surfaces.Advance(Food,-75); var right=surfaces.Advance(Food,75);
+            // Investigation is a waypoint on the approach, not a shared waiting ring.
+            float offset=Mathf.Min(75,Vector2.Distance(observer,Food)*.35f);
+            var left=surfaces.Advance(Food,-offset); var right=surfaces.Advance(Food,offset);
             InspectionPoint=Vector2.Distance(observer,left)<Vector2.Distance(observer,right)?left:right;
             return InspectionPoint;
         }
@@ -60,9 +62,9 @@ namespace CyanPreview
             elapsed+=Mathf.Min(seconds,.1f);
             if(Stage==FeedingStage.Investigating)
             {
-                if(elapsed>=5 || (elapsed>=1.5f && Vector2.Distance(head,InspectionPoint)<50)) Change(FeedingStage.Approaching);
+                if(Vector2.Distance(head,Food)<35 || Vector2.Distance(head,InspectionPoint)<50 || elapsed>=5) Change(FeedingStage.Approaching);
             }
-            else if(Stage==FeedingStage.Approaching)
+            if(Stage==FeedingStage.Approaching)
             {
                 if(Vector2.Distance(head,Food)<35)
                 {

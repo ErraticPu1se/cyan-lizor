@@ -25,8 +25,26 @@ namespace CyanPreview.Editor
             Check(!task.Place(new Vector2(float.NaN,0),Area),"Invalid food accepted");
             Check(!task.Place(Vector2.zero,Area,float.NaN) && !task.Place(Vector2.zero,Area,float.MaxValue),"Invalid pet length accepted");
             task.Place(Vector2.zero,Area);
-            Check(task.Stage==FeedingStage.Investigating && !task.Target.HasValue,"Investigation bypassed");
+            Check(task.Stage==FeedingStage.Investigating && task.Target==task.InspectionPoint,"Investigation bypassed");
             task.Cancel(); Check(!task.Active,"Placement cancellation failed");
+            var near=new PetFeeding(); near.Begin(); near.Place(Vector2.zero,Area);
+            near.ChooseInspectionPoint(new Vector2(20,0),new BackgroundSurfaces(Area));
+            near.Advance(.025f,new Vector2(20,0),Vector2.zero,false,Area);
+            Check(near.Stage==FeedingStage.Carrying,"Nearby food waited for an investigation timer");
+            var far=new PetFeeding(); far.Begin(); far.Place(Vector2.zero,Area);
+            far.ChooseInspectionPoint(new Vector2(300,0),new BackgroundSurfaces(Area));
+            far.Advance(.025f,new Vector2(300,0),new Vector2(300,0),false,Area);
+            Check(far.Stage==FeedingStage.Investigating && far.Target.HasValue,"Distant food lost its approach waypoint");
+            far.Advance(.025f,far.InspectionPoint,far.InspectionPoint,false,Area);
+            Check(far.Stage==FeedingStage.Approaching && far.Target==far.Food,"Waypoint arrival retained mandatory wait");
+            var medium=new PetFeeding(); medium.Begin(); medium.Place(Vector2.zero,Area);
+            medium.ChooseInspectionPoint(new Vector2(-100,0),new BackgroundSurfaces(Area));
+            Check(medium.InspectionPoint.x<0 && Mathf.Abs(medium.InspectionPoint.x)<Mathf.Abs(far.InspectionPoint.x),"Observers share a fixed inspection ring");
+            var paused=new PetFeeding(); paused.Begin(); paused.Place(Vector2.zero,Area);
+            paused.Advance(0,Vector2.zero,Vector2.zero,false,Area);
+            paused.Advance(.025f,Vector2.zero,Vector2.zero,true,Area);
+            Check(paused.Stage==FeedingStage.Investigating,"Paused or grabbed pet picked up food");
+
             task=Enter();
             Check(task.Den.y<=Area.yMin-520 && task.Den.x==task.Entrance.x,"Den is not below desktop");
             for(int i=0;i<100;i++) task.Advance(.1f,task.Den,task.Den,false,Area,true,Area);
