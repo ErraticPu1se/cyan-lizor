@@ -5,6 +5,16 @@ namespace CyanPreview
 {
     public sealed partial class PetMotion
     {
+        // Rest lengths remain stable when the pet bends, unlike its screen bounding box.
+        public float HeadToTailLength
+        {
+            get
+            {
+                float length=58; // Three connected body chunks plus head clearance.
+                foreach(var segment in (Array)Get(graphics,"tail")) length+=(float)Get(segment,"connectionRad");
+                return length;
+            }
+        }
         // Include the tail and limbs, not just the leading chunk, before closing an exit.
         public Rect OccupiedBounds
         {

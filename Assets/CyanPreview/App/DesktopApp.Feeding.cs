@@ -32,7 +32,7 @@ namespace CyanPreview
                 if(!button.Down && native.WorkArea.Contains(button.Position))
                 {
                     feeding.Preview(DesktopCoordinates.ToWorld(button.Position,native.WorkArea,settings.scale),surfaces);
-                    if(feeding.Place(feeding.Food,surfaces.Bounds))
+                    if(feeding.Place(feeding.Food,surfaces.Bounds,motion.HeadToTailLength))
                     {
                         motion.Behavior.TaskTarget=null;
                         motion.ExploreClick(feeding.ChooseInspectionPoint(motion.Position,surfaces));
@@ -49,13 +49,13 @@ namespace CyanPreview
         void AdvanceFeeding(float seconds)
         {
             var previous=feeding.Stage;
-            feeding.Advance(seconds,motion.Position,motion.MouthPosition,motion.State==PetMotionState.Grabbed,surfaces.Bounds,motion.State==PetMotionState.Crawling,motion.OccupiedBounds);
+            feeding.Advance(seconds,motion.Position,motion.MouthPosition,motion.State==PetMotionState.Grabbed,surfaces.Bounds,motion.State==PetMotionState.Crawling,feeding.UsingRoute?motion.OccupiedBounds:(Rect?)null);
             motion.Behavior.TaskTarget=feeding.Target;
             if(previous!=FeedingStage.Carrying && feeding.Stage==FeedingStage.Carrying) petAudio?.FoodPickupCall();
             if(feeding.Stage==FeedingStage.Investigating || feeding.Stage==FeedingStage.Approaching) motion.LookAt(feeding.Food);
             if(previous!=FeedingStage.None && feeding.Stage==FeedingStage.None) motion.Behavior.Rest();
             if(feeding.Frozen) jumpEffects.Advance(seconds);
-            if(feeding.UsingRoute && !denSurfaces.Active) denSurfaces.Open(feeding.ExitLeft);
+            if(feeding.UsingRoute && !denSurfaces.Active) denSurfaces.Open(feeding.ExitLeft,feeding.DenDistance);
             else if(!feeding.UsingRoute && denSurfaces.Active) denSurfaces.Close();
             motion.AutonomousJumps=settings.jumps && !feeding.UsingRoute;
             foodView.Show(feeding.FoodVisible,feeding.Stage==FeedingStage.Entering || feeding.Stage==FeedingStage.Carrying?motion.MouthPosition:feeding.Food);

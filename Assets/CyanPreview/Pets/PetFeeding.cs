@@ -11,6 +11,7 @@ namespace CyanPreview
         public Vector2 Entrance { get; private set; }
         public Vector2 InspectionPoint { get; private set; }
         public Vector2 Den { get; private set; }
+        public float DenDistance { get; private set; }
         public bool ExitLeft { get; private set; }
         public bool UsingRoute => Stage==FeedingStage.Entering || Stage==FeedingStage.Eating || Stage==FeedingStage.Emerging;
         public Vector2? Target => Stage==FeedingStage.Approaching ? Food : Stage==FeedingStage.Carrying || Stage==FeedingStage.Emerging ? Entrance : Stage==FeedingStage.Entering ? Den : (Vector2?)null;
@@ -24,9 +25,10 @@ namespace CyanPreview
         { if(Active) return false; Change(FeedingStage.Placing); return true; }
         public void Preview(Vector2 cursor,IPetSurfaces surfaces)
         { if(Stage==FeedingStage.Placing) Food=surfaces.Nearest(cursor,out var normal)+normal*10; }
-        public bool Place(Vector2 position,Rect area)
+        public bool Place(Vector2 position,Rect area,float petLength=160)
         {
-            if(Stage!=FeedingStage.Placing || !Valid(area) || !Finite(position.x) || !Finite(position.y)) return false;
+            if(Stage!=FeedingStage.Placing || !Valid(area) || !Finite(position.x) || !Finite(position.y) || !Finite(petLength) || petLength<=0) return false;
+            DenDistance=Mathf.Max(520,petLength*3);
             bounds=area; Food=Clamp(position,area); InspectionPoint=Clamp(Food+Vector2.right*75,area); Change(FeedingStage.Investigating); return true;
         }
         public Vector2 ChooseInspectionPoint(Vector2 observer,IPetSurfaces surfaces)
@@ -65,7 +67,7 @@ namespace CyanPreview
                     ExitLeft=head.x<area.center.x;
                     float inset=Mathf.Min(200,area.width*.35f);
                     Entrance=new Vector2(ExitLeft?area.xMin+inset:area.xMax-inset,area.yMin+14);
-                    Den=new Vector2(ExitLeft?area.xMin-260:area.xMax+260,area.yMin+14);
+                    Den=new Vector2(ExitLeft?area.xMin-DenDistance:area.xMax+DenDistance,area.yMin+14);
                     Change(FeedingStage.Carrying);
                 }
                 else if(elapsed>60) Cancel();

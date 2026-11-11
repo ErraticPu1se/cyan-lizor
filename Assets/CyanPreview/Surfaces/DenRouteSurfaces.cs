@@ -2,24 +2,28 @@ using System;
 using UnityEngine;
 namespace CyanPreview
 {
-    // A private extension of this pet's floor; other pets retain their normal desktop bounds.
+    // A private extension of this pet's normal climbing area; other pets retain their normal desktop bounds.
     public sealed class DenRouteSurfaces : IPetSurfaces, IEdgeCatchSurfaces
     {
         readonly IPetSurfaces desktop;
         readonly Rect bounds;
         FrameSurfaces route;
+        BackgroundSurfaces background;
         public bool Active => route != null;
-        IPetSurfaces Current => (IPetSurfaces)route ?? desktop;
+        IPetSurfaces Current => !Active ? desktop : desktop.SupportsFreeClimbing ? (IPetSurfaces)background : route;
         public bool SupportsFreeClimbing => Current.SupportsFreeClimbing;
         public DenRouteSurfaces(IPetSurfaces desktop, Rect bounds)
         { this.desktop = desktop ?? throw new ArgumentNullException(nameof(desktop)); this.bounds = bounds; }
-        public void Open(bool left)
+        public void Open(bool left, float denDistance)
         {
+            if(float.IsNaN(denDistance) || float.IsInfinity(denDistance) || denDistance<=0)
+                throw new ArgumentOutOfRangeException(nameof(denDistance));
             var extended = bounds;
-            if(left) extended.xMin -= 400; else extended.xMax += 400;
+            if(left) extended.xMin -= denDistance+200; else extended.xMax += denDistance+200;
             route = new FrameSurfaces(extended);
+            background = new BackgroundSurfaces(extended);
         }
-        public void Close() { route = null; }
+        public void Close() { route = null; background = null; }
         public Vector2 Nearest(Vector2 p, out Vector2 normal) => Current.Nearest(p, out normal);
         public Vector2 Constrain(Vector2 p, float radius, out Vector2 normal) => Current.Constrain(p, radius, out normal);
         public Vector2 Advance(Vector2 p, float distance) => Current.Advance(p, distance);

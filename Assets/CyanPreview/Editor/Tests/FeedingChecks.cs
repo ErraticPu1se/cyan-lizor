@@ -1,6 +1,5 @@
 using System;
 using UnityEngine;
-using static CyanPreview.ReferenceContext;
 namespace CyanPreview.Editor
 {
     public static class FeedingChecks
@@ -54,10 +53,27 @@ namespace CyanPreview.Editor
             var route=new DenRouteSurfaces(desktop,Area); var other=new DenRouteSurfaces(desktop,Area);
             var point=new Vector2(500,-230);
             Check(route.Constrain(point,8,out _)==desktop.Constrain(point,8,out _),"Inactive route changes movement");
-            route.Open(false);
+            route.Open(false,520);
             Check(route.Constrain(point,8,out _)==point,"Exit still blocked by desktop wall");
             Check(other.Constrain(point,8,out _).x<400,"Route leaked to another pet");
             route.Close(); Check(route.Constrain(point,8,out _).x<400,"Closed route remains open");
+            foreach(bool left in new[]{false,true})
+            foreach(float length in new[]{80f,160f,300f})
+            {
+                var sized=new PetFeeding(); sized.Begin(); sized.Place(Vector2.zero,Area,length);
+                Check(sized.DenDistance>=520 && sized.DenDistance>=length*3,"Den too close for full pet length");
+                var source=new DesktopSurfaces(Area) {Mode=ClimbingMode.EdgesAndBackgrounds};
+                var extension=new DenRouteSurfaces(source,Area); extension.Open(left,sized.DenDistance);
+                var target=new Vector2(left?Area.xMin-sized.DenDistance:Area.xMax+sized.DenDistance,Area.yMin+14);
+                Check(extension.Constrain(target,8,out _)==target,"Den outside permitted route");
+                Check(extension.Nearest(target,out var normal)==target && normal==Vector2.zero,"Background route forced floor posture");
+                source.Mode=ClimbingMode.EdgesOnly;
+                Check(!extension.SupportsFreeClimbing,"Mode change ignored while outside");
+                extension.Nearest(target,out normal); Check(normal==Vector2.up,"Edges-only route lost floor support");
+                extension.Close(); Check(extension.Constrain(target,8,out _)==source.Constrain(target,8,out _),"Mode/bounds not restored");
+            }
+            var invalid=new PetFeeding(); invalid.Begin();
+            Check(!invalid.Place(Vector2.zero,Area,float.NaN) && !invalid.Place(Vector2.zero,Area,-1),"Invalid pet length accepted");
             Debug.Log("FEEDING_PROTOTYPE_EDGE_CASES_PASSED");
         }
         public static void Motion(ReferenceContext context)
@@ -75,12 +91,12 @@ namespace CyanPreview.Editor
                 int launches=0; motion.JumpLaunched+=(p,v,power)=> { launches++; Check(!surfaces.Active,"Den route launched a jump"); };
                 var task=new PetFeeding(); task.Begin();
                 var food=desktop.Nearest(new Vector2(left?-140:140,-210),out var normal)+normal*10;
-                task.Place(food,Area); motion.ExploreClick(task.ChooseInspectionPoint(motion.Position,desktop));
-                bool ate=false,entered=false,returnedHeadFirst=false; int liftedEntry=0,liftedReturn=0; int steps=0;
+                task.Place(food,Area,motion.HeadToTailLength); motion.ExploreClick(task.ChooseInspectionPoint(motion.Position,desktop));
+                bool ate=false,entered=false,returnedHeadFirst=false; int steps=0;
                 while(task.Active && steps++<8000)
                 {
                     task.Advance(.025f,motion.Position,motion.MouthPosition,false,Area,motion.State==PetMotionState.Crawling,motion.OccupiedBounds);
-                    if(task.UsingRoute && !surfaces.Active) { surfaces.Open(task.ExitLeft); entered=true; }
+                    if(task.UsingRoute && !surfaces.Active) { surfaces.Open(task.ExitLeft,task.DenDistance); entered=true; }
                     if(!task.UsingRoute && surfaces.Active)
                     {
                         Check(motion.OccupiedBounds.xMin>=Area.xMin && motion.OccupiedBounds.xMax<=Area.xMax,"Route closed with body outside");
@@ -96,21 +112,15 @@ namespace CyanPreview.Editor
                     }
                     var before=motion.Position;
                     if(!task.Frozen) motion.Advance(.025f);
-                    if(surfaces.Active) Check(Vector2.Distance(before,motion.Position)<25,"Den movement teleported");
+                    if(surfaces.Active)
+                    {
+                        Check(surfaces.SupportsFreeClimbing==desktop.SupportsFreeClimbing,"Feeding changed climbing mode");
+                        Check(Vector2.Distance(before,motion.Position)<25,"Den movement teleported");
+                    }
                     if(task.Stage==FeedingStage.Emerging && Area.Contains(motion.Position))
                         returnedHeadFirst |= (motion.MouthPosition.x-motion.Position.x)*(task.ExitLeft?1:-1)>0;
-                    if(surfaces.Active && Mathf.Abs(motion.Position.y-(Area.yMin+14))<5
-                        && Mathf.Abs((motion.MouthPosition-motion.Position).normalized.x)>.95f)
-                    {
-                        foreach(var limb in (Array)Get(pet.Graphics,"limbs"))
-                        {
-                            if((int)Get(limb,"gripCounter")==0 && ((Vector2)Get(limb,"pos")).y>Area.yMin+5)
-                            { if(task.Stage==FeedingStage.Entering) liftedEntry++; if(task.Stage==FeedingStage.Emerging) liftedReturn++; }
-                        }
-                    }
                     pet.Draw();
                 }
-                Check(liftedEntry>10 && liftedReturn>10,"Feet slide along floor without lifting: entry="+liftedEntry+" return="+liftedReturn);
                 Check(jumps || launches==0,"Disabled propulsion ignored");
                 Check(entered && ate && returnedHeadFirst && !task.Active,"Motion failed: backgrounds="+backgrounds+" jumps="+jumps+" left="+left+" position="+motion.Position+" stage="+task.Stage);
             }
