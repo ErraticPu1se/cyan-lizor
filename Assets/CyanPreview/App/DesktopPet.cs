@@ -66,7 +66,7 @@ namespace CyanPreview
         public void Configure(DesktopPetConfiguration config,bool paused)
         {
             if(Surfaces.Mode!=config.climbingMode) { Surfaces.Mode=config.climbingMode; Motion.RefreshSurfaceSupport(); }
-            Config=config; Motion.Roam=config.roam; Motion.AutonomousJumps=config.jumps; Input.ClickToExplore=config.clickToExplore;
+            Config=config; Motion.Roam=config.roam; Motion.AutonomousJumps=config.jumps && !FollowingFood && !Feeding.UsingRoute; Input.ClickToExplore=config.clickToExplore;
             if(Audio!=null) Audio.Enabled=config.sound&&!paused;
         }
         public void RefreshWindows(IEnumerable<DesktopWindow> snapshot)

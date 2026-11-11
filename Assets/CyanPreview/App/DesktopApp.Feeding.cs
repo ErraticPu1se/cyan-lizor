@@ -52,7 +52,7 @@ namespace CyanPreview
         }
         void ResetInterest(DesktopPet p)
         {
-            p.Feeding.Cancel(); p.FollowingFood=false; p.Motion.Behavior.TaskTarget=null;
+            p.Feeding.Cancel(); p.FollowingFood=false; p.Motion.BeginIdleHold(); p.Motion.Behavior.TaskTarget=null;
             p.Motion.Behavior.HoldPosition=false; p.Motion.Behavior.Rest();
         }
         void AdvanceFeeding(float dt)
@@ -77,7 +77,7 @@ namespace CyanPreview
                     }
                     else if(food.Owner==FoodOwner.Pet || food.Owner==FoodOwner.Cursor)
                     {
-                        if(f.Active) ResetInterest(p);
+                        if(f.Active || !p.FollowingFood) ResetInterest(p);
                         p.FollowingFood=true;
                         var target=food.Position; var away=(p.WorldPosition-target).normalized;
                         if(away.sqrMagnitude<.1f) away=Vector2.right;
@@ -90,7 +90,13 @@ namespace CyanPreview
                 f.Advance(dt,m.Position,m.MouthPosition,m.State==PetMotionState.Grabbed,p.Surfaces.Bounds,m.State==PetMotionState.Crawling,f.UsingRoute?m.OccupiedBounds:(Rect?)null);
                 if(previous!=FeedingStage.Carrying && f.Stage==FeedingStage.Carrying)
                 {
-                    if(food.Take(key)) { owner=true; p.Audio?.FoodPickupCall(); }
+                    if(food.Take(key))
+                    {
+                        owner=true; p.Audio?.FoodPickupCall();
+                        // Apply to every loser now, including those visited earlier in this frame.
+                        foreach(var other in pets) if(other!=p && !other.Feeding.UsingRoute)
+                        { ResetInterest(other); other.FollowingFood=true; other.Motion.AutonomousJumps=false; }
+                    }
                     else ResetInterest(p);
                 }
                 if(owner && food.Owner==FoodOwner.Pet)
@@ -115,7 +121,7 @@ namespace CyanPreview
                     var target=f.Stage==FeedingStage.Entering?f.Den:f.ReturnPoint;
                     m.LookAt(target); if(Vector2.Distance(m.Position,target)>35) m.TryTaskJump(target);
                 }
-                m.AutonomousJumps=p.Config.jumps && !f.UsingRoute;
+                m.AutonomousJumps=p.Config.jumps && !f.UsingRoute && !p.FollowingFood;
             }
         }
         void RefreshFoodVisual()

@@ -52,6 +52,27 @@ namespace CyanPreview.Editor
             grabbed.Advance(.1f,true,false,40,true,1,0); Check(!grabbed.Active,"Grab failed to interrupt fight");
             float tension=low.Tension; low.Advance(float.NaN,true,true,20,true,1,0); low.Advance(0,true,true,20,true,1,0);
             Check(low.Tension==tension,"Invalid or paused time advanced fight");
+            var manual=new PetScuffle();
+            Check(manual.TryStartManual() && !manual.TryStartManual(),"Manual start duplicated an active encounter");
+            manual.Advance(0,true,true,400,false,0,0); Check(manual.Phase==ScufflePhase.Approaching,"Paused approach advanced");
+            manual.Advance(.1f,true,true,50,false,0,0); Check(manual.Phase==ScufflePhase.Posture,"Manual approach did not reach posture");
+            int manualBites=0;
+            for(int i=0;i<40;i++) { manual.Advance(.1f,true,true,40,false,0,0); if(manual.BiteStarted) manualBites++; }
+            Check(manualBites==2 && manual.Phase==ScufflePhase.Cooldown && !manual.TryStartManual(),"Manual fight bypassed bounded bites/cooldown");
+            var unreachable=new PetScuffle(); unreachable.TryStartManual();
+            for(int i=0;i<210;i++) unreachable.Advance(.1f,true,true,500,false,0,0);
+            Check(!unreachable.Active && !string.IsNullOrEmpty(unreachable.Outcome),"Unreachable manual pair had no timeout feedback");
+            var cancelled=new PetScuffle(); cancelled.TryStartManual(); cancelled.Advance(.1f,true,false,100,false,0,0);
+            Check(!cancelled.Active,"Manual approach survived a grab/unavailable pet");
+            var status=new PetSocialStatus {state="Calm"}; var displayFight=new PetScuffle();
+            for(int i=0;i<20;i++) displayFight.Advance(.1f,true,true,40,true,1,0);
+            DesktopApp.UpdateSocialStatus(status,displayFight,"Other pet",true);
+            Check(status.active && status.state=="Posture" && status.rival=="Other pet","Indicator did not expose actual posture state");
+            DesktopApp.UpdateSocialStatus(status,new PetScuffle(),"Bystander",true);
+            Check(status.active && status.rival=="Other pet","Bystander overwrote active rivalry indicator");
+            displayFight.Interrupt(); status=new PetSocialStatus {state="Calm"};
+            DesktopApp.UpdateSocialStatus(status,displayFight,"Other pet",true);
+            Check(!status.active && status.state=="Cooldown","Indicator did not show interrupted fight cooldown");
             Debug.Log("MULTIPLE_PET_ROSTER_OWNERSHIP_RIVALRY_CHECK_PASSED");
         }
         public static void SharedFeeding(ReferenceContext context)
@@ -70,10 +91,41 @@ namespace CyanPreview.Editor
                     var config=DesktopPetConfiguration.From(new DesktopSettings {id="9320",sound=false,roam=false,jumps=false},"pet-"+i);
                     list.Add(new DesktopPet(context,root.transform,config,area,i));
                 }
-                food.Begin(); food.Place(Vector2.zero);
+                var hostSettings=(DesktopSettings)Get(host,"settings");
+                hostSettings.allowFighting=true; hostSettings.scuffleFirst="pet-0"; hostSettings.scuffleSecond="pet-0"; hostSettings.scuffleRequest=1;
+                Call(host,"ProcessScuffleRequest"); Check(Get(host,"manualPair")==null,"Host accepted same-pet fight");
+                hostSettings.scuffleSecond="missing"; hostSettings.scuffleRequest++;
+                Call(host,"ProcessScuffleRequest"); Check(Get(host,"manualPair")==null,"Host accepted removed selection");
+                hostSettings.scuffleSecond="pet-1"; hostSettings.paused=true; hostSettings.scuffleRequest++;
+                Call(host,"ProcessScuffleRequest"); Check(Get(host,"manualPair")==null,"Host accepted fight while paused");
+                hostSettings.paused=false; hostSettings.scuffleRequest++;
+                Call(host,"ProcessScuffleRequest"); var selectedPair=Get(host,"manualPair"); Check(selectedPair!=null,"Valid manual pair rejected");
+                Call(host,"ProcessScuffleRequest"); Check(Equals(selectedPair,Get(host,"manualPair")),"Polling replayed manual request");
+                hostSettings.scuffleRequest++; Call(host,"ProcessScuffleRequest"); Check(Equals(selectedPair,Get(host,"manualPair")),"Repeated button press replaced encounter");
+                Call(host,"AdvanceScuffles",.025f);
+                Check(!list[2].Motion.RivalTarget.HasValue,"Third pet joined selected manual pair");
+                hostSettings.paused=true; Call(host,"AdvanceScuffles",0f);
+                Check(Get(host,"manualPair")==null && list.All(p=>!p.Motion.RivalTarget.HasValue),"Pause did not cancel manual scuffle");
+                hostSettings.paused=false;
+                var encounters=(System.Collections.Generic.Dictionary<string,PetScuffle>)Get(host,"scuffles"); encounters.Clear();
+                list[0].Motion.BeginGrab(list[0].Motion.Position); hostSettings.scuffleRequest++;
+                Call(host,"ProcessScuffleRequest"); Check(Get(host,"manualPair")==null,"Held pet entered manual fight");
+                list[0].Motion.EndGrab(); hostSettings.scuffleRequest++;
+                Call(host,"ProcessScuffleRequest"); Check(Get(host,"manualPair")==null,"Airborne pet entered manual fight");
+                Call(list[0].Motion,"ChangeState",PetMotionState.Crawling);
+                hostSettings.scuffleRequest++; Call(host,"ProcessScuffleRequest"); Check(Get(host,"manualPair")!=null,"Pair failed to restart after cancellation");
+                // SyncPets clears encounters whenever a participant is removed or rebuilt.
+                encounters.Clear(); Call(host,"AdvanceScuffles",.025f);
+                Check(Get(host,"manualPair")==null && ((string)Get(host,"manualMessage")).Contains("removed"),"Roster change left manual encounter pending");
+                hostSettings.allowFighting=false; encounters.Clear();
+                food.Begin(); food.Place(new Vector2(300,0));
                 for(int i=0;i<60;i++) Call(host,"AdvanceFeeding",.1f);
-                foreach(var p in list) p.Motion.ShiftWithSurface(-p.Motion.Position);
+                foreach(var p in list) p.Motion.ShiftWithSurface(p.Local(food.Position)-p.Motion.Position);
+                foreach(var follower in list.Skip(1)) { follower.Config.jumps=true; Call(follower.Motion,"BeginJump",new Vector2(400,200),.5f); }
                 Call(host,"AdvanceFeeding",.025f);
+                Check(list.Skip(1).All(p=>p.Motion.State==PetMotionState.Crawling && !p.Motion.AutonomousJumps),"Pickup retained follower charge or jump permission");
+                foreach(var follower in list.Skip(1)) follower.Configure(follower.Config,false);
+                Check(list.Skip(1).All(p=>!p.Motion.AutonomousJumps),"Settings refresh re-enabled follower jumps");
                 Check(food.Owner==FoodOwner.Pet && list.Count(p=>p.Feeding.Stage==FeedingStage.Carrying)==1,"Host granted two mouth holders");
                 var carrier=list.Find(p=>p.Config.key==food.Holder);
                 carrier.Motion.BeginGrab(carrier.Motion.Position);
@@ -85,6 +137,7 @@ namespace CyanPreview.Editor
                 for(int i=0;i<70;i++) Call(host,"AdvanceFeeding",.1f);
                 Check(food.Owner==FoodOwner.Cursor && list.All(p=>p.Feeding.Stage!=FeedingStage.Carrying),"Host let pet steal cursor food");
                 food.Drop(Vector2.zero);
+                foreach(var p in list) p.Motion.ShiftWithSurface(-p.Motion.Position);
                 for(int i=0;i<60;i++) Call(host,"AdvanceFeeding",.1f);
                 Check(food.Owner==FoodOwner.Pet,"Dropped morsel not picked up");
                 carrier=list.Find(p=>p.Config.key==food.Holder);
@@ -93,6 +146,13 @@ namespace CyanPreview.Editor
                 for(int i=0;i<400 && food.Owner==FoodOwner.Pet;i++) { carrier.Advance(.025f,false); Call(host,"AdvanceFeeding",.025f); }
                 Check(food.Owner==FoodOwner.Den,"Den entry did not commit ownership");
                 Check(list.Where(p=>p!=carrier).All(p=>!p.FollowingFood && !p.Feeding.Active && !p.Motion.Behavior.TaskTarget.HasValue),"Rivals pursued food into den");
+                var followerAfterDen=list.First(p=>p!=carrier);
+                Call(followerAfterDen.Motion,"BeginJump",new Vector2(400,200),.5f);
+                Call(host,"ResetInterest",followerAfterDen);
+                Check(followerAfterDen.Motion.State==PetMotionState.Crawling,"Pursuit cancellation left a pending charge");
+                followerAfterDen.Motion.BeginGrab(followerAfterDen.Motion.Position); followerAfterDen.Motion.EndGrab();
+                Call(host,"ResetInterest",followerAfterDen);
+                Check(followerAfterDen.Motion.State==PetMotionState.Airborne,"Cancelling pursuit snapped an airborne pet to ground");
                 food.Cancel();
                 Call(host,"BeginFeeding"); Check(food.Owner==FoodOwner.None,"New placement interrupted returning pet");
                 Debug.Log("MULTIPLE_PET_SHARED_FEEDING_HOST_CHECK_PASSED");

@@ -18,7 +18,8 @@ namespace CyanPreview
         public const float DefaultScale = 1.2f;
         public float scale = DefaultScale;
         public bool sound = true;
-        public int vocalizeRequest, feedRequest, cancelFeedRequest;
+        public int vocalizeRequest, feedRequest, cancelFeedRequest, scuffleRequest;
+        public string scuffleFirst, scuffleSecond;
         public bool paused;
         public bool allowFighting;
         public DesktopPetConfiguration[] pets;
@@ -71,6 +72,12 @@ namespace CyanPreview
         string previous;
         bool stopping;
         public string FeedingStatus { get { try { return File.Exists(file+".feeding")?File.ReadAllText(file+".feeding"):""; } catch(IOException) { return ""; } } }
+        public DesktopSocialStatus ReadSocialStatus()
+        {
+            try { return Active && File.Exists(file+".social") ? JsonUtility.FromJson<DesktopSocialStatus>(File.ReadAllText(file+".social")) : null; }
+            catch(IOException) { return null; }
+            catch(ArgumentException) { return null; }
+        }
         public bool Active => process != null && !process.HasExited;
         public void UpdateSettings(DesktopSettings settings)
         {
@@ -155,7 +162,7 @@ namespace CyanPreview
                 cameraView.orthographic=true; cameraView.clearFlags=CameraClearFlags.SolidColor; cameraView.enabled=false;
                 cameraView.backgroundColor=Color.clear; cameraView.transform.position=new Vector3(0,0,-10);
                 Screen.SetResolution((int)native.WorkArea.width,(int)native.WorkArea.height,FullScreenMode.Windowed);
-                context=new ReferenceContext(settings.cache); foodView=new FoodMorselView(transform); SyncPets(false);
+                context=new ReferenceContext(settings.cache); foodView=new FoodMorselView(transform); SyncPets(false); handledScuffleRequest=settings.scuffleRequest;
             }
             catch(Exception e) { Debug.LogException(e); Application.Quit(); yield break; }
             yield return null; yield return null;
@@ -235,11 +242,11 @@ namespace CyanPreview
                     if(next.paused!=settings.paused) { CancelPointer(); native.ClearButtonEvents(); }
                     settings=next; bool resized=native.RefreshWorkArea();
                     if(resized) Screen.SetResolution((int)native.WorkArea.width,(int)native.WorkArea.height,FullScreenMode.Windowed);
-                    SyncPets(resized);
+                    SyncPets(resized); ProcessScuffleRequest();
                     if(cancel) CancelFeeding(); else if(feed && !settings.paused) BeginFeeding();
                     if(vocalize && !settings.paused && pets.Count>0) pets[0].Audio?.Vocalize();
                 }
-                if(settings.paused) { native.ClearButtonEvents(); native.SetClickThrough(true); RefreshWindows(); DrawFrame(0,true); return; }
+                if(settings.paused) { AdvanceScuffles(0); native.ClearButtonEvents(); native.SetClickThrough(true); RefreshWindows(); DrawFrame(0,true); return; }
                 var point=World(native.Cursor);
                 foreach(var p in pets) if(!p.Feeding.Frozen) p.Motion.ObserveCursor(p.Local(point));
                 if(food.Owner==FoodOwner.Placing) { PlaceFoodInput(point); RefreshWindows(); DrawFrame(dt,false); return; }

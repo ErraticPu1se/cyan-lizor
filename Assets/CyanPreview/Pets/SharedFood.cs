@@ -25,16 +25,23 @@ namespace CyanPreview
         { if(Holder!=pet) return; if(Owner==FoodOwner.Pet) Drop(drop); else Cancel(); }
         public void Cancel() { Owner=FoodOwner.None; Holder=null; Revision++; }
     }
-    public enum ScufflePhase { Calm, Posture, Bite, Recoil, Cooldown }
+    public enum ScufflePhase { Calm, Posture, Bite, Recoil, Cooldown, Approaching }
     // Pair-local tension and bounded, non-lethal encounters. No damage/health API exists here.
     public sealed class PetScuffle
     {
         public ScufflePhase Phase { get; private set; }
         public float Tension { get; private set; }
-        public bool Active => Phase==ScufflePhase.Posture || Phase==ScufflePhase.Bite || Phase==ScufflePhase.Recoil;
+        public bool Active => Phase==ScufflePhase.Approaching || Phase==ScufflePhase.Posture || Phase==ScufflePhase.Bite || Phase==ScufflePhase.Recoil;
         public bool BiteStarted { get; private set; }
         public bool RecoilStarted { get; private set; }
         float remaining; int exchanges;
+        public string Outcome { get; private set; }
+        public bool TryStartManual()
+        {
+            if(Active || Phase==ScufflePhase.Cooldown) return false;
+            Phase=ScufflePhase.Approaching; remaining=20; exchanges=0; Tension=1; Outcome=null;
+            BiteStarted=RecoilStarted=false; return true;
+        }
         public void Interrupt() { Phase=ScufflePhase.Cooldown; remaining=8; Tension=0; BiteStarted=RecoilStarted=false; }
         public void Advance(float seconds,bool allowed,bool eligible,float distance,bool competing,float aggression,float dominanceDifference)
         {
@@ -47,6 +54,13 @@ namespace CyanPreview
             {
                 Tension=Mathf.Clamp01(Tension+(distance<160?(competing?.35f:.035f)*Mathf.Lerp(.4f,1.6f,Mathf.Clamp01(aggression)):-.2f)*dt);
                 if(Tension>=1) { Phase=ScufflePhase.Posture; remaining=.9f; exchanges=0; }
+                return;
+            }
+            if(Phase==ScufflePhase.Approaching)
+            {
+                remaining-=dt;
+                if(distance<=60) { Phase=ScufflePhase.Posture; remaining=.9f; }
+                else if(remaining<=0) { Interrupt(); Outcome="Could not reach each other. Move them closer and retry after cooldown."; }
                 return;
             }
             if(distance>260) { Interrupt(); return; }
