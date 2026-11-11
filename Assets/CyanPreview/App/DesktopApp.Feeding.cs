@@ -52,7 +52,10 @@ namespace CyanPreview
         }
         void ResetInterest(DesktopPet p)
         {
-            p.Feeding.Cancel(); p.FollowingFood=false; p.Motion.BeginIdleHold(); p.Motion.Behavior.TaskTarget=null;
+            p.Feeding.Cancel(); p.FollowingFood=false;
+            // Clearing food interest must not reset an active rival's movement or posture.
+            if(p.Motion.RivalTarget.HasValue) return;
+            p.Motion.BeginIdleHold(); p.Motion.Behavior.TaskTarget=null;
             p.Motion.Behavior.HoldPosition=false; p.Motion.Behavior.Rest();
         }
         void AdvanceFeeding(float dt)
@@ -64,6 +67,12 @@ namespace CyanPreview
                 if(food.Holder==key && food.Owner==FoodOwner.Pet && m.State==PetMotionState.Grabbed)
                 { food.Drop(Clamp(p.WorldMouth)); ResetInterest(p); }
                 bool owner=food.Holder==key;
+                if(!owner && m.RivalTarget.HasValue && !f.UsingRoute)
+                {
+                    f.Cancel(); p.FoodRevision=-1; p.FollowingFood=food.Owner==FoodOwner.Pet || food.Owner==FoodOwner.Cursor;
+                    m.AutonomousJumps=false;
+                    continue;
+                }
                 if(!owner && !f.UsingRoute)
                 {
                     if(food.Available)

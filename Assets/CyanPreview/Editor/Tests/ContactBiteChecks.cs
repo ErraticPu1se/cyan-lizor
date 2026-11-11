@@ -110,6 +110,38 @@ namespace CyanPreview.Editor
                 food.Drop(Vector2.zero); food.Take("a"); Call(host,"ApplyBite",a,b,BiteDecision.Hit,2); Check(food.Holder=="a","Victim hit dropped another pet's food");
                 food.Drop(Vector2.zero); food.Take("b"); food.EnterDen("b"); Call(host,"ApplyBite",a,b,BiteDecision.Hit,2); Check(food.Owner==FoodOwner.Den,"Bite dropped committed den food");
                 foreach(var pet in pets) for(int i=0;i<3;i++) Check(!float.IsNaN(pet.Motion.BodyPosition(i).x) && !float.IsInfinity(pet.Motion.BodyVelocity(i).y),"Non-finite body after contacts");
+                // A carrier's pickup must not reset the other pet's active combat task.
+                food.Cancel(); a.Feeding.Cancel(); b.Feeding.Cancel();
+                a.Motion.RivalTarget=new Vector2(200,50);
+                a.Motion.Behavior.TaskTarget=a.Motion.RivalTarget; a.Motion.Behavior.HoldPosition=true;
+                a.Motion.VoiceIntensity=.23f;
+                a.Bite.Cancel(); a.Bite.Advance(.025f,true,true,true,false);
+                float jawBeforePickup=a.Bite.Jaw;
+                Call(host,"ResetInterest",a);
+                Check(a.Motion.Behavior.TaskTarget==a.Motion.RivalTarget && a.Motion.Behavior.HoldPosition,"Pickup cleanup reset rival movement");
+                b.Motion.RivalTarget=null;
+                b.Feeding.Begin(); b.Feeding.Place(b.Motion.Position,b.Surfaces.Bounds,b.Motion.HeadToTailLength);
+                food.Begin(); food.Place(b.WorldPosition);
+                a.FoodRevision=b.FoodRevision=food.Revision;
+                Call(host,"AdvanceFeeding",.025f);
+                Check(food.Holder=="b","Pickup isolation fixture did not acquire food");
+                Check(a.Motion.Behavior.TaskTarget==a.Motion.RivalTarget && a.Motion.Behavior.HoldPosition && a.Bite.Jaw==jawBeforePickup,"Carrier pickup interrupted rival bite preparation");
+                Call(host,"AdvanceFeeding",.025f);
+                Check(a.Motion.Behavior.TaskTarget==a.Motion.RivalTarget && a.Motion.VoiceIntensity==.23f,"Food follower overwrote combat or voice state");
+                a.Audio.Enabled=true; b.Audio.Enabled=true;
+                var otherVoice=Get(a.Audio,"voice"); var otherClip=Get(otherVoice,"clip");
+                float otherCooldown=(float)Get(a.Audio,"affectionCooldown");
+                Check(!ReferenceEquals(otherVoice,Get(b.Audio,"voice")) && !ReferenceEquals(a.Pet.Graphics,b.Pet.Graphics),"Pets share playback or graphics state");
+                Check(b.Audio.FoodPickupCall(),"Carrier affection fixture did not play");
+                Check(ReferenceEquals(otherClip,Get(otherVoice,"clip")) && (float)Get(a.Audio,"affectionCooldown")==otherCooldown && a.Motion.VoiceIntensity==.23f,"Carrier affection leaked into rival");
+                a.Audio.Enabled=false; b.Audio.Enabled=false;
+                a.Motion.RivalTarget=null;
+                Call(host,"AdvanceFeeding",.025f);
+                Check(a.FollowingFood && a.Motion.Behavior.TaskTarget.HasValue,"Food following did not resume after combat ended");
+                food.Drop(new Vector2(area.xMax-100,area.yMax-100));
+                Call(host,"AdvanceFeeding",.025f);
+                Check(a.Feeding.Active,"Combat cancellation prevented fresh loose-food interest");
+                a.Feeding.Cancel(); b.Feeding.Cancel();
                 // Exercise the real motion loop: preparation must produce a physical lunge.
                 food.Cancel(); a.Bite.Cancel();
                 Pose(a,Vector2.zero,new Vector2(-17,0),new Vector2(-34,0));
