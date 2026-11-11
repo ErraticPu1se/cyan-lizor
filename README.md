@@ -88,8 +88,10 @@ Right-clicks outside the lizard remain available to other applications. Naturall
 ## Planned additions
 
 - Feeding
-- Multiple simultaneous pets (they might fight with each other)
+- Multiple simultaneous pets (they might fight with each other) and store presets
 - Additional lizard species
+- white lizard camo with background
+- lizard spit might propel the cursor?
 
 They are planned. They are not present in this preview.
 
