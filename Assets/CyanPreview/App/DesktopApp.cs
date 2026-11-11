@@ -132,7 +132,7 @@ namespace CyanPreview
                 if (index < 0 || index + 1 >= args.Length) throw new InvalidDataException("Desktop settings argument missing.");
                 settingsFile = args[index + 1]; settings = LoadSettings();
                 native = new WindowsDesktop(settings.controllerPid);
-                QualitySettings.antiAliasing = 0; Application.runInBackground = true; Application.targetFrameRate = 60;
+                QualitySettings.antiAliasing = 0; Application.runInBackground = true; QualitySettings.vSyncCount = 0; Application.targetFrameRate = 60;
                 cameraView = new GameObject("Desktop camera").AddComponent<Camera>();
                 cameraView.gameObject.AddComponent<AudioListener>();
                 cameraView.orthographic = true; cameraView.clearFlags = CameraClearFlags.SolidColor;
@@ -256,13 +256,18 @@ namespace CyanPreview
                 AdvanceHold(point, unchecked((uint)Environment.TickCount));
                 // The native button callback owns pet presses; other application drags pass through.
                 native.SetClickThrough(!input.CapturesPointer && (buttonHeld || !motion.Contains(point)));
-                RefreshWindows();
+                using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Windows)) RefreshWindows();
                 if (input.Hover(point, Time.unscaledDeltaTime, buttonHeld, petAudio != null && petAudio.CanPettingCall)) petAudio.PettingCall();
-                petAudio?.Advance(Time.unscaledDeltaTime);
-                motion.Advance(Time.unscaledDeltaTime);
-                jumpEffects.Advance(Time.unscaledDeltaTime);
-                pet.Draw(motion.Interpolation); view.Refresh(pet);
-                desktopRenderer.Render(native.WorkArea, settings.scale);
+                using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Frame))
+                {
+                    petAudio?.Advance(Time.unscaledDeltaTime);
+                    using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Motion)) motion.Advance(Time.unscaledDeltaTime);
+                    using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Effects)) jumpEffects.Advance(Time.unscaledDeltaTime);
+                    using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Draw)) pet.Draw(motion.Interpolation);
+                    using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Mesh)) view.Refresh(pet);
+                    desktopRenderer.Render(native.WorkArea, settings.scale);
+                }
+                DesktopFrameProfile.EndFrame();
             }
             catch (Exception e) { Debug.LogException(e); Application.Quit(); }
         }

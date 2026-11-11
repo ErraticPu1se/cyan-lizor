@@ -1,5 +1,7 @@
 using System;
 using System.ComponentModel;
+using System.Collections.Generic;
+using Unity.Collections;
 using System.Runtime.InteropServices;
 using UnityEngine;
 using static CyanPreview.ReferenceContext;
@@ -30,6 +32,7 @@ namespace CyanPreview
         RenderTexture target;
         Texture2D capture;
         byte[] bytes;
+        readonly List<Renderer> renderers = new List<Renderer>();
         bool disposed;
         public DesktopAlphaRenderer(IntPtr window, Camera camera, Transform root)
         {
@@ -50,9 +53,9 @@ namespace CyanPreview
             int height = Mathf.Min((int)workArea.height, Mathf.CeilToInt((bottom - top) / 32f) * 32);
             return new RectInt(Mathf.Min(left, (int)workArea.xMax - width), Mathf.Min(top, (int)workArea.yMax - height), width, height);
         }
-        public static void PackPixels(Color32[] source, byte[] destination, int width, int height)
+        public static void PackPixels(NativeArray<Color32> source, byte[] destination, int width, int height)
         {
-            if (width <= 0 || height <= 0 || source.Length != checked(width * height) || destination.Length != checked(source.Length * 4))
+            if (!source.IsCreated || destination == null || width <= 0 || height <= 0 || source.Length != checked(width * height) || destination.Length != checked(source.Length * 4))
                 throw new ArgumentException("Invalid desktop pixel buffer dimensions.");
             for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
@@ -62,17 +65,40 @@ namespace CyanPreview
                 destination[offset + 2] = Math.Min(p.r, p.a); destination[offset + 3] = p.a;
             }
         }
+        public static bool VisibleBounds(Transform root, List<Renderer> renderers, out Bounds bounds, Rect? viewport = null)
+        {
+            bounds = default; bool found = false;
+            root.GetComponentsInChildren(false, renderers);
+            foreach (var renderer in renderers)
+            {
+                if (!renderer.enabled) continue;
+                if (renderer is MeshRenderer && renderer.TryGetComponent<MeshFilter>(out var filter)
+                    && (filter.sharedMesh == null || filter.sharedMesh.vertexCount == 0)) continue;
+                var current = renderer.bounds;
+                // Empty particle meshes have zero bounds at the scene origin, not at the pet.
+                if (current.size.x <= 0 || current.size.y <= 0) continue;
+                if (viewport.HasValue)
+                {
+                    // Rain World also hides some sprites by moving them far off-screen.
+                    // Clip each renderer before union, otherwise that hidden sprite inflates the whole crop.
+                    var area = viewport.Value;
+                    float left=Mathf.Max(current.min.x,area.xMin), right=Mathf.Min(current.max.x,area.xMax);
+                    float bottom=Mathf.Max(current.min.y,area.yMin), top=Mathf.Min(current.max.y,area.yMax);
+                    if (right<=left || top<=bottom) continue;
+                    current.SetMinMax(new Vector3(left,bottom,current.min.z),new Vector3(right,top,current.max.z));
+                }
+                if (!found) { bounds = current; found = true; } else bounds.Encapsulate(current);
+            }
+            return found;
+        }
         public void Render(Rect workArea, float scale)
         {
             if (disposed) return;
-            Bounds bounds = default; bool found = false;
-            foreach (var renderer in root.GetComponentsInChildren<Renderer>())
-            {
-                if (!renderer.enabled) continue;
-                if (!found) { bounds = renderer.bounds; found = true; } else bounds.Encapsulate(renderer.bounds);
-            }
+            Bounds bounds; bool found;
+            using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Bounds)) found = VisibleBounds(root, renderers, out bounds, DesktopCoordinates.ToWorld(workArea, workArea, scale));
             var rect = found ? CaptureRect(bounds, workArea, scale) : new RectInt((int)workArea.x, (int)workArea.y, 1, 1);
-            EnsureSize(rect.width, rect.height);
+            DesktopFrameProfile.Pixels(rect.width * rect.height);
+            using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Buffers)) EnsureSize(rect.width, rect.height);
             var center = DesktopCoordinates.ToWorld(rect.center, workArea, scale);
             camera.transform.position = new Vector3(center.x, center.y, -10);
             camera.orthographicSize = rect.height / (2f * scale); camera.aspect = rect.width / (float)rect.height;
@@ -80,20 +106,25 @@ namespace CyanPreview
             var active = RenderTexture.active;
             try
             {
-                camera.Render(); RenderTexture.active = target;
-                capture.ReadPixels(new Rect(0, 0, rect.width, rect.height), 0, 0, false);
-                PackPixels(capture.GetPixels32(), bytes, rect.width, rect.height);
+                using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Camera)) camera.Render();
+                RenderTexture.active = target;
+                using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Readback)) capture.ReadPixels(new Rect(0, 0, rect.width, rect.height), 0, 0, false);
+                using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Pack)) PackPixels(capture.GetRawTextureData<Color32>(), bytes, rect.width, rect.height);
             }
             finally { RenderTexture.active = active; }
-            Marshal.Copy(bytes, 0, pixels, bytes.Length);
-            var destination = new Point { X = rect.x, Y = rect.y }; var size = new Point { X = rect.width, Y = rect.height };
-            var source = new Point(); var blend = new Blend { Alpha = 255, Format = 1 };
-            if (!UpdateLayeredWindow(window, IntPtr.Zero, ref destination, ref size, dc, ref source, 0, ref blend, 2))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot present the desktop alpha surface.");
+            using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Present))
+            {
+                Marshal.Copy(bytes, 0, pixels, bytes.Length);
+                var destination = new Point { X = rect.x, Y = rect.y }; var size = new Point { X = rect.width, Y = rect.height };
+                var source = new Point(); var blend = new Blend { Alpha = 255, Format = 1 };
+                if (!UpdateLayeredWindow(window, IntPtr.Zero, ref destination, ref size, dc, ref source, 0, ref blend, 2))
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot present the desktop alpha surface.");
+            }
         }
         void EnsureSize(int width, int height)
         {
             if (target != null && target.width == width && target.height == height) return;
+            DesktopFrameProfile.Resize();
             ReleaseBuffers();
             target = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear) { antiAliasing = 1 };
             capture = new Texture2D(width, height, TextureFormat.RGBA32, false, true); bytes = new byte[checked(width * height * 4)];

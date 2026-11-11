@@ -21,6 +21,7 @@ namespace CyanPreview
         readonly List<Particle> particles = new List<Particle>();
         readonly GameObject root;
         readonly Mesh mesh;
+        readonly MeshRenderer renderer;
         readonly Material material;
         bool disposed;
         public int ParticleCount => particles.Count;
@@ -32,7 +33,7 @@ namespace CyanPreview
             mesh = new Mesh { name = "Cyan jump particles" }; mesh.MarkDynamic();
             root.AddComponent<MeshFilter>().sharedMesh = mesh;
             material = new Material(Shader.Find("CyanPreview/JumpParticle"));
-            var renderer = root.AddComponent<MeshRenderer>(); renderer.sharedMaterial = material; renderer.sortingOrder = 1000;
+            renderer = root.AddComponent<MeshRenderer>(); renderer.enabled = false; renderer.sharedMaterial = material; renderer.sortingOrder = 1000;
             motion.JumpLaunched += Burst; motion.JumpSmoke += Trail;
         }
         float Next() => (float)random.NextDouble();
@@ -77,6 +78,8 @@ namespace CyanPreview
                 p.Velocity *= Mathf.Pow(Mathf.Clamp(.7f + .3f / Mathf.Sqrt(Mathf.Max(1, p.Velocity.magnitude)), .7f, 1), dt * 40);
                 particles[i] = p;
             }
+            renderer.enabled = particles.Count > 0;
+            if (particles.Count == 0) { if (mesh.vertexCount > 0) mesh.Clear(); return; }
             var vertices = new List<Vector3>(); var uv = new List<Vector3>(); var colors = new List<Color>(); var triangles = new List<int>();
             foreach (var p in particles)
             {

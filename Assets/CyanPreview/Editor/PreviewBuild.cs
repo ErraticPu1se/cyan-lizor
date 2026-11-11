@@ -130,6 +130,7 @@ namespace CyanPreview.Editor
                 CompanionChecks.Run(context);
                 TargetingChecks.Run(context);
                 DesktopEffectsChecks.Run(context);
+                RenderOptimizationChecks.Run(context);
                 InteractionUpgradeChecks.Run(context);
                 LandingRecoveryChecks.Run(context);
                 JumpEffectChecks.Run(context);

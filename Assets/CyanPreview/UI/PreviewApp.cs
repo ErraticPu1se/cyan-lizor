@@ -44,7 +44,7 @@ namespace CyanPreview
         }
         void Start()
         {
-            Application.targetFrameRate=60;
+            QualitySettings.vSyncCount=0; Application.targetFrameRate=60;
             if (!Application.isEditor)
                 Screen.SetResolution(Mathf.Min(540,Display.main.systemWidth),Mathf.Min(900,Display.main.systemHeight-80),FullScreenMode.Windowed);
             var backgroundCamera=new GameObject("Background camera").AddComponent<Camera>();
