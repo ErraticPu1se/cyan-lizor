@@ -138,6 +138,7 @@ namespace CyanPreview.Editor
                 DesktopEffectsChecks.Run(context);
                 MultiplePetChecks.Motion(context);
                 MultiplePetChecks.SharedFeeding(context);
+                MultiplePetChecks.CarrierCompetition(context);
                 ContactBiteChecks.Run(context);
                 PickupDiagnosticsChecks.Run(context);
                 RenderOptimizationChecks.Run(context);

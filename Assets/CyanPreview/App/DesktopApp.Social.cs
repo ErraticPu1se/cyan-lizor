@@ -42,12 +42,12 @@ namespace CyanPreview
             b.Motion.BeginIdleHold(); b.Motion.Behavior.HoldPosition=false;
             manualPair=key; manualMessage="Approaching: "+a.Config.name+" and "+b.Config.name;
         }
-        bool CanRemainInScuffle(DesktopPet pet)
+        bool CanRemainInScuffle(DesktopPet pet,bool carrierCompetition)
         {
             if(!PetContacts.Available(pet)) return false;
             if(pet.Motion.State==PetMotionState.Crawling) return true;
-            // The carrier remains a target during escape; this does not grant attack permission.
-            return food.Owner==FoodOwner.Pet && food.Holder==pet.Config.key
+            // Keep both pursuit intentions through flight; actual bites still require a grip.
+            return carrierCompetition
                 && (pet.Motion.State==PetMotionState.Charging || pet.Motion.State==PetMotionState.Airborne);
         }
         PetSocialStatus[] socialStates;
@@ -66,14 +66,15 @@ namespace CyanPreview
             {
                 var a=pets[i]; var b=pets[j]; string key=a.Config.key+"|"+b.Config.key;
                 if(!scuffles.TryGetValue(key,out var fight)) { fight=new PetScuffle(); scuffles.Add(key,fight); }
-                bool eligible=!settings.paused && (manualPair==null || key==manualPair || (!ManualMember(a) && !ManualMember(b))) && food.Owner!=FoodOwner.Placing && !a.Feeding.UsingRoute && !b.Feeding.UsingRoute
-                    && CanRemainInScuffle(a) && CanRemainInScuffle(b)
+                bool carrierCompetition=food.Owner==FoodOwner.Pet && (food.Holder==a.Config.key || food.Holder==b.Config.key);
+                bool eligible=(food.Owner!=FoodOwner.Pet || carrierCompetition || key==manualPair) && !settings.paused && (manualPair==null || key==manualPair || (!ManualMember(a) && !ManualMember(b))) && food.Owner!=FoodOwner.Placing && !a.Feeding.UsingRoute && !b.Feeding.UsingRoute
+                    && CanRemainInScuffle(a,carrierCompetition) && CanRemainInScuffle(b,carrierCompetition)
                     && !a.Input.CapturesPointer && !b.Input.CapturesPointer && !engaged.Contains(a.Config.key) && !engaged.Contains(b.Config.key);
                 float scale=(a.Config.scale+b.Config.scale)*.5f;
                 fight.Advance(dt,settings.allowFighting,eligible,Mathf.Min(Vector2.Distance(a.WorldPosition,PetContacts.TargetPoint(a,b)),Vector2.Distance(b.WorldPosition,PetContacts.TargetPoint(b,a)))/scale,
                     food.Owner==FoodOwner.Pet || food.Owner==FoodOwner.Loose,
                     (a.Pet.Personality.Aggression+b.Pet.Personality.Aggression)*.5f,
-                    Mathf.Abs(a.Pet.Personality.Dominance-b.Pet.Personality.Dominance));
+                    Mathf.Abs(a.Pet.Personality.Dominance-b.Pet.Personality.Dominance),carrierCompetition);
                 if(key==manualPair && fight.Active) manualMessage="Test scuffle: "+fight.Phase;
                 if(key==manualPair && !fight.Active)
                 {
@@ -141,7 +142,8 @@ namespace CyanPreview
             pet.Motion.RivalRecovering=pet.Bite.Recovering;
             pet.Motion.RivalStance=pet.Bite.Threatening && !pursuingCarrier;
             pet.Motion.Behavior.HoldPosition=pet.Bite.Recovering || pet.Bite.Lunging || (!pursuingCarrier && (pet.Bite.Threatening || contact));
-            pet.Motion.Behavior.TaskTarget=target; pet.Motion.AutonomousJumps=false;
+            pet.Motion.Behavior.TaskTarget=target;
+            pet.Motion.AutonomousJumps=pursuingCarrier && pet.Config.jumps && !pet.Motion.Behavior.HoldPosition;
         }
         void ApplyBite(DesktopPet attacker,DesktopPet defender,BiteDecision decision,int contact)
         {

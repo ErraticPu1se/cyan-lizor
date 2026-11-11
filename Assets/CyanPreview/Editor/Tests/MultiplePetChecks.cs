@@ -73,7 +73,96 @@ namespace CyanPreview.Editor
             displayFight.Interrupt(); status=new PetSocialStatus {state="Calm"};
             DesktopApp.UpdateSocialStatus(status,displayFight,"Other pet",true);
             Check(!status.active && status.state=="Cooldown","Indicator did not show interrupted fight cooldown");
+            var pursuit=new PetScuffle();
+            pursuit.Advance(0,true,true,100,true,1,0,true);
+            pursuit.Advance(float.NaN,true,true,100,true,1,0,true);
+            pursuit.Advance(.025f,false,true,100,true,1,0,true);
+            pursuit.Advance(.025f,true,false,100,true,1,0,true);
+            Check(!pursuit.Active,"Invalid, disabled or unavailable carrier chase started");
+            pursuit.Advance(.025f,true,true,300,true,0,0,true);
+            Check(pursuit.Active,"Food carrier still waited for tension buildup");
+            pursuit.Interrupt(); pursuit.Advance(.025f,true,true,30,true,1,0,true);
+            Check(!pursuit.Active,"Food competition bypassed combat cooldown");
             Debug.Log("MULTIPLE_PET_ROSTER_OWNERSHIP_RIVALRY_CHECK_PASSED");
+        }
+        public static void CarrierCompetition(ReferenceContext context)
+        {
+            var root=new GameObject("Automatic carrier competition");
+            var host=root.AddComponent<DesktopApp>();
+            var native=new WindowsDesktop(System.Diagnostics.Process.GetCurrentProcess().Id);
+            var area=new Rect(-native.WorkArea.width/2,-native.WorkArea.height/2,native.WorkArea.width,native.WorkArea.height);
+            var settings=new DesktopSettings {allowFighting=true};
+            Set(host,"native",native); Set(host,"settings",settings);
+            var pets=(System.Collections.Generic.List<DesktopPet>)Get(host,"pets");
+            var food=(SharedFood)Get(host,"food");
+            var pairs=(System.Collections.Generic.Dictionary<string,PetScuffle>)Get(host,"scuffles");
+            try
+            {
+                for(int i=0;i<3;i++)
+                {
+                    var config=DesktopPetConfiguration.From(new DesktopSettings {id="9320",scale=1,sound=false,roam=false,jumps=true},"chase-"+i);
+                    var pet=new DesktopPet(context,root.transform,config,area,i); pets.Add(pet);
+                    pet.Motion.ShiftWithSurface(new Vector2(-200+i*200,0)-pet.Motion.Position);
+                }
+                var challenger=pets[0]; var carrier=pets[2];
+                food.Begin(); food.Place(carrier.WorldPosition);
+                foreach(var pet in pets) pet.FoodRevision=food.Revision;
+                carrier.Feeding.Begin(); carrier.Feeding.Place(carrier.Motion.Position,carrier.Surfaces.Bounds);
+                Call(challenger.Motion,"BeginJump",carrier.Motion.Position,.5f);
+                Call(host,"AdvanceFeeding",.025f);
+                Check(food.Holder==carrier.Config.key,"Automatic competition pickup fixture failed");
+                Check(challenger.Motion.State==PetMotionState.Charging,"Pickup cancelled challenger charge");
+                Call(host,"AdvanceScuffles",.025f);
+                Check(challenger.Motion.RivalTarget.HasValue,"Pickup did not immediately start automatic carrier pursuit");
+                Check(!pets[1].Motion.RivalTarget.HasValue,"Non-carrier pair stole food rivalry priority");
+                foreach(var attackerState in new[]{PetMotionState.Charging,PetMotionState.Airborne,PetMotionState.Crawling})
+                    foreach(var carrierState in new[]{PetMotionState.Charging,PetMotionState.Airborne,PetMotionState.Crawling})
+                    {
+                        Call(challenger.Motion,"ChangeState",attackerState); Call(carrier.Motion,"ChangeState",carrierState);
+                        carrier.Motion.ShiftWithSurface(Vector2.right*3);
+                        Call(host,"AdvanceFeeding",.025f); Call(host,"AdvanceScuffles",.025f);
+                        Check(challenger.Motion.RivalTarget.HasValue && challenger.Motion.Behavior.TaskTarget==challenger.Local(PetContacts.TargetPoint(challenger,carrier)),"Flight transition lost moving body target");
+                        Check(!challenger.Motion.Behavior.HoldPosition && challenger.Motion.AutonomousJumps,"Pursuit was held or jump preference disabled");
+                        Check(carrier.Motion.Behavior.TaskTarget==carrier.Feeding.Target && !carrier.Motion.RivalTarget.HasValue,"Chase overwrote carrier escape route");
+                        Check(!carrier.Bite.Lunging && !carrier.Motion.RivalBiting,"Food carrier attacked");
+                    }
+                // The production social/feeding/motion sequence must actually advance a grounded challenger.
+                challenger.Config.jumps=false;
+                var start=challenger.WorldPosition;
+                for(int i=0;i<100;i++)
+                {
+                    Call(host,"AdvanceFeeding",.025f); Call(host,"AdvanceScuffles",.025f);
+                    challenger.Advance(.025f,false);
+                }
+                Check(Vector2.Distance(challenger.WorldPosition,carrier.WorldPosition)<Vector2.Distance(start,carrier.WorldPosition)-20,"Automatic chase exposed a target without approaching it");
+                Check(!challenger.Motion.AutonomousJumps,"Chase ignored disabled jumping");
+                settings.allowFighting=false; Call(host,"AdvanceScuffles",.025f); Call(host,"AdvanceFeeding",.025f);
+                Check(pets.All(p=>!p.Motion.RivalTarget.HasValue) && challenger.FollowingFood,"Fighting off did not restore peaceful food following");
+                settings.allowFighting=true; pairs.Clear(); Call(host,"AdvanceScuffles",.025f);
+                challenger.Motion.BeginGrab(challenger.Motion.Position); Call(host,"AdvanceScuffles",.025f);
+                Check(!challenger.Motion.RivalTarget.HasValue,"Grabbed challenger retained combat");
+                challenger.Motion.EndGrab(); pairs.Clear();
+                settings.paused=true; Call(host,"AdvanceScuffles",0f);
+                Check(pets.All(p=>!p.Motion.RivalTarget.HasValue),"Paused pets pursued food");
+                settings.paused=false; Call(host,"AdvanceScuffles",.025f);
+                food.EnterDen(carrier.Config.key); carrier.Feeding.Cancel();
+                // Den route makes the carrier unavailable even while still partially visible.
+                carrier.Feeding.Begin(); carrier.Feeding.Place(carrier.Motion.Position,carrier.Surfaces.Bounds);
+                carrier.Feeding.Advance(.025f,carrier.Motion.Position,carrier.Motion.MouthPosition,false,carrier.Surfaces.Bounds);
+                carrier.Feeding.Advance(.025f,carrier.Feeding.Entrance,carrier.Motion.MouthPosition,false,carrier.Surfaces.Bounds);
+                Call(host,"AdvanceScuffles",.025f); Call(host,"AdvanceFeeding",.025f);
+                Check(pets.Take(2).All(p=>!p.Motion.RivalTarget.HasValue && !p.Motion.Behavior.TaskTarget.HasValue),"Challengers followed carrier into den");
+                food.Cancel(); carrier.Feeding.Cancel(); pairs.Clear();
+                food.Begin(); food.Place(carrier.WorldPosition); food.TakeCursor();
+                Call(host,"AdvanceScuffles",.025f);
+                Check(pets.All(p=>!p.Motion.RivalTarget.HasValue),"Cursor-held food started carrier attack");
+                food.Drop(carrier.WorldPosition); food.Take(carrier.Config.key); pairs.Clear();
+                food.Remove(carrier.Config.key,carrier.WorldPosition); pets.Remove(carrier); carrier.Dispose();
+                Call(host,"AdvanceScuffles",.025f);
+                Check(pets.All(p=>!p.Motion.RivalTarget.HasValue) && food.Available,"Removed carrier stranded combat or food");
+                Debug.Log("AUTOMATIC_FOOD_CARRIER_CHASE_FLIGHT_TRANSITIONS_CHECK_PASSED");
+            }
+            finally { foreach(var pet in pets) pet.Dispose(); pets.Clear(); native.Dispose(); UnityEngine.Object.DestroyImmediate(root); }
         }
         public static void SharedFeeding(ReferenceContext context)
         {

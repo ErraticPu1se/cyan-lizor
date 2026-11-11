@@ -42,7 +42,7 @@ namespace CyanPreview
             Phase=ScufflePhase.Approaching; remaining=20; engagement=0; Tension=1; Outcome=null; return true;
         }
         public void Interrupt() { Phase=ScufflePhase.Cooldown; remaining=8; Tension=0; }
-        public void Advance(float seconds,bool allowed,bool eligible,float distance,bool competing,float aggression,float dominanceDifference)
+        public void Advance(float seconds,bool allowed,bool eligible,float distance,bool competing,float aggression,float dominanceDifference,bool carrierCompetition=false)
         {
             if(!allowed || !eligible) { if(Active) Interrupt(); else Tension=0; return; }
             if(float.IsNaN(seconds)||float.IsInfinity(seconds)||seconds<=0) return;
@@ -50,6 +50,8 @@ namespace CyanPreview
             if(Phase==ScufflePhase.Cooldown) { remaining-=dt; if(remaining<=0) Phase=ScufflePhase.Calm; return; }
             if(Phase==ScufflePhase.Calm)
             {
+                // A visible food carrier is an immediate chase, not another tension waiting period.
+                if(carrierCompetition) { TryStartManual(); return; }
                 Tension=Mathf.Clamp01(Tension+(distance<160?(competing?.35f:.035f)*Mathf.Lerp(.4f,1.6f,Mathf.Clamp01(aggression)):-.2f)*dt);
                 if(Tension>=1) { Phase=ScufflePhase.Approaching; remaining=20; engagement=0; }
                 return;

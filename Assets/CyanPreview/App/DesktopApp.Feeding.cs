@@ -55,7 +55,10 @@ namespace CyanPreview
             p.Feeding.Cancel(); p.FollowingFood=false;
             // Clearing food interest must not reset an active rival's movement or posture.
             if(p.Motion.RivalTarget.HasValue) return;
-            p.Motion.BeginIdleHold(); p.Motion.Behavior.TaskTarget=null;
+            // Pickup must not cancel a competitor's already planned jump.
+            bool competing=settings.allowFighting && food.Owner==FoodOwner.Pet && food.Holder!=p.Config.key && PetContacts.Available(p);
+            if(!competing) p.Motion.BeginIdleHold();
+            p.Motion.Behavior.TaskTarget=null;
             p.Motion.Behavior.HoldPosition=false; p.Motion.Behavior.Rest();
         }
         void AdvanceFeeding(float dt)
