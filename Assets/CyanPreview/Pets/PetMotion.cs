@@ -17,6 +17,8 @@ namespace CyanPreview
         readonly IPetSurfaces surfaces;
         readonly object[] feet = new object[4];
         readonly Vector2[] anchors = new Vector2[4];
+        readonly Vector2[] stepStarts = new Vector2[4];
+        readonly float[] stepProgress = new float[4];
         readonly bool[] planted = new bool[4];
         readonly bool[] seeking = new bool[4];
         readonly int[] gripAge = new int[4];
@@ -165,7 +167,7 @@ namespace CyanPreview
                 TranslatePart(foot, delta);
                 Set(foot, "absoluteHuntPos", (Vector2)Get(foot, "absoluteHuntPos") + delta);
             }
-            for (int i = 0; i < anchors.Length; i++) anchors[i] += delta;
+            for (int i = 0; i < anchors.Length; i++) { anchors[i] += delta; stepStarts[i] += delta; }
             var draw = (Vector2[,])Get(graphics, "drawPositions");
             for (int i = 0; i < 3; i++) for (int history = 0; history < 2; history++) draw[i, history] += delta;
             var tail = (Array)Get(graphics, "tail");
@@ -464,9 +466,20 @@ namespace CyanPreview
                 {
                     var spread = normal == Vector2.zero ? new Vector2(-localForward.y, localForward.x) * (i % 2 == 0 ? 14 : -14) : Vector2.zero;
                     anchors[i] = surfaces.Nearest(shoulder + localForward * (Recovery.Active ? 0 : i % 2 == 0 ? 16 : 10) + spread, out _);
+                    stepStarts[i] = (Vector2)Get(feet[i], "pos");
+                    stepProgress[i] = 0;
                     seeking[i] = true;
                 }
                 Vector2 hunt = anchors[i];
+                if(!flying && !planted[i] && normal != Vector2.zero)
+                {
+                    // LizardLimb lifts a released foot toward its shoulder before finding the next grip.
+                    float speed = 6 + ((Vector2)Get(chunks[i < 2 ? 0 : 2], "vel")).magnitude;
+                    stepProgress[i] = Mathf.Min(1, stepProgress[i] + speed / Mathf.Max(24, Vector2.Distance(stepStarts[i], anchors[i])));
+                    float lift = Mathf.Clamp(reach * (float)Get(Get(pet.Lizard,"lizardParams"),"liftFeet"), 8, 12);
+                    hunt = Vector2.Lerp(stepStarts[i], anchors[i], stepProgress[i])
+                        + normal * (Mathf.Sin(stepProgress[i] * Mathf.PI) * lift);
+                }
                 bool reachingToCatch = false;
                 Vector2 catchNormal = Vector2.zero;
                 if (flying)
@@ -491,7 +504,7 @@ namespace CyanPreview
                     Behavior.Rest(); resting = false;
                     planted[i] = true; seeking[i] = false;
                 }
-                if (!flying && Vector2.Distance(shoulder, anchors[i]) <= reach && Vector2.Distance((Vector2)Get(feet[i], "pos"), anchors[i]) < 2) planted[i] = true;
+                if (!flying && (normal == Vector2.zero || stepProgress[i] >= 1) && Vector2.Distance(shoulder, anchors[i]) <= reach && Vector2.Distance((Vector2)Get(feet[i], "pos"), anchors[i]) < 2) planted[i] = true;
                 if (planted[i]) gripAge[i]++;
             }
             UpdateGraphics();

@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using static CyanPreview.ReferenceContext;
 namespace CyanPreview.Editor
 {
     public static class FeedingChecks
@@ -75,7 +76,7 @@ namespace CyanPreview.Editor
                 var task=new PetFeeding(); task.Begin();
                 var food=desktop.Nearest(new Vector2(left?-140:140,-210),out var normal)+normal*10;
                 task.Place(food,Area); motion.ExploreClick(task.ChooseInspectionPoint(motion.Position,desktop));
-                bool ate=false,entered=false,returnedHeadFirst=false; int steps=0;
+                bool ate=false,entered=false,returnedHeadFirst=false; int liftedEntry=0,liftedReturn=0; int steps=0;
                 while(task.Active && steps++<8000)
                 {
                     task.Advance(.025f,motion.Position,motion.MouthPosition,false,Area,motion.State==PetMotionState.Crawling,motion.OccupiedBounds);
@@ -98,8 +99,18 @@ namespace CyanPreview.Editor
                     if(surfaces.Active) Check(Vector2.Distance(before,motion.Position)<25,"Den movement teleported");
                     if(task.Stage==FeedingStage.Emerging && Area.Contains(motion.Position))
                         returnedHeadFirst |= (motion.MouthPosition.x-motion.Position.x)*(task.ExitLeft?1:-1)>0;
+                    if(surfaces.Active && Mathf.Abs(motion.Position.y-(Area.yMin+14))<5
+                        && Mathf.Abs((motion.MouthPosition-motion.Position).normalized.x)>.95f)
+                    {
+                        foreach(var limb in (Array)Get(pet.Graphics,"limbs"))
+                        {
+                            if((int)Get(limb,"gripCounter")==0 && ((Vector2)Get(limb,"pos")).y>Area.yMin+5)
+                            { if(task.Stage==FeedingStage.Entering) liftedEntry++; if(task.Stage==FeedingStage.Emerging) liftedReturn++; }
+                        }
+                    }
                     pet.Draw();
                 }
+                Check(liftedEntry>10 && liftedReturn>10,"Feet slide along floor without lifting: entry="+liftedEntry+" return="+liftedReturn);
                 Check(jumps || launches==0,"Disabled propulsion ignored");
                 Check(entered && ate && returnedHeadFirst && !task.Active,"Motion failed: backgrounds="+backgrounds+" jumps="+jumps+" left="+left+" position="+motion.Position+" stage="+task.Stage);
             }
