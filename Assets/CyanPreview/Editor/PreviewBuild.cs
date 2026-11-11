@@ -18,7 +18,7 @@ namespace CyanPreview.Editor
             EditorSceneManager.SaveScene(scene, "Assets/Scenes/Preview.unity");
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene("Assets/Scenes/Preview.unity", true) };
             PlayerSettings.companyName = "ErraticPu1se";
-            PlayerSettings.productName = "Cyan Lizor Preview";
+            PlayerSettings.productName = "Lizor";
             PlayerSettings.bundleVersion = "0.2.0-preview.2";
             PlayerSettings.defaultScreenWidth = 540;
             PlayerSettings.defaultScreenHeight = 900;
@@ -35,11 +35,11 @@ namespace CyanPreview.Editor
         public static void Windows()
         {
             CreateScene();
-            Directory.CreateDirectory("Builds/Windows");
+            Directory.CreateDirectory("Builds/LizorWindows");
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions {
                 scenes = new[] { "Assets/Scenes/Preview.unity" },
                 target = BuildTarget.StandaloneWindows64,
-                locationPathName = "Builds/Windows/CyanLizor.exe",
+                locationPathName = "Builds/LizorWindows/Lizor.exe",
                 options = BuildOptions.None
             });
             if (report.summary.result != BuildResult.Succeeded) throw new Exception("Build failed: " + report.summary.result);
@@ -98,6 +98,7 @@ namespace CyanPreview.Editor
         public static void Verify()
         {
             SetupChecks.Run();
+            TrayChecks.Run();
             if (!ReferenceBridge.TryParseId("ID.7.12345", out var spawner, out var seed) || spawner != 7 || seed != 12345)
                 throw new Exception("Full ID parser failed");
             foreach (var invalid in new[] { "", "ID.a.2", "1.2.3", "2147483648", "ID.1.2.3" })

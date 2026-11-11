@@ -9,6 +9,12 @@ namespace CyanPreview
 {
     public sealed class PreviewApp : MonoBehaviour
     {
+        WindowsTray tray;
+        SingleInstance instance;
+        readonly TrayState trayState = new TrayState();
+        Camera backgroundCamera;
+        string trayWarning;
+        bool migrationFailed;
         ReferenceContext context;
         ReferenceBridge reference;
         SpriteMeshView view;
@@ -44,10 +50,22 @@ namespace CyanPreview
         }
         void Start()
         {
+            if(!Application.isEditor)
+            {
+                instance=new SingleInstance();
+                if(!instance.IsPrimary) { enabled=false; WindowsTray.RestoreExisting(); Application.Quit(); return; }
+                try
+                {
+                    PreferenceMigration.Apply(PlayerPrefs.HasKey,PlayerPrefs.SetString,LegacyPreferences.Read);
+                    PlayerPrefs.Save();
+                }
+                catch(Exception e) { migrationFailed=true; error="Your existing settings could not be imported. They have not been changed. "+e.Message; return; }
+            }
+            Application.runInBackground=true;
             QualitySettings.vSyncCount=0; Application.targetFrameRate=60;
             if (!Application.isEditor)
                 Screen.SetResolution(Mathf.Min(540,Display.main.systemWidth),Mathf.Min(900,Display.main.systemHeight-80),FullScreenMode.Windowed);
-            var backgroundCamera=new GameObject("Background camera").AddComponent<Camera>();
+            backgroundCamera=new GameObject("Background camera").AddComponent<Camera>();
             backgroundCamera.depth=-10; backgroundCamera.cullingMask=0;
             backgroundCamera.clearFlags=CameraClearFlags.SolidColor; backgroundCamera.backgroundColor=PanelTheme.Background;
             previewCamera=new GameObject("Preview camera").AddComponent<Camera>();
@@ -66,6 +84,7 @@ namespace CyanPreview
             DetectInstallation();
             view=new SpriteMeshView(transform);
             if(File.Exists(Path.Combine(cache,"reference.json"))) LoadReference();
+            if(!Application.isEditor) StartCoroutine(InitializeTray());
         }
         void LoadReference()
         {
@@ -93,7 +112,49 @@ namespace CyanPreview
         }
         void Fail(Exception e) { error=e.Message; Debug.LogException(e); }
         DesktopSettings DesktopConfiguration() => new DesktopSettings {id=reference.Identity,cache=cache,scale=desktopScale,
-            climbingMode=desktopClimbingMode,clickToExplore=desktopClicks,sound=desktopSounds,vocalizeRequest=desktopVocalizeRequest,roam=desktopRoam,jumps=autonomousJumps};
+            paused=trayState.Paused,climbingMode=desktopClimbingMode,clickToExplore=desktopClicks,sound=desktopSounds,vocalizeRequest=desktopVocalizeRequest,roam=desktopRoam,jumps=autonomousJumps};
+        System.Collections.IEnumerator InitializeTray()
+        {
+            yield return null; yield return null;
+            try
+            {
+                tray=new WindowsTray();
+                if(!tray.Available) trayWarning="The tray is unavailable. Closing this window will quit Lizor.";
+            }
+            catch(Exception e) { trayWarning="The tray is unavailable: "+e.Message; }
+        }
+        void QuitApp()
+        {
+            if(trayState.Quitting) return;
+            trayState.Quit(); if(tray!=null) tray.AllowExit=true;
+            SavePreferences(); Application.Quit();
+        }
+        void UpdateTray()
+        {
+            trayState.Sync(desktop.Active);
+            if(tray==null) return;
+            tray.UpdateState(desktop.Active,trayState.Paused,desktopSounds);
+            while(tray.TryRead(out var action))
+            {
+                switch(action)
+                {
+                    case TrayAction.Settings: tray.ShowSettings(); break;
+                    case TrayAction.PauseResume: trayState.TogglePause(desktop.Active); break;
+                    case TrayAction.Sound: desktopSounds=!desktopSounds; SavePreferences(); break;
+                    case TrayAction.StopPet: desktop.Stop(); trayState.Sync(false); break;
+                    case TrayAction.Quit: QuitApp(); break;
+                    case TrayAction.Hidden:
+                        SavePreferences();
+                        if(PlayerPrefs.GetInt("Lizor.TrayHintShown",0)==0 && tray.NotifyHidden())
+                        { PlayerPrefs.SetInt("Lizor.TrayHintShown",1); PlayerPrefs.Save(); }
+                        break;
+                }
+            }
+            bool visible=tray.PanelVisible;
+            if(previewCamera!=null) previewCamera.enabled=visible;
+            if(backgroundCamera!=null) backgroundCamera.enabled=visible;
+            Application.targetFrameRate=visible?60:15;
+        }
         void DetectInstallation()
         {
             if(detection!=null) return;
@@ -113,6 +174,9 @@ namespace CyanPreview
         }
         void Update()
         {
+            if(migrationFailed) return;
+            UpdateTray();
+            if(trayState.Quitting) return;
             if(detection!=null && detection.IsCompleted)
             {
                 if(detection.IsFaulted) setupMessage="Automatic detection failed. Browse to your game folder.";
@@ -152,7 +216,7 @@ namespace CyanPreview
                 if(importer.ExitCode==0) { importer.Dispose(); importer=null; LoadReference(); }
                 else { error="Reference import failed: "+importerError.Result; importer.Dispose(); importer=null; }
             }
-            if(!Ready || !animate) return;
+            if(!Ready || !animate || trayState.Paused || (tray!=null && !tray.PanelVisible)) return;
             previewClock+=Time.unscaledDeltaTime;
             if(previewClock<1f/30f) return;
             phase+=Mathf.Min(previewClock,.1f)*.8f; previewClock=0;
@@ -161,6 +225,13 @@ namespace CyanPreview
         }
         void OnGUI()
         {
+            if(migrationFailed)
+            {
+                GUILayout.Label(error);
+                if(GUILayout.Button("Quit Lizor")) Application.Quit();
+                return;
+            }
+            if(tray!=null && !tray.PanelVisible) return;
             if(theme==null) theme=new PanelTheme(GUI.skin);
             var previousSkin=GUI.skin; GUI.skin=theme.Skin;
             try { DrawPanel(); }
@@ -171,15 +242,15 @@ namespace CyanPreview
             if(Event.current.type==EventType.KeyDown && Event.current.keyCode==KeyCode.Return && GUI.GetNameOfFocusedControl()=="CreatureId" && reference != null)
             { Generate(); Event.current.Use(); }
             float width=Mathf.Min(580,Screen.width-32), left=(Screen.width-width)/2;
-            GUI.Label(new Rect(left,16,width-110,35),"LIZARD",theme.Title);
+            GUI.Label(new Rect(left,16,width-110,35),"LIZOR",theme.Title);
             GUI.Label(new Rect(left,52,width,22),"desktop settings & preview",theme.Small);
-            GUI.Label(new Rect(left+width-96,23,96,25),desktop.Active?"RUNNING":"STOPPED",theme.Badge);
+            GUI.Label(new Rect(left+width-96,23,96,25),desktop.Active?(trayState.Paused?"PAUSED":"RUNNING"):"STOPPED",theme.Badge);
             float heroHeight=Mathf.Clamp(Screen.height*.16f,90,144);
             var hero=new Rect(left,83,width,heroHeight);
             GUI.Box(hero,GUIContent.none,theme.Card);
             if(previewTexture!=null) GUI.DrawTexture(new Rect(hero.x+2,hero.y+2,hero.width-4,hero.height-4),previewTexture,ScaleMode.ScaleToFit,false);
             if(!Ready) GUI.Label(new Rect(hero.x+16,hero.y+hero.height/2-12,hero.width-32,45),"Prepare your game assets below to unlock your lizard.",theme.Small);
-            float top=hero.yMax+10, footer=Screen.height-112;
+            float top=hero.yMax+10, footer=Screen.height-146;
             GUILayout.BeginArea(new Rect(left,top,width,Mathf.Max(40,footer-top-8)));
             panelScroll=GUILayout.BeginScrollView(panelScroll,false,false,GUIStyle.none,GUI.skin.verticalScrollbar);
             if(!string.IsNullOrEmpty(error))
@@ -188,6 +259,7 @@ namespace CyanPreview
                 if(GUILayout.Button("Dismiss")) error=null;
                 GUILayout.EndVertical();
             }
+            if(!string.IsNullOrEmpty(trayWarning)) GUILayout.Label(trayWarning,theme.Small);
             if(!string.IsNullOrEmpty(preferenceWarning)) GUILayout.Label(preferenceWarning,theme.Small);
             if(!Ready) DrawSetup();
             GUILayout.BeginVertical(theme.Card);
@@ -264,8 +336,8 @@ namespace CyanPreview
             }
             GUILayout.EndVertical();
             GUILayout.EndScrollView(); GUILayout.EndArea();
-            GUILayout.BeginArea(new Rect(left,footer,width,108));
-            GUILayout.BeginHorizontal(); GUILayout.Label(desktop.Active?"Desktop pet is running":"Desktop pet is stopped",theme.Small);
+            GUILayout.BeginArea(new Rect(left,footer,width,142));
+            GUILayout.BeginHorizontal(); GUILayout.Label(desktop.Active?(trayState.Paused?"Desktop pet is paused":"Desktop pet is running"):"Desktop pet is stopped",theme.Small);
             GUILayout.FlexibleSpace();
             GUI.enabled=desktop.Active || StartBlocker==null;
             if(GUILayout.Button(desktop.Active?"Stop desktop pet":"Start desktop pet",theme.Primary,GUILayout.Width(166),GUILayout.Height(36)))
@@ -274,7 +346,13 @@ namespace CyanPreview
                 else try { desktop.Start(DesktopConfiguration()); } catch(Exception e) { Fail(e); }
             }
             GUI.enabled=true; GUILayout.EndHorizontal();
-            GUILayout.Label(desktop.Active?"Keep this panel open while your pet is running.":StartBlocker??"Ready. Start your desktop pet when you like.",theme.Small);
+            GUILayout.Label(desktop.Active?(tray!=null && tray.Available?"Close this window to keep Lizor in the tray.":"Keep this panel open while your pet is running."):StartBlocker??"Ready. Start your desktop pet when you like.",theme.Small);
+            GUILayout.BeginHorizontal();
+            GUI.enabled=desktop.Active;
+            if(GUILayout.Button(trayState.Paused?"Resume pet":"Pause pet",GUILayout.Width(100))) trayState.TogglePause(desktop.Active);
+            GUI.enabled=!Application.isEditor;
+            GUILayout.FlexibleSpace(); if(GUILayout.Button("Quit Lizor",GUILayout.Width(100))) QuitApp();
+            GUI.enabled=true; GUILayout.EndHorizontal();
             GUILayout.Space(5);
             GUILayout.Label("An unofficial desktop companion inspired by Rain World. Rain World belongs to Videocult and Akupara Games.",theme.Small);
             GUILayout.EndArea();
@@ -360,7 +438,11 @@ namespace CyanPreview
         }
         void OnDestroy()
         {
-            SavePreferences(); desktop.Dispose(); importer?.Dispose(); view?.Dispose(); reference?.Dispose(); context?.Dispose(); theme?.Dispose();
+            SavePreferences();
+            tray?.Dispose(); desktop.Dispose();
+            try { if(importer!=null && !importer.HasExited) importer.Kill(); }
+            catch(Exception e) { Debug.LogWarning("Importer shutdown: "+e.Message); }
+            importer?.Dispose(); view?.Dispose(); reference?.Dispose(); context?.Dispose(); theme?.Dispose(); instance?.Dispose();
             if(previewCamera!=null) previewCamera.targetTexture=null;
             if(previewTexture!=null) { previewTexture.Release(); Destroy(previewTexture); }
         }

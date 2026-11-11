@@ -1,6 +1,6 @@
 # Development
 
-To build the published Windows preview, check out tag `v0.2.0-preview.2` before following these instructions.
+These instructions describe the current source. For the published Windows preview, check out tag `v0.2.0-preview.2` and use the instructions at that tag.
 
 ## Build from source
 
@@ -15,7 +15,7 @@ Use **Unity 2020.3.45f1** with Windows build support and the Mono backend.
    ```
 
 3. Open the project, select **Cyan Lizor → Create preview scene**, then press Play.
-4. Use **Cyan Lizor → Build Windows preview** to produce `Builds/Windows/CyanLizor.exe`.
+4. Use **Cyan Lizor → Build Windows preview** to produce `Builds/LizorWindows/Lizor.exe`.
 
 Run the automated verification suite with `$UnityEditor` set to your Unity editor executable:
 
@@ -81,3 +81,13 @@ The setup panel explains why Start is disabled: assets have not been prepared, p
 `SetupChecks` covers preference storage round trips, partial/corrupt/unsupported data, invalid scale and mode values, multiple/duplicate/missing Steam libraries, legacy library syntax, quoted/Unicode paths, wrong data subfolders, removed installations, and launch-blocker states. The Windows player was also checked for automatic detection, native folder-picker cancellation, successful preparation, and size/mode restoration after restarting.
 
 See [setup preview performance measurements](performance-setup-preview.md) for the local CPU, GPU, and memory samples. Setup and preference improvements are included in v0.2.0-preview.2. See [desktop rendering optimization](performance-desktop-rendering.md) for the subsequent profiling and verification.
+
+## Lizor system tray
+
+The current source builds as **Lizor**. Closing settings hides the panel while the desktop pet keeps running. Double-click the cyan **Liz** tray icon to reopen settings; right-click for Settings, Pause/Resume, Sound, Stop desktop pet, or Quit Lizor. Launching Lizor again restores the existing controller. Pause is temporary and is not saved across launches; Stop removes the pet without closing settings.
+
+Existing `LastId`, `ReferenceCache`, and `CompanionPreferences.v1` values are copied once from the old Cyan Lizor Preview preference store, only where Lizor has no value. The original preferences and local reference folder stay in place. A failed migration leaves the app blocked with an explanation rather than saving defaults over user settings.
+
+`TrayState` owns transient application state, `WindowsTray` owns native window/menu/icon cleanup, `SingleInstance` owns the native instance handle, and `LegacyPreferences` reads the old store. `TrayGlyph` creates the Liz icon without a new image dependency. The native callback queues commands for the Unity update loop. A missing tray leaves normal window-close behavior available; an Explorer restart recreates the icon or restores settings if recreation fails. Hidden settings stop preview rendering and lower their update rate while the separate desktop pet continues normally.
+
+`TrayChecks` covers stopped/paused/quit transitions, close fallback and shutdown policy, duplicate instance disposal/relaunch, exact and partial preference migration, migration failure, old IPC defaults, and icon sizes/transparency. Player checks are still required because Unity's standalone Mono differs from its editor runtime.
