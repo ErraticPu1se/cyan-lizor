@@ -427,8 +427,12 @@ namespace CyanPreview
                     {
                         // FightingStance braces the rear while the head leans toward its rival.
                         var direction=(RivalTarget.Value-Position).normalized;
-                        v+=direction*(i==0?4f:-2.2f)*Mathf.Clamp01(GripCount/2f);
+                        v+=direction*(i==0?.4f:-.3f)*Mathf.Clamp01(GripCount/2f);
                     }
+                    if(RivalPropelling && GripCount>0)
+                        v+=RivalLungeDirection*Species.Biting.LungeSpeed/(i+1);
+                    if(RivalRecovering && RivalTarget.HasValue && GripCount>0)
+                        v+=(Position-RivalTarget.Value).normalized*.25f/(i+1);
                     if (State == PetMotionState.Charging)
                     {
                         if (i == 1) v *= .5f;

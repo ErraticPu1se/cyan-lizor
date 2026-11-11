@@ -335,3 +335,25 @@ Packaged player Build/ContactPreview (actual path: Builds/ContactPreview/Lizor.e
 Replaced the fixed 75-unit inspection ring and mandatory 1.5-second pause with an observer-distance-based waypoint. The feeding task owns that waypoint so generic cursor exploration cannot settle there. Arrival immediately transitions to food approach; a pet already within pickup range can claim food in the same step. The five-second fallback only prevents an unreachable waypoint from blocking approach. Shared food ownership, fighting, den travel, and saved preferences are unchanged.
 
 Full Verify and Windows build passed: research/unity-food-approach-tests.log and research/unity-food-approach-build.log. Added regressions for immediate nearby pickup, waypoint arrival without waiting, distinct approach offsets/directions, and paused/grabbed pickup prevention. Existing motion tests exercise the complete feeding journey across climbing modes and jump settings. Test package: Builds/FeedingApproachPreview/Lizor.exe. Multi-pet visual timing still requires user observation.
+
+## Threat, lunge, and recovery (2026-11-11)
+
+Inspected local Lizard.PrepareToLounge/Lounge, FightingStance, and cyan breed parameters. Each pet now prepares independently before a short committed-direction lunge. Cyan range is 130 local units; base preparation is 35 simulation ticks, with a small per-pet aggression-weighted hesitation. Propulsion applies 4.5/(chunk index+1) for the first 10 of 20 lunge ticks. The 40-tick recovery follows the inspected Lounge exit path; it is not the unused cyan postLoungeStun breed field. Threat posture is softened for desktop surfaces, and recovery applies a small backward force. These are desktop adaptations, not execution of the full game combat AI.
+
+Bite contact remains required for a hit and food release. Misses close the jaw and recover. Facing/range loss cancels preparation; a committed lunge does not home toward a moving rival. Grabbing, unavailable pets, and ending the encounter clear propulsion. Health and lethal game APIs remain untouched. Threat/Lunge/Recoil statuses appear independently for each participant.
+
+Full Verify and Windows build passed (research/unity-lunge-tests.log, research/unity-lunge-build.log). Tests include preparation before biting, misalignment cancellation, lunge interruption, recovery lockout, real body displacement, held-body safety, simultaneous decisions, misses, food ownership/drop rules, and unchanged health. Build: Builds/LungePreview/Lizor.exe. Preset file and LastId/ReferenceCache/CompanionPreferences match pre-change snapshots. Visual fidelity remains a user check.
+
+## Lunge preview memory sample (2026-11-11)
+
+Windows LungePreview, settings panel visible, fighting off, sequentially 1/2/3 active pets. Primary ID 2222, then 9320, then 7205. Each count used a 10-second warm-up and five samples at five-second intervals. Values below sum the settings and desktop-pet processes; units are MiB (bytes / 1048576).
+
+| Active pets | Average working set | Observed working-set range | Average private committed |
+| --- | ---: | ---: | ---: |
+| 1 | 302 | 287-340 | 632 |
+| 2 | 394 | 360-435 | 803 |
+| 3 | 393 | 377-414 | 788 |
+
+The panel stayed near 131 MiB; variability came mainly from the pet process. These short, sequential samples include allocation spikes and retained caches. They do not establish a leak, prove that three pets cost less than two, or isolate incremental per-pet memory. No optimization is claimed. Raw local measurements: research/lunge-memory-1.csv, lunge-memory-2.csv, lunge-memory-3.csv. A longer repeated add/remove run and allocation profiling would be needed to explain the spikes.
+
+Live check reached Threat but the initially separated pair timed out before a completed exchange could be confirmed. Added preparation-range hysteresis (35% margin while crouching) to avoid cancelling solely because the backward crouch crosses the starting range. Added margin/reset regression checks; full Verify and Windows build passed again. Memory samples above were taken before this final range-only correction. The corrected player was repackaged; full visual lunge/recoil quality remains unverified.

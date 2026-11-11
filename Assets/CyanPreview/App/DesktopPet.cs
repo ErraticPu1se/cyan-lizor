@@ -56,7 +56,7 @@ namespace CyanPreview
             Surfaces=new DesktopSurfaces(new Rect(worldBounds.position/config.scale,worldBounds.size/config.scale)) {Mode=config.climbingMode};
             Den=new DenRouteSurfaces(Surfaces,Surfaces.Bounds);
             Pet.Generate(config.id); Pet.Pose(0,.7f);
-            Bite=new PetBite(Pet.Seed ^ Config.key.GetHashCode(),Pet.Species.Biting);
+            Bite=new PetBite(Pet.Seed ^ Config.key.GetHashCode(),Pet.Species.Biting,Pet.Personality.Aggression);
             Motion=new PetMotion(Pet,Den) {Roam=config.roam,AutonomousJumps=config.jumps};
             if(worldPosition.HasValue) { var p=Surfaces.Nearest(Local(worldPosition.Value),out var n)+n*14; Motion.ShiftWithSurface(p-Motion.Position); }
             Input=new PetInteraction(Motion) {ClickToExplore=config.clickToExplore};

@@ -24,11 +24,11 @@ namespace CyanPreview.Editor
             var aJaw=new PetBite(1,tuning); var bJaw=new PetBite(2,tuning);
             for(int i=0;i<10;i++) aJaw.Advance(.025f,true,true,true,true);
             Check(aJaw.Jaw>0 && bJaw.Jaw==0,"Pet jaws share state");
-            var left=new PetBite(1,tuning); var right=new PetBite(2,tuning); bool simultaneous=false;
-            for(int i=0;i<30;i++) { var x=left.Advance(.025f,true,true,true,true); var y=right.Advance(.025f,true,true,true,true); simultaneous|=x==BiteDecision.Hit && y==BiteDecision.Hit; }
+            var left=new PetBite(1,tuning); var right=new PetBite(1,tuning); bool simultaneous=false;
+            for(int i=0;i<80;i++) { var x=left.Advance(.025f,true,true,true,true); var y=right.Advance(.025f,true,true,true,true); simultaneous|=x==BiteDecision.Hit && y==BiteDecision.Hit; }
             Check(simultaneous,"Mutual contact cannot bite simultaneously");
             var miss=new PetBite(3,tuning); bool snapped=false;
-            for(int i=0;i<40;i++) { var result=miss.Advance(.025f,true,true,true,false); Check(result!=BiteDecision.Hit,"Non-contact produced a hit"); snapped|=result==BiteDecision.Miss; }
+            for(int i=0;i<100;i++) { var result=miss.Advance(.025f,true,true,true,false); Check(result!=BiteDecision.Hit,"Non-contact produced a hit"); snapped|=result==BiteDecision.Miss; }
             Check(snapped,"Failed attempts never produced a missed snap");
             var jaw=new PetBite(4,tuning); float before=jaw.Jaw;
             jaw.Advance(float.NaN,true,true,true,true); jaw.Advance(0,true,true,true,true); Check(jaw.Jaw==before,"Invalid time advanced jaw");
@@ -36,6 +36,21 @@ namespace CyanPreview.Editor
             jaw.ReceiveHit(); Check(jaw.Recovering,"Hit did not trigger local recovery");
             for(int i=0;i<6;i++) Check(jaw.Advance(.025f,true,true,true,true)!=BiteDecision.Hit,"Recovering pet attacked");
             jaw.Cancel(); Check(jaw.Jaw==0 && !jaw.Snapping,"Cancelled jaw remained open/snapping");
+
+            var sequence=new PetBite(7,tuning);
+            for(int i=0;i<20;i++) Check(sequence.Advance(.025f,true,true,true,true)==BiteDecision.None,"Bit before preparation completed");
+            Check(sequence.Threatening && !sequence.Lunging,"Threat phase missing");
+            Check(sequence.EngagementRange>tuning.LungeRange+20,"Crouch has no range margin");
+            sequence.Advance(.025f,true,true,true,false,false);
+            Check(!sequence.Threatening && !sequence.Lunging,"Misaligned wind-up did not cancel");
+            Check(sequence.EngagementRange==tuning.LungeRange,"Cancelled threat retained enlarged range");
+            for(int i=0;i<45 && !sequence.Lunging;i++) sequence.Advance(.025f,true,true,true,false);
+            Check(sequence.Lunging && sequence.Propelling,"Prepared lunge did not launch");
+            sequence.Advance(.025f,false,true,true,true);
+            Check(!sequence.Lunging && !sequence.Propelling,"Interrupted lunge retained propulsion");
+            sequence.ReceiveHit();
+            for(int i=0;i<30;i++) Check(sequence.Advance(.025f,true,true,true,true)==BiteDecision.None,"Recovery attacked again");
+            Check(sequence.Recovering,"Post-lunge recovery ended prematurely");
 
             var root=new GameObject("Contact bite integration"); var host=root.AddComponent<DesktopApp>();
             var native=new WindowsDesktop(System.Diagnostics.Process.GetCurrentProcess().Id);
@@ -77,6 +92,23 @@ namespace CyanPreview.Editor
                 food.Drop(Vector2.zero); food.Take("a"); Call(host,"ApplyBite",a,b,BiteDecision.Hit,2); Check(food.Holder=="a","Victim hit dropped another pet's food");
                 food.Drop(Vector2.zero); food.Take("b"); food.EnterDen("b"); Call(host,"ApplyBite",a,b,BiteDecision.Hit,2); Check(food.Owner==FoodOwner.Den,"Bite dropped committed den food");
                 foreach(var pet in pets) for(int i=0;i<3;i++) Check(!float.IsNaN(pet.Motion.BodyPosition(i).x) && !float.IsInfinity(pet.Motion.BodyVelocity(i).y),"Non-finite body after contacts");
+                // Exercise the real motion loop: preparation must produce a physical lunge.
+                food.Cancel(); a.Bite.Cancel();
+                Pose(a,Vector2.zero,new Vector2(-17,0),new Vector2(-34,0));
+                Pose(b,new Vector2(100,0),new Vector2(130,0),new Vector2(160,0));
+                for(int i=0;i<60;i++) a.Motion.Advance(.025f);
+                var launchStart=a.Motion.Position;
+                a.Motion.RivalTarget=a.Motion.Position+Vector2.right*100;
+                a.Motion.Behavior.HoldPosition=true; a.Motion.RivalStance=false;
+                a.Motion.RivalLungeDirection=Vector2.right; a.Motion.RivalPropelling=true;
+                for(int i=0;i<8;i++) a.Motion.Advance(.025f);
+                Check(a.Motion.Position.x>launchStart.x+8,"Lunge propulsion did not move the real body");
+                a.Motion.RivalPropelling=false;
+                a.Motion.BeginGrab(a.Motion.Position); var held=a.Motion.Position;
+                a.Motion.RivalPropelling=true;
+                for(int i=0;i<8;i++) a.Motion.Advance(.025f);
+                Check(Vector2.Distance(held,a.Motion.Position)<2,"Lunge force moved a cursor-held pet");
+                a.Motion.RivalPropelling=false;
                 Debug.Log("BODY_COLLISION_CONTACT_INDEPENDENT_BITE_FOOD_DROP_CHECK_PASSED");
             }
             finally { foreach(var p in pets) p.Dispose(); pets.Clear(); native.Dispose(); UnityEngine.Object.DestroyImmediate(root); }
