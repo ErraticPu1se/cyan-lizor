@@ -6,6 +6,7 @@ namespace CyanPreview
     {
         public Vector2? DiagnosticDriveTarget => hasDestination ? destination : (Vector2?)null;
         public Vector2? RivalTarget { get; set; }
+        public bool RivalPursuingCarrier { get; set; }
         public float RivalJaw { get; set; }
         public int BodyCount => chunks.Length;
         public Vector2 BodyPosition(int index) => (Vector2)Get(chunks[index],"pos");
@@ -36,13 +37,31 @@ namespace CyanPreview
         public bool RivalBiting { get; set; }
         public bool BiteToward(Vector2 target)
         {
-            if(State!=PetMotionState.Crawling || !RivalTarget.HasValue || float.IsNaN(target.x) || float.IsNaN(target.y) || float.IsInfinity(target.x) || float.IsInfinity(target.y)) return false;
+            if(State==PetMotionState.Grabbed || !RivalTarget.HasValue || float.IsNaN(target.x) || float.IsNaN(target.y) || float.IsInfinity(target.x) || float.IsInfinity(target.y)) return false;
             var direction=(target-Position).normalized;
             if(direction.sqrMagnitude<.01f) return false;
+            // Contact snaps can happen in flight without an extra propulsion impulse.
+            if(State!=PetMotionState.Crawling) return true;
             // Lizard's attack bends the body: front +8, middle/rear -6. No Violence/Grab call.
             for(int i=0;i<chunks.Length;i++)
                 ReferenceContext.Set(chunks[i],"vel",Vector2.ClampMagnitude((Vector2)ReferenceContext.Get(chunks[i],"vel")+direction*(i==0?8:-6),14));
             return true;
+        }
+        bool pursuitJump;
+        float PursuitJumpDistance => Mathf.Max(190,Species.Biting.LungeRange+30);
+        bool CanPlanPursuitJump(Vector2 target) => !Behavior.HoldPosition && !RivalLunging && !RivalRecovering
+            && Vector2.Distance(Position,target)>PursuitJumpDistance && FacingRival(target);
+        void RefreshPursuitCharge()
+        {
+            if(State!=PetMotionState.Charging || (!pursuitJump && !RivalPursuingCarrier)) return;
+            pursuitJump=true;
+            if(!RivalPursuingCarrier || !RivalTarget.HasValue || !AutonomousJumps || !CanPlanPursuitJump(RivalTarget.Value))
+            { ChangeState(PetMotionState.Crawling); cooldown=Mathf.Max(cooldown,12); pursuitJump=false; return; }
+            if(chargeTicks>1) return;
+            // Recheck the moving target at takeoff rather than launching toward its old position.
+            if(!PetJumpPlanner.TryPlanToTarget(Position,RivalTarget.Value,surfaces,capabilities,out var plan))
+            { ChangeState(PetMotionState.Crawling); cooldown=Mathf.Max(cooldown,12); pursuitJump=false; return; }
+            jumpTarget=plan.Landing; launchVelocity=plan.Velocity; jumpPower=plan.Power;
         }
         public void ScuffleImpulse(Vector2 impulse)
         {

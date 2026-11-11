@@ -44,10 +44,12 @@ namespace CyanPreview
         public void Interrupt() { Phase=ScufflePhase.Cooldown; remaining=8; Tension=0; }
         public void Advance(float seconds,bool allowed,bool eligible,float distance,bool competing,float aggression,float dominanceDifference,bool carrierCompetition=false)
         {
-            if(!allowed || !eligible) { if(Active) Interrupt(); else Tension=0; return; }
-            if(float.IsNaN(seconds)||float.IsInfinity(seconds)||seconds<=0) return;
-            float dt=Mathf.Min(seconds,.1f);
+            bool validTime=!float.IsNaN(seconds) && !float.IsInfinity(seconds) && seconds>0;
+            float dt=validTime?Mathf.Min(seconds,.1f):0;
+            // Rest time elapses even when a pet is unavailable; pause supplies zero time.
             if(Phase==ScufflePhase.Cooldown) { remaining-=dt; if(remaining<=0) Phase=ScufflePhase.Calm; return; }
+            if(!allowed || !eligible) { if(Active) Interrupt(); else Tension=0; return; }
+            if(!validTime) return;
             if(Phase==ScufflePhase.Calm)
             {
                 // A visible food carrier is an immediate chase, not another tension waiting period.

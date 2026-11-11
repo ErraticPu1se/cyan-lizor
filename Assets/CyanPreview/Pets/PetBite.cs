@@ -36,7 +36,7 @@ namespace CyanPreview
         }
         public void Cancel() { Jaw=0; preparation=0; lunge=0; snap=0; closeAttempts=0; }
         public void ReceiveHit() { recovery=tuning?.RecoveryTicks??40; Cancel(); }
-        public BiteDecision Advance(float seconds,bool engaged,bool canBite,bool near,bool contact,bool aligned=true)
+        public BiteDecision Advance(float seconds,bool engaged,bool canBite,bool near,bool contact,bool aligned=true,bool canLunge=true)
         {
             if(float.IsNaN(seconds)||float.IsInfinity(seconds)||seconds<=0) return BiteDecision.None;
             clock+=Mathf.Min(seconds,.1f); BiteDecision decision=BiteDecision.None;
@@ -45,6 +45,7 @@ namespace CyanPreview
                 clock-=.025f; if(delay>0) delay--; if(snap>0) snap--; if(recovery>0) recovery--;
                 if(!engaged || !canBite || tuning==null) { Cancel(); continue; }
                 if(recovery>0 || delay>0) { Jaw=0; preparation=0; lunge=0; continue; }
+                if(!canLunge) { lunge=0; preparation=0; }
                 if(lunge>0)
                 {
                     lunge--; Jaw=1;
@@ -64,8 +65,11 @@ namespace CyanPreview
                     continue;
                 }
                 closeAttempts=0;
-                if(!near || !aligned) { preparation=0; Jaw=Mathf.Max(0,Jaw-.05f); continue; }
-                preparation++; Jaw=Mathf.Min(1,Jaw+.05f);
+                if(!near) { preparation=0; Jaw=Mathf.Max(0,Jaw-.05f); continue; }
+                // Ready the jaw on approach, including flight; only a grounded, aligned pet lunges.
+                Jaw=Mathf.Min(1,Jaw+.05f);
+                if(!canLunge || !aligned) { preparation=0; continue; }
+                preparation++;
                 if(preparation>=preparationTicks) { preparation=0; lunge=tuning.LungeTicks; }
             }
             return decision;

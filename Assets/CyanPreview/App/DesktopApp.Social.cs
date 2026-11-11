@@ -58,7 +58,7 @@ namespace CyanPreview
             foreach(var p in pets)
             {
                 if(p.Motion.RivalTarget.HasValue) { p.Motion.Behavior.TaskTarget=p.Feeding.Target; p.Motion.Behavior.HoldPosition=p.Feeding.UsingRoute; }
-                p.Motion.RivalTarget=null; p.Motion.RivalBiting=false; p.Motion.RivalStance=false; p.Motion.RivalPropelling=false; p.Motion.RivalRecovering=false;
+                p.Motion.RivalTarget=null; p.Motion.RivalPursuingCarrier=false; p.Motion.RivalBiting=false; p.Motion.RivalStance=false; p.Motion.RivalPropelling=false; p.Motion.RivalRecovering=false;
             }
             socialStates=pets.ConvertAll(p=>new PetSocialStatus {key=p.Config.key,state=settings.allowFighting?"Calm":"Fighting off"}).ToArray();
             var engaged=new HashSet<string>();
@@ -93,11 +93,11 @@ namespace CyanPreview
                 int contactA=PetContacts.BiteContact(a,b,out bool nearA), contactB=PetContacts.BiteContact(b,a,out bool nearB);
                 nearA=Vector2.Distance(a.WorldPosition,targetA)<a.Bite.EngagementRange*a.Config.scale;
                 nearB=Vector2.Distance(b.WorldPosition,targetB)<b.Bite.EngagementRange*b.Config.scale;
-                bool canA=food.Holder!=a.Config.key && a.Motion.State==PetMotionState.Crawling && a.Motion.GripCount>0;
-                bool canB=food.Holder!=b.Config.key && b.Motion.State==PetMotionState.Crawling && b.Motion.GripCount>0;
+                bool canA=food.Holder!=a.Config.key && PetContacts.Available(a);
+                bool canB=food.Holder!=b.Config.key && PetContacts.Available(b);
                 // Decide both jaws from the same contact snapshot; order never chooses a winner.
-                var decisionA=a.Bite.Advance(dt,true,canA,nearA,contactA>=0,a.Motion.FacingRival(a.Local(targetA)));
-                var decisionB=b.Bite.Advance(dt,true,canB,nearB,contactB>=0,b.Motion.FacingRival(b.Local(targetB)));
+                var decisionA=a.Bite.Advance(dt,true,canA,nearA,contactA>=0,a.Motion.FacingRival(a.Local(targetA)),a.Motion.State==PetMotionState.Crawling && a.Motion.GripCount>0);
+                var decisionB=b.Bite.Advance(dt,true,canB,nearB,contactB>=0,b.Motion.FacingRival(b.Local(targetB)),b.Motion.State==PetMotionState.Crawling && b.Motion.GripCount>0);
                 ApplyBite(a,b,decisionA,contactA); ApplyBite(b,a,decisionB,contactB);
                 ConfigureRival(a,b,nearA,contactA>=0); ConfigureRival(b,a,nearB,contactB>=0);
                 socialStates[i].state=BiteStatus(a,fight); socialStates[j].state=BiteStatus(b,fight);
@@ -133,6 +133,7 @@ namespace CyanPreview
                 return;
             }
             bool pursuingCarrier=food.Owner==FoodOwner.Pet && food.Holder==rival.Config.key;
+            pet.Motion.RivalPursuingCarrier=pursuingCarrier;
             var target=pet.Local(PetContacts.TargetPoint(pet,rival));
             pet.Motion.RivalJaw=pet.Bite.Jaw; pet.Motion.RivalBiting=pet.Bite.Snapping;
             if(pet.Bite.Lunging && !pet.Motion.RivalLunging)

@@ -18,6 +18,83 @@ namespace CyanPreview.Editor
             for(int i=0;i<3;i++) for(int j=0;j<3;j++) total+=Mathf.Max(0,a.Motion.BodyRadius(i)*a.Config.scale+b.Motion.BodyRadius(j)*b.Config.scale-Vector2.Distance(a.Motion.BodyPosition(i)*a.Config.scale,b.Motion.BodyPosition(j)*b.Config.scale));
             return total;
         }
+        public static void Pursuit(ReferenceContext context)
+        {
+            var jaw=new PetBite(10,new BiteTuning(25,0,90,1.4f,1,12));
+            for(int i=0;i<24;i++)
+            {
+                Check(jaw.Advance(.025f,true,true,true,false,false,false)==BiteDecision.None,"Airborne preparation hit without contact");
+                Check(!jaw.Lunging && !jaw.Threatening,"Ungrounded jaw preparation started lunge");
+            }
+            Check(jaw.Jaw>.9f,"Airborne jaw never readied for contact");
+            Check(jaw.Advance(.025f,true,true,true,true,false,false)==BiteDecision.Hit,"Ready airborne contact failed to bite");
+            for(int i=0;i<10;i++) Check(jaw.Advance(.025f,true,true,true,true,false,false)!=BiteDecision.Hit,"Airborne contact bypassed bite cooldown");
+            jaw.ReceiveHit();
+            for(int i=0;i<20;i++) Check(jaw.Advance(.025f,true,true,true,true,false,false)==BiteDecision.None,"Airborne contact bypassed hit recovery");
+            var fight=new PetScuffle(); fight.TryStartManual(); fight.Interrupt();
+            for(int i=0;i<100;i++) fight.Advance(0,true,false,300,true,1,0,true);
+            Check(fight.Phase==ScufflePhase.Cooldown,"Pause consumed encounter cooldown");
+            fight.Advance(float.NaN,true,false,300,true,1,0,true);
+            fight.Advance(float.PositiveInfinity,true,false,300,true,1,0,true);
+            for(int i=0;i<81;i++) fight.Advance(.1f,false,false,300,true,1,0,true);
+            Check(fight.Phase==ScufflePhase.Calm,"Unavailable/disabled encounter froze cooldown");
+            fight.Advance(.025f,true,true,300,true,1,0,true); Check(fight.Active,"Expired cooldown blocked next carrier chase");
+
+            var root=new GameObject("Pursuit jump and airborne bite regression");
+            var host=root.AddComponent<DesktopApp>(); var native=new WindowsDesktop(System.Diagnostics.Process.GetCurrentProcess().Id);
+            Set(host,"native",native); Set(host,"settings",new DesktopSettings {allowFighting=true});
+            var pets=(List<DesktopPet>)Get(host,"pets"); var food=(SharedFood)Get(host,"food");
+            var area=new Rect(-700,-400,1400,800);
+            try
+            {
+                var config=new DesktopSettings {id="9320",scale=1,sound=false,roam=false,jumps=true};
+                var a=new DesktopPet(context,root.transform,DesktopPetConfiguration.From(config,"pursuer"),area,0); pets.Add(a);
+                var b=new DesktopPet(context,root.transform,DesktopPetConfiguration.From(config,"carrier"),area,1); pets.Add(b);
+                var m=a.Motion;
+                Pose(a,Vector2.zero,new Vector2(-17,0),new Vector2(-34,0));
+                m.RivalPursuingCarrier=true; m.RivalTarget=new Vector2(300,0); m.Behavior.TaskTarget=m.RivalTarget;
+                m.AutonomousJumps=true; m.Behavior.HoldPosition=false;
+                Call(m,"BeginJump",new Vector2(250,0),.5f); Set(m,"chargeTicks",1);
+                Call(m,"RefreshPursuitCharge");
+                Check(m.State==PetMotionState.Charging && Vector2.Distance((Vector2)Get(m,"jumpTarget"),m.RivalTarget.Value)<15,"Takeoff retained stale carrier landing point");
+                foreach(var target in new[]{new Vector2(25,0),new Vector2(-300,0)})
+                {
+                    Call(m,"BeginJump",new Vector2(300,0),.5f); m.RivalTarget=target; Call(m,"RefreshPursuitCharge");
+                    Check(m.State==PetMotionState.Crawling && (int)Get(m,"cooldown")>0,"Near/backward pursuit charge did not cancel");
+                }
+                m.RivalTarget=new Vector2(300,0); Call(m,"BeginJump",m.RivalTarget.Value,.5f);
+                m.RivalPursuingCarrier=false; Call(m,"RefreshPursuitCharge");
+                Check(m.State==PetMotionState.Crawling,"Lost carrier still launched pending pursuit jump");
+                m.RivalPursuingCarrier=true; Call(m,"BeginJump",m.RivalTarget.Value,.5f); m.AutonomousJumps=false;
+                Call(m,"RefreshPursuitCharge"); Check(m.State==PetMotionState.Crawling,"Disabled jumps still launched pursuit");
+                // A launched jump follows its momentum even after passing the old landing point.
+                m.AutonomousJumps=true; m.Behavior.TaskTarget=new Vector2(300,0); m.RivalTarget=m.Behavior.TaskTarget;
+                Call(m,"BeginJump",new Vector2(-200,0),.5f); Call(m,"ChangeState",PetMotionState.Airborne);
+                Set(m,"flightTicks",12); var chunks=(Array)Get(a.Pet.Lizard,"bodyChunks");
+                foreach(var chunk in chunks) Set(chunk,"vel",Vector2.right*8);
+                int launches=0; m.JumpLaunched+=(pos,vel,power)=>launches++;
+                m.Advance(.025f);
+                Check(m.State==PetMotionState.Airborne && launches==0 && m.BodyVelocity(0).x>m.BodyVelocity(1).x,"Passing old target reversed flight posture or relaunched");
+                Check((Vector2)Get(m,"jumpTarget")==new Vector2(-200,0),"Airborne chase rewrote committed landing point");
+                var health=context.Blank("LizardState"); Set(health,"health",1f); Set(Get(b.Pet.Lizard,"abstractPhysicalObject"),"state",health);
+                foreach(var state in new[]{PetMotionState.Charging,PetMotionState.Airborne})
+                {
+                    Pose(a,Vector2.zero,new Vector2(-17,0),new Vector2(-34,0));
+                    Pose(b,new Vector2(100,0),new Vector2(60,0),new Vector2(25,0));
+                    Call(m,"ChangeState",state); m.RivalTarget=new Vector2(25,0);
+                    food.Cancel(); food.Begin(); food.Place(b.WorldMouth); food.Take(b.Config.key);
+                    int contact=PetContacts.BiteContact(a,b,out _); Check(contact==2,"Airborne contact fixture missed rear body");
+                    var velocity=m.BodyVelocity(0);
+                    Call(host,"ApplyBite",a,b,BiteDecision.Hit,contact);
+                    Check(food.Available && food.Holder==null,"Charging/airborne hit did not drop food");
+                    Check(m.BodyVelocity(0)==velocity && m.State==state,"Contact snap added a midair jump impulse");
+                    Check((float)Get(health,"health")==1 && !(bool)Get(b.Pet.Lizard,"dead"),"Flight bite damaged carrier");
+                }
+                m.BeginGrab(m.Position); Check(!m.BiteToward(new Vector2(25,0)),"Held pet snapped");
+                Debug.Log("PURSUIT_TAKEOFF_AIR_CONTACT_COOLDOWN_CHECK_PASSED");
+            }
+            finally { foreach(var p in pets) p.Dispose(); pets.Clear(); native.Dispose(); UnityEngine.Object.DestroyImmediate(root); }
+        }
         public static void Run(ReferenceContext context)
         {
             var tuning=new BiteTuning(25,0,90,1.4f,1,12);

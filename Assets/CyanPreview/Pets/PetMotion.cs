@@ -234,6 +234,7 @@ namespace CyanPreview
         }
         void BeginJump(Vector2 point, float power)
         {
+            pursuitJump = RivalPursuingCarrier;
             jumpPower = Mathf.Clamp01(power);
             jumpTarget = point;
             propelled = true;
@@ -305,6 +306,7 @@ namespace CyanPreview
             var exploration = Behavior.ExplorationTarget;
             if ((Behavior.TaskTarget.HasValue ? AutonomousJumps : (!clickInvestigation || AutonomousJumps)) && State == PetMotionState.Crawling && !Recovery.Active && cooldown == 0 && GripCount > 0 && exploration.HasValue
                 && Vector2.Distance(Position, exploration.Value) > (clickInvestigation ? 35 : Mathf.Lerp(190, 120, pet.Personality.Bravery))
+                && (!RivalPursuingCarrier || CanPlanPursuitJump(exploration.Value))
                 && PetJumpPlanner.TryPlanToTarget(Position, exploration.Value, surfaces, capabilities, out var targetedJump))
             {
                 launchVelocity = targetedJump.Velocity;
@@ -319,6 +321,7 @@ namespace CyanPreview
                     BeginJump(candidate.Landing, candidate.Power);
                 }
             }
+            RefreshPursuitCharge();
             if (State == PetMotionState.Charging && --chargeTicks == 0)
             {
                 foreach (var chunk in chunks) Set(chunk, "vel", launchVelocity);
@@ -358,7 +361,7 @@ namespace CyanPreview
                 {
                     // Cyan JumpingUpdate applies opposite front/rear forces toward
                     // the landing target, allowing the body to turn during flight.
-                    if (propelled && i != 1) v += (jumpTarget - (Vector2)Get(chunks[1], "pos")).normalized
+                    if (propelled && i != 1) v += (pursuitJump ? ((Vector2)Get(chunks[1], "vel")).normalized : (jumpTarget - (Vector2)Get(chunks[1], "pos")).normalized)
                         * Mathf.Lerp(2, 0, Mathf.InverseLerp(10, 60, flightTicks)) * (i == 0 ? 1 : -1);
                     p += v; v = v * .999f + Vector2.down * .9f;
                 }
@@ -536,7 +539,8 @@ namespace CyanPreview
             var head = Get(graphics, "head");
             var forward = (draw[0, 0] - draw[1, 0]).normalized;
             var target = draw[0, 0] + forward * 100;
-            if (State == PetMotionState.Charging || (State == PetMotionState.Airborne && propelled)) target = jumpTarget;
+            if (pursuitJump && RivalTarget.HasValue) target=RivalTarget.Value;
+            else if (State == PetMotionState.Charging || (State == PetMotionState.Airborne && propelled)) target = jumpTarget;
             else if (RivalTarget.HasValue) target=RivalTarget.Value;
             else if (lookTarget.HasValue && Vector2.Distance(HeadPosition, lookTarget.Value) <= 180) target = lookTarget.Value;
             else if (Behavior.InterestPoint.HasValue && lookTarget.HasValue) target = lookTarget.Value;
