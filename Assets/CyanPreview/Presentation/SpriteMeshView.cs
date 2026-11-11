@@ -36,6 +36,7 @@ namespace CyanPreview
         {
             set { glowMaterial.SetInt("_DstBlend", value ? 10 : 1); }
         }
+        public bool Visible { set => root.gameObject.SetActive(value); }
         public bool HeadGlowEnabled { get; set; } = true;
         public void SetScale(float scale) => root.localScale = Vector3.one * scale;
 

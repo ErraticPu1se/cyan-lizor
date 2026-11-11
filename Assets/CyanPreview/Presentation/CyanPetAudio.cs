@@ -89,12 +89,19 @@ namespace CyanPreview
         }
         float NextIdleDelay() => 30 + (float)voiceRandom.NextDouble() * 30;
         public bool CanPettingCall => !disposed && enabled && affectionVoice != null && affectionCooldown <= 0 && !voice.isPlaying;
-        public bool PettingCall()
+        public bool PettingCall() => PlayAffection("PETTING");
+        public bool FoodPickupCall()
+        {
+            if(disposed || !enabled || affectionVoice==null || affectionCooldown>0) return false;
+            // Pickup may replace the arrival call, but never overlaps voices or bypasses the affection cooldown.
+            voice.Stop(); return PlayAffection("FOOD_PICKUP");
+        }
+        bool PlayAffection(string reason)
         {
             if (!CanPettingCall) return false;
             voice.clip = affectionVoice; voice.volume = .55f; voice.Play();
             affectionCooldown = PettingContact.CooldownSeconds; vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay();
-            Debug.Log("PETTING_AFFECTION_PLAYED " + affectionVoice.name);
+            Debug.Log(reason+"_AFFECTION_PLAYED " + affectionVoice.name);
             return true;
         }
         void Landed(float speed) { Impact(speed); }

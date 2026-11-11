@@ -37,7 +37,7 @@ namespace CyanPreview
         float phase, depth=.7f, desktopScale=DesktopSettings.DefaultScale, previewClock;
         bool animate=true, desktopClicks, desktopSounds=true, desktopRoam=true, autonomousJumps=true;
         bool movementOpen=true, interactionOpen, soundOpen, advancedOpen;
-        int desktopVocalizeRequest;
+        int desktopVocalizeRequest, desktopFeedRequest, desktopCancelFeedRequest;
         ClimbingMode desktopClimbingMode=ClimbingMode.EdgesAndBackgrounds;
         Vector2 panelScroll;
         bool Ready => reference != null && reference.Graphics != null;
@@ -113,7 +113,7 @@ namespace CyanPreview
         }
         void Fail(Exception e) { error=e.Message; Debug.LogException(e); }
         DesktopSettings DesktopConfiguration() => new DesktopSettings {id=reference.Identity,cache=cache,scale=desktopScale,
-            paused=trayState.Paused,climbingMode=desktopClimbingMode,clickToExplore=desktopClicks,sound=desktopSounds,vocalizeRequest=desktopVocalizeRequest,roam=desktopRoam,jumps=autonomousJumps};
+            paused=trayState.Paused,climbingMode=desktopClimbingMode,clickToExplore=desktopClicks,sound=desktopSounds,vocalizeRequest=desktopVocalizeRequest,feedRequest=desktopFeedRequest,cancelFeedRequest=desktopCancelFeedRequest,roam=desktopRoam,jumps=autonomousJumps};
         System.Collections.IEnumerator InitializeTray()
         {
             yield return null; yield return null;
@@ -265,6 +265,7 @@ namespace CyanPreview
             if(!string.IsNullOrEmpty(preferenceWarning)) GUILayout.Label(preferenceWarning,theme.Small);
             if(!Ready) DrawSetup();
             DrawPresets();
+            DrawFeeding();
             GUILayout.BeginVertical(theme.Card);
             GUILayout.Label("Your lizard",theme.Heading);
             GUILayout.Space(8);

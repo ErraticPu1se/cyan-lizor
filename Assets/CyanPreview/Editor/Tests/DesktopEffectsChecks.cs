@@ -95,6 +95,14 @@ namespace CyanPreview.Editor
                             audio.Enabled = true; audio.Advance(0); audio.Dispose(); audio.Dispose(); audio.Enabled = false;
                             Require(motion.VoiceIntensity == 0, "Disposed audio retained voice state");
                         }
+                        using(var feedingAudio=new CyanPetAudio(root.transform,context,motion,effects,pet.Seed))
+                        {
+                            Require(feedingAudio.Vocalize(),"Food arrival call failed");
+                            Require(feedingAudio.FoodPickupCall(),"Arrival call blocked pickup affection");
+                            Require(!feedingAudio.FoodPickupCall(),"Repeated pickup bypassed affection cooldown");
+                            feedingAudio.Enabled=false; Require(!feedingAudio.FoodPickupCall(),"Muted pickup played");
+                            feedingAudio.Dispose(); Require(!feedingAudio.FoodPickupCall(),"Disposed pickup played");
+                        }
                         effects.Dispose(); effects.Dispose(); effects.HeadBubble(1); effects.Advance(.1f);
                         Require(effects.ParticleCount == 0, "Disposed effects accepted emissions");
                         int bursts = effects.BurstCount;

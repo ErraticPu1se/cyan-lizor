@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace CyanPreview
 {
-    public enum PetIntent { Idle, Roaming, Investigating, Inspecting, Settling, FollowingOwner }
+    public enum PetIntent { Idle, Roaming, Investigating, Inspecting, Settling, FollowingOwner, Task }
 
     // Rain World-inspired weighted/smoothed utilities. Personality mappings and
     // desktop needs are adaptations, not the game's complete creature AI.
@@ -17,7 +17,8 @@ namespace CyanPreview
         float curiosity, restlessness = .1f, fatigue = .15f;
         float restScore = .35f, exploreScore, cueScore, friendScore;
         public Vector2? InterestPoint => interest;
-        public Vector2? ExplorationTarget => interest.HasValue && !arrived ? interest : null;
+        public Vector2? TaskTarget { get; set; }
+        public Vector2? ExplorationTarget => TaskTarget ?? (interest.HasValue && !arrived ? interest : null);
         public bool Roam { get; set; } = true;
         public PetIntent Intent { get; private set; }
         public float RunSpeed { get; private set; }
@@ -49,6 +50,11 @@ namespace CyanPreview
         }
         public Vector2? Update(Vector2 position, IPetSurfaces surfaces, bool canArrive = true)
         {
+            if(TaskTarget.HasValue)
+            {
+                Intent=PetIntent.Task; RunSpeed=Mathf.Lerp(RunSpeed,.35f,.08f);
+                lastPosition=position; return TaskTarget;
+            }
             float travel = lastPosition.HasValue ? Mathf.Min(4, Vector2.Distance(position, lastPosition.Value)) : 0;
             lastPosition = position;
             bool working = destination.HasValue || !canArrive;

@@ -100,6 +100,7 @@ namespace CyanPreview.Editor
             SetupChecks.Run();
             TrayChecks.Run();
             PresetChecks.Run();
+            FeedingChecks.Run();
             if (!ReferenceBridge.TryParseId("ID.7.12345", out var spawner, out var seed) || spawner != 7 || seed != 12345)
                 throw new Exception("Full ID parser failed");
             foreach (var invalid in new[] { "", "ID.a.2", "1.2.3", "2147483648", "ID.1.2.3" })
@@ -125,6 +126,7 @@ namespace CyanPreview.Editor
                 if (reference.Summary != first || reference.EffectColor != color)
                     throw new Exception("Prior generations changed the result");
                 VerifyIndependentPets(context, reference);
+                FeedingChecks.Motion(context);
                 DesktopChecks.Run(context);
                 ClimbingModeChecks.Run(context);
                 FallCatchChecks.Run(context);

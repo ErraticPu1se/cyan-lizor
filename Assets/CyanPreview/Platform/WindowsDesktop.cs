@@ -24,6 +24,8 @@ namespace CyanPreview
         [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hwnd, int index);
         [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hwnd, int index, int value);
         [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
+        [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
+        public bool EscapePressed => (GetAsyncKeyState(0x1B) & 0x8000)!=0;
         [DllImport("user32.dll")] static extern bool GetCursorPos(out Point point);
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint action, uint param, out NativeRect rect, uint flags);
@@ -55,6 +57,7 @@ namespace CyanPreview
             try
             {
                 AddMenu(menu, DesktopMenuAction.Settings, "Settings...");
+                AddMenu(menu, DesktopMenuAction.Feed, "Feed: place a morsel...");
                 AppendMenu(menu, 0x800, UIntPtr.Zero, null);
                 AddMenu(menu, DesktopMenuAction.Small, "Small (1.0x)", Mathf.Approximately(settings.scale, 1));
                 AddMenu(menu, DesktopMenuAction.Medium, "Medium (1.2x)", Mathf.Approximately(settings.scale, DesktopSettings.DefaultScale));

@@ -10,7 +10,7 @@ namespace CyanPreview
     // One controller per pet. Rain World integration is confined to this adapter.
     // Room AI is replaced by host surface selection; original constraints and Limb
     // reach interpolation are executed against the locally installed game assembly.
-    public sealed class PetMotion
+    public sealed partial class PetMotion
     {
         const float TickSeconds = 1f / 40f;
         readonly ReferenceBridge pet;
@@ -42,6 +42,8 @@ namespace CyanPreview
         public float JumpPower => jumpPower;
         public float SmokeLifeTicks => Mathf.Max(1, (70 * jumpPower - flightTicks) * 1.5f);
         public Vector2 HeadPosition => pet.HeadPosition;
+        // Rain World CarryObject places held objects ahead of the front body chunk.
+        public Vector2 MouthPosition => Position+(Position-(Vector2)Get(chunks[1],"pos")).normalized*(25*.95f);
         public float VoiceIntensity { get; set; }
         Vector2 destination, launchVelocity, jumpTarget;
         Vector2? lookTarget;
@@ -289,7 +291,7 @@ namespace CyanPreview
             Recovery.Advance(TickSeconds, GripCount, bodySpeed);
             if (cooldown > 0) cooldown--;
             var exploration = Behavior.ExplorationTarget;
-            if ((!clickInvestigation || AutonomousJumps) && State == PetMotionState.Crawling && !Recovery.Active && cooldown == 0 && GripCount > 0 && exploration.HasValue
+            if ((Behavior.TaskTarget.HasValue ? AutonomousJumps : (!clickInvestigation || AutonomousJumps)) && State == PetMotionState.Crawling && !Recovery.Active && cooldown == 0 && GripCount > 0 && exploration.HasValue
                 && Vector2.Distance(Position, exploration.Value) > (clickInvestigation ? 35 : Mathf.Lerp(190, 120, pet.Personality.Bravery))
                 && PetJumpPlanner.TryPlanToTarget(Position, exploration.Value, surfaces, capabilities, out var targetedJump))
             {
