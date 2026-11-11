@@ -10,14 +10,15 @@ namespace CyanPreview
         readonly GameObject root;
         readonly PetMotion motion;
         readonly CyanJumpEffects effects;
-        readonly AudioSource charge, voice;
+        readonly AudioSource charge, voice, bite;
+        readonly AudioClip[] biteHits=new AudioClip[7], biteMisses=new AudioClip[7];
         readonly AudioSource[] impacts = new AudioSource[3];
         readonly AudioClip regularVoice, affectionVoice;
         readonly AudioSource[] launch = new AudioSource[3];
         readonly AudioClip[] charges = new AudioClip[3], clangs = new AudioClip[3];
         readonly float[] samples = new float[128];
         readonly System.Random voiceRandom;
-        float idleVoice, bubbleTime, vocalCooldown, affectionCooldown, impactCooldown;
+        float idleVoice, bubbleTime, vocalCooldown, affectionCooldown, impactCooldown, biteCooldown;
         public const float VocalCooldownSeconds = 10;
         PetIntent lastIntent;
         bool enabled = true, disposed;
@@ -28,7 +29,7 @@ namespace CyanPreview
             {
                 if (disposed || enabled == value) return;
                 enabled = value;
-                if (!value) { charge.Stop(); voice.Stop(); foreach (var source in launch) source.Stop(); foreach (var source in impacts) if (source != null) source.Stop(); motion.VoiceIntensity = 0; }
+                if (!value) { charge.Stop(); voice.Stop(); bite.Stop(); foreach (var source in launch) source.Stop(); foreach (var source in impacts) if (source != null) source.Stop(); motion.VoiceIntensity = 0; }
             }
         }
         public CyanPetAudio(Transform parent, ReferenceContext context, PetMotion motion, CyanJumpEffects effects, int seed)
@@ -39,7 +40,13 @@ namespace CyanPreview
             root = new GameObject("Cyan pet audio"); root.transform.SetParent(parent, false);
             try
             {
-                charge = Source(); voice = Source();
+                charge = Source(); voice = Source(); bite=Source();
+                // Local sounds.txt: Lizard_Jaws_Grab_NPC and Lizard_Jaws_Shut_Miss_Creature.
+                try
+                {
+                    for(int i=0;i<7;i++) { biteHits[i]=context.LoadSound("lizBite2"+(char)('A'+i)); biteMisses[i]=context.LoadSound("lizBite3"+(char)('A'+i)); }
+                }
+                catch(System.IO.IOException e) { Debug.LogWarning("Bite sound unavailable: "+e.Message); }
                 charges[0] = context.LoadSound("CyanChargeSm"); charges[1] = context.LoadSound("CyanChargeM"); charges[2] = context.LoadSound("CyanChargeL");
                 clangs[0] = context.LoadSound("Clang2A"); clangs[1] = context.LoadSound("Clang1H"); clangs[2] = context.LoadSound("Clang1G");
                 for (int i = 0; i < launch.Length; i++) launch[i] = Source();
@@ -117,6 +124,14 @@ namespace CyanPreview
             impactCooldown = .15f;
             return true;
         }
+        public bool Bite(bool contact)
+        {
+            if(disposed || !enabled || biteCooldown>0) return false;
+            var clips=contact?biteHits:biteMisses;
+            var clip=clips[voiceRandom.Next(clips.Length)]; if(clip==null) return false;
+            bite.Stop(); bite.clip=clip; bite.volume=contact?.3f:.5f; bite.pitch=1; bite.Play(); biteCooldown=.3f;
+            return true;
+        }
         public bool Vocalize() => PlayVoice(regularVoice, .4f);
         bool PlayVoice(AudioClip clip, float volume)
         {
@@ -133,6 +148,7 @@ namespace CyanPreview
             vocalCooldown = Mathf.Max(0, vocalCooldown - seconds);
             affectionCooldown = Mathf.Max(0, affectionCooldown - seconds);
             impactCooldown = Mathf.Max(0, impactCooldown - seconds);
+            biteCooldown=Mathf.Max(0,biteCooldown-seconds);
             var intent = motion.Behavior.Intent;
             if (intent == PetIntent.Investigating && lastIntent != intent) Vocalize();
             lastIntent = intent;
@@ -156,7 +172,7 @@ namespace CyanPreview
         {
             if (disposed) return; disposed = true;
             motion.StateChanged -= StateChanged; motion.JumpLaunched -= Launched; motion.Landed -= Landed;
-            motion.VoiceIntensity = 0; charge.Stop(); voice.Stop(); foreach (var source in launch) source.Stop(); foreach (var source in impacts) if (source != null) source.Stop();
+            motion.VoiceIntensity = 0; charge.Stop(); voice.Stop(); bite.Stop(); foreach (var source in launch) source.Stop(); foreach (var source in impacts) if (source != null) source.Stop();
             Release(root);
         }
     }

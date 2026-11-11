@@ -178,6 +178,14 @@ namespace CyanPreview.Editor
                 for(int i=0;i<50;i++) { a.Advance(.025f,false); b.Advance(.025f,false); c.Advance(.025f,false); }
                 // Original graphics animation with our bounded impulses; never invoke a game attack.
                 a.Motion.RivalTarget=b.Motion.Position; a.Motion.RivalBiting=true;
+                Call(a.Motion,"ChangeState",PetMotionState.Crawling);
+                var body=(Array)Get(a.Pet.Lizard,"bodyChunks");
+                foreach(var chunk in body) Set(chunk,"vel",Vector2.zero);
+                Check(a.Motion.BiteToward(a.Motion.Position+Vector2.right*30),"Bite impulse rejected");
+                Check(((Vector2)Get(body.GetValue(0),"vel")).x>0 && ((Vector2)Get(body.GetValue(1),"vel")).x<0 && ((Vector2)Get(body.GetValue(2),"vel")).x<0,"Bite moved whole body rigidly instead of opposing front/rear forces");
+                Check(!a.Motion.BiteToward(new Vector2(float.NaN,0)),"Invalid bite target accepted");
+                a.Motion.BeginGrab(a.Motion.Position); Check(!a.Motion.BiteToward(a.Motion.Position+Vector2.right*30),"Held pet attacked"); a.Motion.EndGrab();
+                Call(a.Motion,"ChangeState",PetMotionState.Crawling);
                 var state=context.Blank("LizardState"); Set(state,"health",1f); Set(Get(a.Pet.Lizard,"abstractPhysicalObject"),"state",state); var health=Get(state,"health"); var dead=Get(a.Pet.Lizard,"dead");
                 for(int i=0;i<80;i++) { a.Motion.ScuffleImpulse(Vector2.right*4); a.Advance(.025f,false); }
                 Check(Equals(health,Get(state,"health")) && Equals(dead,Get(a.Pet.Lizard,"dead")),"Scuffle injured pet");

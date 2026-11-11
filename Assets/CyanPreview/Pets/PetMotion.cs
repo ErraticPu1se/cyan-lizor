@@ -333,7 +333,7 @@ namespace CyanPreview
             Set(Get(pet.Lizard, "AI"), "runSpeed", Behavior.RunSpeed);
             bool airborne = State == PetMotionState.Airborne;
             poseTicks++;
-            bool atRest = State == PetMotionState.Crawling && !hasDestination && !Recovery.Active;
+            bool atRest = State == PetMotionState.Crawling && !hasDestination && !Recovery.Active && !RivalTarget.HasValue;
             if (atRest && !resting) for (int i = 0; i < 3; i++) restingPose[i] = (Vector2)Get(chunks[i], "pos");
             resting = atRest;
             if (airborne)
@@ -422,6 +422,12 @@ namespace CyanPreview
                             restTarget = restingPose[1] + (Vector2)(Quaternion.Euler(0, 0, turn) * (restTarget - restingPose[1]));
                         }
                         v += Vector2.ClampMagnitude(restTarget + offset - p, 12) * .12f;
+                    }
+                    if(RivalStance && RivalTarget.HasValue)
+                    {
+                        // FightingStance braces the rear while the head leans toward its rival.
+                        var direction=(RivalTarget.Value-Position).normalized;
+                        v+=direction*(i==0?4f:-2.2f)*Mathf.Clamp01(GripCount/2f);
                     }
                     if (State == PetMotionState.Charging)
                     {
@@ -512,7 +518,7 @@ namespace CyanPreview
         {
             Set(pet.Lizard, "animation", pet.Context.Static("Lizard+Animation", State == PetMotionState.Charging ? "PrepareToJump" : RivalTarget.HasValue ? "FightingStance" : "Standard"));
             Set(pet.Lizard,"lastJawOpen",Get(pet.Lizard,"jawOpen"));
-            Set(pet.Lizard,"jawOpen",RivalTarget.HasValue?(RivalBiting?.15f:.65f):0f);
+            Set(pet.Lizard,"jawOpen",RivalBiting?0f:RivalStance?1f:0f);
             Set(pet.Lizard, "timeInAnimation", chargeDuration - chargeTicks);
             Set(pet.Lizard, "timeToRemainInAnimation", chargeDuration);
             Set(graphics, "lastVoiceVisualization", Get(graphics, "voiceVisualization"));

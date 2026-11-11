@@ -50,7 +50,7 @@ namespace CyanPreview
             foreach(var p in pets)
             {
                 if(p.Motion.RivalTarget.HasValue) { p.Motion.Behavior.TaskTarget=p.Feeding.Target; p.Motion.Behavior.HoldPosition=p.Feeding.UsingRoute; }
-                p.Motion.RivalTarget=null; p.Motion.RivalBiting=false;
+                p.Motion.RivalTarget=null; p.Motion.RivalBiting=false; p.Motion.RivalStance=false;
             }
             socialStates=pets.ConvertAll(p=>new PetSocialStatus {key=p.Config.key,state=settings.allowFighting?"Calm":"Fighting off"}).ToArray();
             var engaged=new HashSet<string>();
@@ -81,8 +81,12 @@ namespace CyanPreview
                 engaged.Add(a.Config.key); engaged.Add(b.Config.key);
                 a.Motion.RivalTarget=a.Local(b.WorldPosition); b.Motion.RivalTarget=b.Local(a.WorldPosition);
                 bool bite=fight.Phase==ScufflePhase.Bite;
-                a.Motion.RivalBiting=b.Motion.RivalBiting=bite;
-                bool hold=fight.Phase==ScufflePhase.Bite || fight.Phase==ScufflePhase.Recoil;
+                var first=a.Pet.Personality.Dominance>=b.Pet.Personality.Dominance?a:b;
+                var attacker=fight.ExchangeIndex%2==0?first:(first==a?b:a);
+                var defender=attacker==a?b:a;
+                attacker.Motion.RivalBiting=bite;
+                a.Motion.RivalStance=b.Motion.RivalStance=fight.Phase==ScufflePhase.Posture;
+                bool hold=fight.Phase==ScufflePhase.Bite || fight.Phase==ScufflePhase.Recoil || (fight.Phase==ScufflePhase.Posture && Vector2.Distance(a.WorldPosition,b.WorldPosition)/scale<=75);
                 a.Motion.Behavior.HoldPosition=b.Motion.Behavior.HoldPosition=hold;
                 a.Motion.Behavior.TaskTarget=a.Local(b.WorldPosition); b.Motion.Behavior.TaskTarget=b.Local(a.WorldPosition);
                 a.Motion.AutonomousJumps=b.Motion.AutonomousJumps=false;
@@ -90,14 +94,19 @@ namespace CyanPreview
                 if(direction.sqrMagnitude<.1f) direction=Vector2.right;
                 if(fight.BiteStarted)
                 {
-                    a.Motion.ScuffleImpulse(direction*2); b.Motion.ScuffleImpulse(-direction*2);
+                    bool contact=Vector2.Distance(attacker.WorldMouth,defender.WorldPosition)<=28*scale;
+                    if(attacker.Motion.BiteToward(attacker.Local(defender.WorldPosition)))
+                    {
+                        attacker.Audio?.Bite(contact);
+                        if(contact) defender.Motion.ScuffleImpulse((defender.WorldPosition-attacker.WorldPosition).normalized*5);
+                    }
                     if(food.Owner==FoodOwner.Pet && (food.Holder==a.Config.key || food.Holder==b.Config.key))
                     { var holder=food.Holder==a.Config.key?a:b; food.Drop(Clamp(holder.WorldMouth)); ResetInterest(holder); }
                 }
                 if(fight.RecoilStarted)
                 {
                     a.Motion.ScuffleImpulse(-direction*4); b.Motion.ScuffleImpulse(direction*4);
-                    a.Audio?.Vocalize(); b.Audio?.Vocalize();
+                    // Jaw snaps have their own sound; do not substitute two vocal calls.
                 }
             }
             socialRefresh-=dt;

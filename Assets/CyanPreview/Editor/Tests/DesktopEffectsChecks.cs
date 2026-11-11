@@ -48,6 +48,18 @@ namespace CyanPreview.Editor
                         Require(rejected && root.GetComponentsInChildren<AudioSource>().Length == 0, "Missing audio leaked playback objects");
                         using (var audio = new CyanPetAudio(root.transform, context, motion, effects, pet.Seed))
                         {
+                            Require(audio.Bite(true),"Local NPC jaw bite sound failed to load/play");
+                            Require(!audio.Bite(false),"Repeated bite bypassed snap cooldown");
+                            bool hitClip=false;
+                            foreach(var source in root.GetComponentsInChildren<AudioSource>()) hitClip|=source.clip!=null && source.clip.name.StartsWith("lizBite2");
+                            Require(hitClip,"Contact bite used incorrect local clip family");
+                            audio.Advance(.25f); audio.Advance(.1f);
+                            Require(audio.Bite(false),"Missed bite sound did not play");
+                            bool missClip=false;
+                            foreach(var source in root.GetComponentsInChildren<AudioSource>()) missClip|=source.clip!=null && source.clip.name.StartsWith("lizBite3");
+                            Require(missClip,"Missed bite used incorrect clip family");
+                            audio.Enabled=false; Require(!audio.Bite(true),"Muted bite played"); audio.Enabled=true;
+                            Require(!audio.Bite(true),"Mute reset bite cooldown");
                             Require(audio.Vocalize(), "First vocal call was rejected");
                             foreach (var source in root.GetComponentsInChildren<AudioSource>()) source.Stop();
                             for (int i = 0; i < 39; i++)
@@ -92,7 +104,7 @@ namespace CyanPreview.Editor
                             Require(motion.JumpTo(new Vector2(150, 80)), "Desktop effect jump rejected");
                             for (int i = 0; i < 100; i++) { motion.Advance(.025f); effects.Advance(.025f); audio.Advance(.025f); }
                             Require(effects.BurstCount == 1, "Mute disabled propulsion particles");
-                            audio.Enabled = true; audio.Advance(0); audio.Dispose(); audio.Dispose(); audio.Enabled = false;
+                            audio.Enabled = true; audio.Advance(0); audio.Dispose(); audio.Dispose(); audio.Enabled = false; Require(!audio.Bite(true),"Disposed bite played");
                             Require(motion.VoiceIntensity == 0, "Disposed audio retained voice state");
                         }
                         using(var feedingAudio=new CyanPetAudio(root.transform,context,motion,effects,pet.Seed))
