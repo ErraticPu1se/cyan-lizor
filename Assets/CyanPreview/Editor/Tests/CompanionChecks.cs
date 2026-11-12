@@ -45,6 +45,70 @@ namespace CyanPreview.Editor
             Require(worst<.15f,"Flat-background idle correction exceeded .15 units per tick");
             Debug.Log("FLAT_BACKGROUND_IDLE_STABILITY_CHECK_PASSED");
         }
+        public static void VerifyEdgeFootholds()
+        { using(var context=new ReferenceContext(System.IO.Path.GetFullPath("local-data"))) EdgeFootholds(context); }
+        public static void EdgeFootholds(ReferenceContext context)
+        {
+            int worstUnreachable=0,worstResets=0;
+            foreach(var scenario in new[]{"floor","wall","corner","window","window-raised","window-background","floor-raised"})
+            using(var pet=context.CreatePet())
+            {
+                pet.Generate("9320");
+                var surfaces=new DesktopSurfaces(new Rect(-700,-400,1400,800)) {Mode=scenario=="window-background"?ClimbingMode.EdgesAndBackgrounds:ClimbingMode.EdgesOnly};
+                if(scenario.StartsWith("window")) surfaces.UpdateWindows(new[]{new DesktopWindow(1,new Rect(-200,-100,400,200))});
+                var motion=new PetMotion(pet,surfaces,42) {Roam=false,AutonomousJumps=false};
+                var origin=scenario=="wall"?new Vector2(686,0):scenario=="corner"?new Vector2(680,-380):
+                    scenario.StartsWith("window")?new Vector2(0,scenario=="window"?86:72):new Vector2(0,scenario=="floor-raised"?-372:-386);
+                var forward=scenario=="wall"||scenario=="corner"?Vector2.up:Vector2.right;
+                var chunks=(Array)Get(pet.Lizard,"bodyChunks");
+                for(int i=0;i<3;i++) { Set(chunks.GetValue(i),"pos",origin-forward*17*i); Set(chunks.GetValue(i),"lastPos",origin-forward*17*i); Set(chunks.GetValue(i),"vel",Vector2.zero); }
+                var anchors=(Vector2[])Get(motion,"anchors"); var ages=(int[])Get(motion,"gripAge"); var seeking=(bool[])Get(motion,"seeking"); var planted=(bool[])Get(motion,"planted");
+                var limbs=(Array)Get(pet.Graphics,"limbs"); var oldAges=new int[4];
+                int resets=0,unreachable=0; float travel=0,maxStep=0;
+                for(int t=0;t<800;t++)
+                {
+                    motion.ObserveCursor(null); var before=motion.Position; motion.Advance(.025f);
+                    if(t>=200)
+                    {
+                        travel+=Vector2.Distance(before,motion.Position); maxStep=Mathf.Max(maxStep,Vector2.Distance(before,motion.Position));
+                        for(int i=0;i<4;i++)
+                        {
+                            if(oldAges[i]>0 && ages[i]<=1) resets++;
+                            if((seeking[i] || planted[i]) && Vector2.Distance(anchors[i],motion.BodyPosition(i<2?0:2))>(float)Get(limbs.GetValue(i),"jointDist")+.1f) unreachable++;
+                        }
+                    }
+                    Array.Copy(ages,oldAges,4);
+                }
+                Debug.Log($"EDGE_FOOTHOLDS {scenario} resets={resets} unreachable={unreachable} grips={motion.GripCount} travel={travel:F3} maxStep={maxStep:F3}");
+                worstUnreachable=Mathf.Max(worstUnreachable,unreachable); worstResets=Mathf.Max(worstResets,resets);
+                Require(travel>.1f,"Edge idle movement froze");
+                Require(motion.GripCount==4,"Reachable idle edge failed to retain four grips");
+                if(scenario=="floor")
+                {
+                    var start=motion.Position; int steps=0; float progress=0;
+                    motion.MoveTo(surfaces.Advance(start,140));
+                    for(int tick=0;tick<160;tick++)
+                    {
+                        var before=(Vector2[])anchors.Clone(); motion.Advance(.025f);
+                        progress=Mathf.Max(progress,Vector2.Distance(start,motion.Position));
+                        for(int i=0;i<4;i++) if(Vector2.Distance(before[i],anchors[i])>.5f) steps++;
+                    }
+                    Require(progress>20 && steps>0,"Stable resting feet prevented normal crawling/stepping");
+                }
+                if(scenario=="window")
+                {
+                    var oldAnchors=(Vector2[])anchors.Clone(); var shift=new Vector2(50,30);
+                    var delta=surfaces.UpdateWindows(new[]{new DesktopWindow(1,new Rect(-150,-70,400,200))},motion.Position,true);
+                    Require(Vector2.Distance(delta,shift)<.01f,"Window-move fixture lost support");
+                    motion.ShiftWithSurface(delta);
+                    for(int i=0;i<4;i++) Require(Vector2.Distance(anchors[i],oldAnchors[i]+shift)<.01f,"Moving window detached stationary foot anchor");
+                    surfaces.UpdateWindows(new DesktopWindow[0]); motion.RefreshSurfaceSupport(); motion.Advance(.025f);
+                    Require(motion.State==PetMotionState.Airborne && motion.GripCount==0,"Closed window retained false foot support");
+                }
+            }
+            Require(worstUnreachable==0 && worstResets<8,"Resting edge feet repeatedly seek unreachable footholds or reset grips");
+            Debug.Log("EDGE_IDLE_FOOTHOLD_STABILITY_CHECK_PASSED");
+        }
         public static void Run(ReferenceContext context)
         {
             var surface = new BackgroundSurfaces(new Rect(-360, -180, 720, 360));

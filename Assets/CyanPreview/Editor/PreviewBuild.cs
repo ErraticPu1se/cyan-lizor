@@ -135,6 +135,7 @@ namespace CyanPreview.Editor
                 UtilityChecks.Run(context);
                 CompanionChecks.Run(context);
                 CompanionChecks.IdleStability(context);
+                CompanionChecks.EdgeFootholds(context);
                 TargetingChecks.Run(context);
                 DesktopEffectsChecks.Run(context);
                 MultiplePetChecks.Motion(context);

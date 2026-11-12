@@ -493,19 +493,20 @@ namespace CyanPreview
                 float reach = (float)Get(((Array)Get(graphics, "limbs")).GetValue(i), "jointDist");
                 // LizardLimb releases a grip when the shoulder passes it and the
                 // limb reaches its limit; its partner's grip delays the next step.
-                var localForward = i < 2 ? tangent : ((Vector2)Get(chunks[1], "pos") - shoulder).normalized;
+                var localForward = i < 2 ? (resting ? (Position-BodyPosition(1)).normalized : tangent) : ((Vector2)Get(chunks[1], "pos") - shoulder).normalized;
                 if (localForward.sqrMagnitude < .01f) localForward = tangent;
                 float extension = Vector2.Distance(anchors[i], shoulder);
                 bool trailing = Vector2.Dot(shoulder - anchors[i], localForward) > 0;
-                bool release = !Recovery.Active && planted[i] && trailing && extension > reach - 2 && (gripAge[i ^ 1] > 2 || extension > reach + 3);
-                if (release || flying || extension > reach + 3) { planted[i] = seeking[i] = false; gripAge[i] = 0; }
+                bool release = !resting && !Recovery.Active && planted[i] && trailing && extension > reach - 2 && (gripAge[i ^ 1] > 2 || extension > reach + 3);
+                bool lostSupport=(planted[i] || seeking[i]) && Vector2.Distance(anchors[i],surfaces.Nearest(anchors[i],out _))>2;
+                if (release || flying || lostSupport || extension > (resting ? reach-1 : reach+3)) { planted[i] = seeking[i] = false; gripAge[i] = 0; }
                 if (!planted[i] && !seeking[i])
                 {
                     var spread = normal == Vector2.zero ? new Vector2(-localForward.y, localForward.x) * (i % 2 == 0 ? 14 : -14) : Vector2.zero;
-                    anchors[i] = surfaces.Nearest(shoulder + localForward * (Recovery.Active ? 0 : i % 2 == 0 ? 16 : 10) + spread, out _);
-                    seeking[i] = true;
+                    var preferred=shoulder + localForward * (Recovery.Active ? 0 : i % 2 == 0 ? 16 : 10) + spread;
+                    seeking[i]=TryFindFoothold(shoulder,preferred,reach,out anchors[i]);
                 }
-                Vector2 hunt = anchors[i];
+                Vector2 hunt = planted[i] || seeking[i] ? anchors[i] : shoulder+Vector2.ClampMagnitude(anchors[i]-shoulder,Mathf.Max(0,reach-1));
                 bool reachingToCatch = false;
                 Vector2 catchNormal = Vector2.zero;
                 if (flying)
@@ -530,10 +531,22 @@ namespace CyanPreview
                     Behavior.Rest(); resting = false;
                     planted[i] = true; seeking[i] = false;
                 }
-                if (!flying && Vector2.Distance(shoulder, anchors[i]) <= reach && Vector2.Distance((Vector2)Get(feet[i], "pos"), anchors[i]) < 2) planted[i] = true;
+                if (!flying && seeking[i] && Vector2.Distance(shoulder, anchors[i]) <= reach && Vector2.Distance((Vector2)Get(feet[i], "pos"), anchors[i]) < 2)
+                { planted[i] = true; seeking[i] = false; }
                 if (planted[i]) gripAge[i]++;
             }
             UpdateGraphics();
+        }
+        bool TryFindFoothold(Vector2 shoulder,Vector2 preferred,float reach,out Vector2 anchor)
+        {
+            // Project progressively shorter steps onto real support, leaving room for idle sway.
+            for(int step=4;step>=0;step--)
+            {
+                anchor=surfaces.Nearest(Vector2.Lerp(shoulder,preferred,step*.25f),out _);
+                if(Vector2.Distance(shoulder,anchor)<=Mathf.Max(0,reach-3)) return true;
+            }
+            anchor=surfaces.Nearest(shoulder,out _);
+            return Vector2.Distance(shoulder,anchor)<=Mathf.Max(0,reach-1);
         }
         void UpdateGraphics()
         {
