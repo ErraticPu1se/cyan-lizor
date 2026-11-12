@@ -438,6 +438,13 @@ namespace CyanPreview
                         var offset = new Vector2(Mathf.Sin(poseTicks * .035f + i), Mathf.Sin(poseTicks * .06f + i * .7f)) * amplitude;
                         var restTarget = restingPose[i];
                         restTarget = restingPose[1] + (Vector2)(Quaternion.Euler(0,0,idleBodyTurn)*(restTarget-restingPose[1]));
+                        if(inward!=Vector2.zero)
+                        {
+                            // Support owns the wall-normal position; idle sway must not pull against it.
+                            restTarget+=inward*Vector2.Dot(p-restTarget,inward);
+                            offset-=inward*Vector2.Dot(offset,inward);
+                            restingPose[i]+=inward*Vector2.Dot(p-restingPose[i],inward);
+                        }
                         v += Vector2.ClampMagnitude(restTarget + offset - p, 12) * .12f;
                     }
                     if(RivalStance && RivalTarget.HasValue)

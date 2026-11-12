@@ -109,6 +109,48 @@ namespace CyanPreview.Editor
             Require(worstUnreachable==0 && worstResets<8,"Resting edge feet repeatedly seek unreachable footholds or reset grips");
             Debug.Log("EDGE_IDLE_FOOTHOLD_STABILITY_CHECK_PASSED");
         }
+        public static void VerifyRestingForces()
+        { using(var context=new ReferenceContext(System.IO.Path.GetFullPath("local-data"))) RestingForces(context); }
+        public static void RestingForces(ReferenceContext context)
+        {
+            float straightError=0;
+            foreach(var scenario in new[]{"raised-floor","raised-window","tilted-floor","corner","window-threshold"})
+            using(var pet=context.CreatePet())
+            {
+                pet.Generate("9320");
+                var surfaces=new DesktopSurfaces(new Rect(-700,-400,1400,800)) {Mode=scenario=="window-threshold"?ClimbingMode.EdgesAndBackgrounds:ClimbingMode.EdgesOnly};
+                if(scenario.Contains("window")) surfaces.UpdateWindows(new[]{new DesktopWindow(1,new Rect(-200,-100,400,200))});
+                var motion=new PetMotion(pet,surfaces,42) {Roam=false,AutonomousJumps=false};
+                var origin=scenario.Contains("window")?new Vector2(0,scenario=="window-threshold"?70:72):scenario=="corner"?new Vector2(680,-380):new Vector2(0,-372);
+                var forward=scenario=="tilted-floor"?new Vector2(.8f,.6f):scenario=="corner"?new Vector2(.6f,.8f):Vector2.right;
+                var chunks=(Array)Get(pet.Lizard,"bodyChunks");
+                for(int i=0;i<3;i++) { Set(chunks.GetValue(i),"pos",origin-forward*17*i); Set(chunks.GetValue(i),"lastPos",origin-forward*17*i); Set(chunks.GetValue(i),"vel",Vector2.zero); }
+                float error=0,opposed=0,travel=0,maxStep=0; int samples=0,driveTicks=0;
+                var tail=((Array)Get(pet.Graphics,"tail")).GetValue(0); float tailTravel=0;
+                for(int tick=0;tick<800;tick++)
+                {
+                    motion.ObserveCursor(null); var before=motion.Position; var tailBefore=(Vector2)Get(tail,"pos"); motion.Advance(.025f);
+                    if(tick<200) continue;
+                    if(motion.DiagnosticDriveTarget.HasValue || motion.Behavior.TaskTarget.HasValue) driveTicks++;
+                    travel+=Vector2.Distance(before,motion.Position); tailTravel+=Vector2.Distance(tailBefore,(Vector2)Get(tail,"pos")); maxStep=Mathf.Max(maxStep,Vector2.Distance(before,motion.Position));
+                    var rest=(Vector2[])Get(motion,"restingPose");
+                    for(int i=0;i<3;i++)
+                    {
+                        var pos=motion.BodyPosition(i); var support=surfaces.Nearest(pos,out var normal); if(normal==Vector2.zero) continue;
+                        float gap=Vector2.Dot(support+normal*14-pos,normal);
+                        float restPull=Vector2.Dot(rest[i]-pos,normal);
+                        error+=Mathf.Abs(gap); if(gap*restPull<0) opposed+=Mathf.Min(Mathf.Abs(gap)*.18f,Mathf.Abs(restPull)*.12f); samples++;
+                    }
+                }
+                float mean=error/Mathf.Max(1,samples);
+                Debug.Log($"REST_FORCES {scenario} supportError={mean:F3} opposedEstimate={opposed/Mathf.Max(1,samples):F3} driveTicks={driveTicks} travel={travel:F3} maxStep={maxStep:F3} tailTravel={tailTravel:F3}");
+                Require(driveTicks==0,"Resting pet still had a movement destination");
+                Require(travel>.1f && tailTravel>.1f && maxStep<1,"Resting edge motion froze or remained unstable");
+                if(scenario=="raised-floor" || scenario=="raised-window") straightError=Mathf.Max(straightError,mean);
+            }
+            Require(straightError<1,"Saved resting pose keeps pulling body away from edge support");
+            Debug.Log("SUPPORTED_EDGE_RESTING_FORCES_CHECK_PASSED");
+        }
         public static void Run(ReferenceContext context)
         {
             var surface = new BackgroundSurfaces(new Rect(-360, -180, 720, 360));
