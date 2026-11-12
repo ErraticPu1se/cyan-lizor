@@ -144,6 +144,14 @@ namespace CyanPreview
             Behavior.Target(target);
             clickInvestigation = true;
         }
+        public void AppendHitCircles(System.Collections.Generic.List<DesktopHitSnapshot.Circle> circles, Rect area, float scale)
+        {
+            for(int i=0;i<3;i++) circles.Add(HitCircle(BodyPosition(i),14,area,scale));
+            foreach(var part in (Array)Get(graphics,"tail")) circles.Add(HitCircle((Vector2)Get(part,"pos"),7,area,scale));
+            circles.Add(HitCircle(HeadPosition,12,area,scale));
+        }
+        static DesktopHitSnapshot.Circle HitCircle(Vector2 point,float radius,Rect area,float scale)
+            => new DesktopHitSnapshot.Circle(area.center.x+point.x*scale,area.center.y-point.y*scale,radius*scale);
         public bool Contains(Vector2 point)
         {
             foreach (var chunk in chunks)

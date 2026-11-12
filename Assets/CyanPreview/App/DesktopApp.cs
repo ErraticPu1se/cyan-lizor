@@ -22,6 +22,7 @@ namespace CyanPreview
         public string scuffleFirst, scuffleSecond;
         public bool paused;
         public bool allowFighting;
+        public bool showAttentionLabels=true;
         public DesktopPetConfiguration[] pets;
         public const int MaximumPets = 3;
         public DesktopPetConfiguration[] Roster => pets ?? new[] { DesktopPetConfiguration.From(this) };
@@ -170,12 +171,12 @@ namespace CyanPreview
             {
                 if(!native.Initialize()) throw new InvalidOperationException("Owned overlay window not found.");
                 desktopRenderer=new DesktopAlphaRenderer(native.WindowHandle,cameraView,transform);
-                native.HitTest=cursor=>!settings.paused && (food.Owner==FoodOwner.Placing || HitPet(World(cursor))!=null || HitFood(World(cursor)));
+                PublishPointerSnapshot();
                 if(File.Exists(Path.Combine(Application.dataPath,"../pickup-diagnostics.enabled")))
                     diagnostics=new PickupDiagnostics(transform,Path.Combine(Application.persistentDataPath,"Diagnostics"));
                 if(File.Exists(Path.Combine(Application.dataPath,"../motion-diagnostics.enabled")))
                     motionDiagnostics=new MotionDiagnostics(Path.Combine(Application.persistentDataPath,"Diagnostics"));
-                if(diagnostics==null && File.Exists(Path.Combine(Application.dataPath,"../social-diagnostics.enabled")))
+                if(diagnostics==null)
                     diagnostics=new PickupDiagnostics(transform,Path.Combine(Application.persistentDataPath,"Diagnostics"),true);
                 ready=true; RefreshWindows(); Debug.Log("DESKTOP_OVERLAY_READY pets="+pets.Count);
             }
@@ -237,6 +238,8 @@ namespace CyanPreview
             if(!ready || menuOpen) return;
             try
             {
+                if(!native.InputHealthy) throw new InvalidOperationException("Desktop mouse input stopped unexpectedly.");
+                if(native.ConsumeInputOverflow()) { CancelPointer(); native.ClearButtonEvents(); }
                 float dt=Time.unscaledDeltaTime; diagnostics?.BeginFrame(dt,pets); refresh-=dt;
                 if(refresh<=0)
                 {
@@ -252,7 +255,8 @@ namespace CyanPreview
                     if(cancel) CancelFeeding(); else if(feed && !settings.paused) BeginFeeding();
                     if(vocalize && !settings.paused && pets.Count>0) pets[0].Audio?.Vocalize();
                 }
-                if(settings.paused) { AdvanceScuffles(0); native.ClearButtonEvents(); native.SetClickThrough(true); RefreshWindows(); DrawFrame(0,true); return; }
+                diagnostics.LabelsVisible=settings.showAttentionLabels;
+                if(settings.paused) { native.PublishHitSnapshot(DesktopHitSnapshot.Empty); AdvanceScuffles(0); native.ClearButtonEvents(); native.SetClickThrough(true); RefreshWindows(); DrawFrame(0,true); return; }
                 var point=World(native.Cursor);
                 foreach(var p in pets) if(!p.Feeding.Frozen) p.Motion.ObserveCursor(p.Local(point));
                 if(food.Owner==FoodOwner.Placing) { PlaceFoodInput(point); RefreshWindows(); DrawFrame(dt,false); return; }
@@ -282,11 +286,11 @@ namespace CyanPreview
                         CancelPointer(); buttonHeld=true; pressTime=button.Time; holdElapsed=0;
                         if(!native.WorkArea.Contains(button.Position)) continue;
                         // Mouth-held food is part of its pet. Loose food gets first refusal.
-                        foodPressed=HitFood(eventPoint);
+                        foodPressed=button.Captured && HitFood(eventPoint);
                         if(foodPressed) continue;
-                        pointerPet=HitPet(eventPoint);
+                        pointerPet=button.Captured?HitPet(eventPoint):null;
                         if(pointerPet!=null) pointerPet.Input.Press(pointerPet.Local(eventPoint));
-                        else if(!button.ControllerFocused && !native.IsWindowControl(button.Position))
+                        else if(HitPet(eventPoint)==null && !HitFood(eventPoint) && !button.ControllerFocused && !native.IsWindowControl(button.Position))
                         {
                             var nearest=NearestPet(eventPoint);
                             if(nearest!=null && !nearest.Surfaces.IsWindowChrome(nearest.Local(eventPoint),nearest.Config.scale)) nearest.Motion.ExploreClick(nearest.Local(eventPoint));
@@ -301,7 +305,7 @@ namespace CyanPreview
                     }
                 }
                 AdvanceHold(point,unchecked((uint)Environment.TickCount));
-                native.SetClickThrough(pointerPet==null && food.Owner!=FoodOwner.Cursor && (buttonHeld || (HitPet(point)==null && !HitFood(point))));
+                native.SetClickThrough(true);
                 RefreshWindows();
                 var hovered=HitPet(point);
                 foreach(var p in pets)
@@ -322,6 +326,7 @@ namespace CyanPreview
         readonly PetSocialPerception socialPerception=new PetSocialPerception();
         PickupDiagnostics diagnostics;
         MotionDiagnostics motionDiagnostics;
+        void PublishPointerSnapshot() => native.PublishHitSnapshot(DesktopPointerSnapshot.Capture(pets,food,native.WorkArea,settings.paused));
         void DrawFrame(float dt,bool paused)
         {
             socialPerception.Advance(pets,paused,dt);
@@ -331,7 +336,7 @@ namespace CyanPreview
             diagnostics?.Record("after-contacts",pets,food);
             foreach(var p in pets) p.Draw();
             diagnostics?.Record("after-motion",pets,food);
-            RefreshFoodVisual(); PublishFeedingStatus(); desktopRenderer.Render(native.WorkArea,1); DesktopFrameProfile.EndFrame();
+            RefreshFoodVisual(); PublishFeedingStatus(); desktopRenderer.Render(native.WorkArea,1); PublishPointerSnapshot(); DesktopFrameProfile.EndFrame();
         }
         void OnDestroy()
         {

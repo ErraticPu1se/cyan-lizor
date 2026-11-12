@@ -13,6 +13,7 @@ namespace CyanPreview
             if(pets.Exists(p=>p.Feeding.UsingRoute) || !food.Begin()) return;
             CancelPointer(); native.ClearButtonEvents();
             foreach(var p in pets) { p.Motion.BeginIdleHold(); p.Input.Cancel(); }
+            PublishPointerSnapshot();
         }
         void CancelFeeding()
         {
@@ -24,14 +25,15 @@ namespace CyanPreview
                 if(!p.Feeding.Active) p.Motion.Behavior.Rest();
             }
             foodView.Show(false,Vector2.zero);
+            PublishPointerSnapshot();
         }
         void PlaceFoodInput(Vector2 point)
         {
             if(native.EscapePressed) { CancelFeeding(); native.ClearButtonEvents(); return; }
-            food.Move(Clamp(point)); native.SetClickThrough(false);
+            food.Move(Clamp(point)); native.SetClickThrough(true);
             while(native.TryReadButton(out var button))
             {
-                if(!button.Down && native.WorkArea.Contains(button.Position))
+                if(!button.Down && button.Captured && native.WorkArea.Contains(button.Position))
                 {
                     food.Place(OfferPoint(World(button.Position)));
                     foreach(var p in pets) p.Motion.Behavior.HoldPosition=false;

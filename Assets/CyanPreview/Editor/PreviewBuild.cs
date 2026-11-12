@@ -98,6 +98,7 @@ namespace CyanPreview.Editor
         public static void Verify()
         {
             SetupChecks.Run();
+            CursorInputChecks.Run();
             TrayChecks.Run();
             PresetChecks.Run();
             FeedingChecks.Run();
@@ -145,6 +146,7 @@ namespace CyanPreview.Editor
                 ContactBiteChecks.Run(context);
                 ContactBiteChecks.Pursuit(context);
                 PickupDiagnosticsChecks.Run(context);
+                DevelopmentInputChecks.Run(context);
                 MotionDiagnosticsChecks.Run(context);
                 WindowStabilityChecks.Run();
                 WindowStabilityChecks.Motion(context);

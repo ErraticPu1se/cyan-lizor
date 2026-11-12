@@ -5,6 +5,8 @@ namespace CyanPreview
     public sealed partial class PreviewApp
     {
         readonly List<DesktopPetConfiguration> extraPets=new List<DesktopPetConfiguration>();
+        const string AttentionLabelsKey="Lizor.ShowAttentionLabels";
+        bool showAttentionLabels=true;
         bool primaryPresent=true, allowFighting, showActivePets=true;
         string scuffleFirst,scuffleSecond;
         int scuffleRequest;
@@ -15,7 +17,7 @@ namespace CyanPreview
             roster.AddRange(extraPets);
             // Stopping the last pet still needs a valid shutdown message.
             if(roster.Count==0) roster.Add(DesktopPetConfiguration.From(settings));
-            settings.pets=roster.ToArray(); settings.allowFighting=allowFighting;
+            settings.showAttentionLabels=showAttentionLabels; settings.pets=roster.ToArray(); settings.allowFighting=allowFighting;
             settings.scuffleFirst=scuffleFirst; settings.scuffleSecond=scuffleSecond; settings.scuffleRequest=scuffleRequest; return settings;
         }
         void RemoveActivePet(string key)
@@ -42,6 +44,8 @@ namespace CyanPreview
                         if(GUILayout.Button("Add · "+p.name)) extraPets.Add(DesktopPetConfiguration.From(p));
                     GUI.enabled=true;
                 }
+                ToggleRow("Show attention labels",ref showAttentionLabels);
+                GUILayout.Label("Only changes the text above pets. Their social attention stays active.",theme.Small);
                 allowFighting=GUILayout.Toggle(allowFighting,"Allow fighting (no injuries)");
                 GUILayout.Label("Brief scuffles, then a rest. Grabbing a pet stops its fight.",theme.Small);
                 DrawScuffleControls();

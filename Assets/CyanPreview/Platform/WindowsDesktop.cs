@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Threading;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -42,11 +44,17 @@ namespace CyanPreview
         [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
         [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr window, int command);
         [DllImport("user32.dll")] static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
-        bool capturedRight, showingMenu;
-        Vector2? menuRequest;
+        bool capturedRight;
+        volatile bool showingMenu;
+        readonly ConcurrentQueue<Vector2> menuRequests = new ConcurrentQueue<Vector2>();
         public bool TryReadMenuRequest(out Vector2 point)
-        { point = menuRequest ?? Vector2.zero; bool found = menuRequest.HasValue; menuRequest = null; return found; }
-        public void ClearButtonEvents() { buttons.Clear(); capturedButton = capturedRight = false; menuRequest = null; }
+        { return menuRequests.TryDequeue(out point); }
+        public void ClearButtonEvents()
+        {
+            while (buttons.TryDequeue(out _)) { }
+            while (menuRequests.TryDequeue(out _)) { }
+            // Capture belongs to the hook until its matching release, even after pause/cancel.
+        }
         public DesktopMenuAction ShowPetMenu(Vector2 point, DesktopSettings settings)
         {
             IntPtr menu = CreatePopupMenu();
@@ -98,52 +106,115 @@ namespace CyanPreview
                 ShowWindow(window, IsIconic(window) ? 9 : 5); SetForegroundWindow(window); return false;
             }, IntPtr.Zero);
         }
-        public struct MouseButtonEvent { public Vector2 Position; public bool Down, ControllerFocused; public uint Time; }
-        readonly Queue<MouseButtonEvent> buttons = new Queue<MouseButtonEvent>();
+        public struct MouseButtonEvent { public Vector2 Position; public bool Down, ControllerFocused, Captured; public uint Time; }
+        readonly ConcurrentQueue<MouseButtonEvent> buttons = new ConcurrentQueue<MouseButtonEvent>();
+        int inputOverflow;
         MouseProc mouseCallback;
         IntPtr mouseHook;
         bool capturedButton;
-        public Func<Vector2, bool> HitTest { private get; set; }
+        volatile DesktopHitSnapshot hitSnapshot = DesktopHitSnapshot.Empty;
+        public void PublishHitSnapshot(DesktopHitSnapshot snapshot) { hitSnapshot = snapshot ?? DesktopHitSnapshot.Empty; }
+        public bool ConsumeInputOverflow() => Interlocked.Exchange(ref inputOverflow, 0) != 0;
         public bool TryReadButton(out MouseButtonEvent value)
         {
-            if (buttons.Count == 0) { value = default; return false; }
-            value = buttons.Dequeue(); return true;
+            return buttons.TryDequeue(out value);
         }
-        // Keep this callback short: queue button events only; simulate in Update.
+        // No Unity, game reflection, rendering, or waits on the input thread.
         IntPtr MouseMessage(int code, IntPtr message, IntPtr data)
         {
-            if (showingMenu) return CallNextHookEx(mouseHook, code, message, data);
-            if (code >= 0 && (message.ToInt64() == 0x204 || message.ToInt64() == 0x205))
+            if(inputProbeEnabled && code>=0) Interlocked.Increment(ref inputHookProbeCount);
+            long kind=message.ToInt64();
+            if(code>=0 && !showingMenu && (kind==0x201 || kind==0x202 || kind==0x204 || kind==0x205))
             {
-                var mouse = Marshal.PtrToStructure<MouseData>(data);
-                var point = new Vector2(mouse.Position.X, mouse.Position.Y);
-                bool down = message.ToInt64() == 0x204;
-                bool consume = capturedRight;
                 try
                 {
-                    if (down) consume = capturedRight = !capturedButton && WorkArea.Contains(point) && (HitTest?.Invoke(point) ?? false);
-                    else if (capturedRight) menuRequest = point;
+                    var mouse=Marshal.PtrToStructure<MouseData>(data);
+                    if(QueueMouseButton((uint)kind,mouse.Position.X,mouse.Position.Y,mouse.Time,ControllerFocused)) return new IntPtr(1);
                 }
-                catch { capturedRight = false; consume = false; }
-                if (!down) capturedRight = false;
-                if (consume) return new IntPtr(1);
+                catch { Interlocked.Exchange(ref inputOverflow,1); }
             }
-            if (code >= 0 && (message.ToInt64() == 0x201 || message.ToInt64() == 0x202))
+            return CallNextHookEx(mouseHook,code,message,data);
+        }
+        bool QueueMouseButton(uint kind,int x,int y,uint time,bool controllerFocused)
+        {
+            bool down=kind==0x201 || kind==0x204;
+            bool right=kind==0x204 || kind==0x205;
+            bool consume=right?capturedRight:capturedButton;
+            if(down)
             {
-                var mouse = Marshal.PtrToStructure<MouseData>(data);
-                var point = new Vector2(mouse.Position.X, mouse.Position.Y);
-                bool down = message.ToInt64() == 0x201;
-                bool consume = capturedButton;
-                try
-                {
-                    if (down) consume = capturedButton = WorkArea.Contains(point) && (HitTest?.Invoke(point) ?? false);
-                    buttons.Enqueue(new MouseButtonEvent { Position = point, Down = down, Time = mouse.Time, ControllerFocused = ControllerFocused });
-                }
-                catch { capturedButton = false; consume = false; }
-                if (!down) capturedButton = false;
-                if (consume) return new IntPtr(1);
+                consume=(!right || !capturedButton) && hitSnapshot.Contains(x,y);
+                if(right) capturedRight=consume; else capturedButton=consume;
             }
-            return CallNextHookEx(mouseHook, code, message, data);
+            if(right)
+            {
+                if(!down && capturedRight && menuRequests.IsEmpty) menuRequests.Enqueue(new Vector2(x,y));
+                if(!down) capturedRight=false;
+            }
+            else
+            {
+                if(buttons.Count<128) buttons.Enqueue(new MouseButtonEvent { Position=new Vector2(x,y), Down=down, Time=time, ControllerFocused=controllerFocused, Captured=consume });
+                else Interlocked.Exchange(ref inputOverflow,1);
+                if(!down) capturedButton=false;
+            }
+            return consume;
+        }
+        [StructLayout(LayoutKind.Sequential)] struct NativeMessage
+        { public IntPtr Window; public uint Message; public UIntPtr WParam; public IntPtr LParam; public uint Time; public Point Position; public uint Private; }
+        [DllImport("user32.dll")] static extern int GetMessage(out NativeMessage message, IntPtr window, uint first, uint last);
+        [DllImport("user32.dll")] static extern bool PeekMessage(out NativeMessage message, IntPtr window, uint first, uint last, uint remove);
+        [DllImport("user32.dll")] static extern bool PostThreadMessage(uint thread, uint message, UIntPtr wParam, IntPtr lParam);
+        [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+        Thread mouseThread;
+        uint mouseThreadId;
+        readonly ManualResetEventSlim mouseReady = new ManualResetEventSlim(false);
+        Exception mouseFailure;
+        int inputProbeCount, inputHookProbeCount;
+        bool inputProbeEnabled;
+        public bool InputHealthy => mouseThread != null && mouseThread.IsAlive;
+        volatile bool stopMouse;
+        void StartMouseThread()
+        {
+            if (mouseThread != null) throw new InvalidOperationException("Mouse input already started.");
+            stopMouse=false; mouseFailure=null; mouseReady.Reset();
+            mouseThread = new Thread(MouseLoop) { IsBackground=true, Name="Lizor mouse input" };
+            mouseThread.Start();
+            if (!mouseReady.Wait(3000) || mouseFailure != null)
+            {
+                StopMouseThread();
+                throw new InvalidOperationException("Cannot start desktop pet mouse input.", mouseFailure);
+            }
+        }
+        void MouseLoop()
+        {
+            try
+            {
+                mouseThreadId=GetCurrentThreadId();
+                PeekMessage(out _,IntPtr.Zero,0,0,0); // Create the queue before exposing readiness.
+                mouseCallback=MouseMessage;
+                mouseHook=SetWindowsHookEx(14,mouseCallback,GetModuleHandle(null),0);
+                if(mouseHook==IntPtr.Zero) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                mouseReady.Set();
+                while(!stopMouse)
+                {
+                    int result=GetMessage(out var message,IntPtr.Zero,0,0);
+                    if(result<=0) break;
+                    if(message.Message==0x8001) Interlocked.Increment(ref inputProbeCount);
+                }
+            }
+            catch(Exception error) { mouseFailure=error; }
+            finally
+            {
+                if(mouseHook!=IntPtr.Zero) { UnhookWindowsHookEx(mouseHook); mouseHook=IntPtr.Zero; }
+                mouseReady.Set();
+            }
+        }
+        void StopMouseThread()
+        {
+            if(mouseThread==null) return;
+            stopMouse=true;
+            if(mouseThreadId!=0) PostThreadMessage(mouseThreadId,0x12,UIntPtr.Zero,IntPtr.Zero);
+            if(!mouseThread.Join(3000)) throw new InvalidOperationException("Mouse input thread did not stop.");
+            mouseThread=null; mouseThreadId=0;
         }
         const int ExLayered = 0x80000, ExTransparent = 0x20, ExNoActivate = 0x08000000, ExToolWindow = 0x80;
         readonly int ownPid = Process.GetCurrentProcess().Id;
@@ -174,9 +245,7 @@ namespace CyanPreview
             SetWindowLong(handle, -16, unchecked((int)0x80000000));
             SetWindowLong(handle, -20, originalExStyle | ExLayered | ExTransparent | ExNoActivate | ExToolWindow);
             Resize();
-            mouseCallback = MouseMessage;
-            mouseHook = SetWindowsHookEx(14, mouseCallback, GetModuleHandle(null), 0);
-            if (mouseHook == IntPtr.Zero) throw new InvalidOperationException("Cannot capture desktop pet mouse presses.");
+            StartMouseThread();
             return true;
         }
         public bool RefreshWorkArea()
@@ -233,8 +302,8 @@ namespace CyanPreview
         }
         public void Dispose()
         {
-            if (mouseHook != IntPtr.Zero) { UnhookWindowsHookEx(mouseHook); mouseHook = IntPtr.Zero; }
-            HitTest = null; buttons.Clear();
+            StopMouseThread();
+            hitSnapshot = DesktopHitSnapshot.Empty; ClearButtonEvents();
             if (handle == IntPtr.Zero) return;
             SetWindowLong(handle, -16, originalStyle); SetWindowLong(handle, -20, originalExStyle); handle = IntPtr.Zero;
         }

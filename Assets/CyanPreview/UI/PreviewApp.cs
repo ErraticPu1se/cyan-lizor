@@ -80,6 +80,7 @@ namespace CyanPreview
             var preferences=CompanionPreferences.Read(PlayerPrefs.GetString(PreferencesKey,""),out preferenceWarning);
             gameFolder=preferences.gameFolder; desktopScale=preferences.scale; desktopClimbingMode=preferences.climbingMode;
             desktopClicks=preferences.clickToExplore; desktopSounds=preferences.sound; desktopRoam=preferences.roam; autonomousJumps=preferences.jumps;
+            showAttentionLabels=PlayerPrefs.GetInt(AttentionLabelsKey,1)!=0;
             InitializePresets(preferences);
             savedPreferences=JsonUtility.ToJson(preferences); initialized=true;
             DetectInstallation();
@@ -170,8 +171,9 @@ namespace CyanPreview
                 sound=desktopSounds, roam=desktopRoam, jumps=autonomousJumps, clickToExplore=desktopClicks };
             string json=JsonUtility.ToJson(preferences);
             try { SavePreset(); } catch(Exception e) { presetWarning="Could not save preset: "+e.Message; }
-            if(json==savedPreferences) return;
-            try { PlayerPrefs.SetString(PreferencesKey,json); PlayerPrefs.Save(); savedPreferences=json; }
+            bool labelsChanged=PlayerPrefs.GetInt(AttentionLabelsKey,1)!=(showAttentionLabels?1:0);
+            if(json==savedPreferences && !labelsChanged) return;
+            try { if(labelsChanged) PlayerPrefs.SetInt(AttentionLabelsKey,showAttentionLabels?1:0); PlayerPrefs.SetString(PreferencesKey,json); PlayerPrefs.Save(); savedPreferences=json; }
             catch(Exception e) { preferenceWarning="Could not save preferences: "+e.Message; }
         }
         void Update()

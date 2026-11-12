@@ -39,6 +39,17 @@ namespace CyanPreview
         Rect viewport;
         bool traceFull;
         bool sample,disposed,failed;
+        bool labelsVisible=true;
+        public bool LabelsVisible
+        {
+            get => labelsVisible;
+            set
+            {
+                if(labelsVisible==value) return;
+                labelsVisible=value;
+                if(!value) foreach(var label in labels.Values) if(label!=null) label.gameObject.SetActive(false);
+            }
+        }
         public string TracePath { get; private set; }
         public const int MaximumLines=5000;
         public const int MaximumBytes=8*1024*1024;
@@ -81,11 +92,12 @@ namespace CyanPreview
         }
         public void Record(string phase,List<DesktopPet> pets,SharedFood food)
         {
-            if(disposed || failed || !sample) return;
+            if(disposed || failed || !sample || (socialOnly && (!labelsVisible || phase!="after-motion"))) return;
             try
             {
                 var values=new PetSample[pets.Count];
                 for(int i=0;i<pets.Count;i++) values[i]=Read(pets[i],pets,starts.TryGetValue(pets[i].Config.key,out var start)?start:pets[i].WorldPosition);
+                if(socialOnly) { UpdateLabels(values); return; }
                 string json=JsonUtility.ToJson(new Sample {phase=phase,frame=Time.frameCount,time=Time.realtimeSinceStartup,food=food.Owner.ToString(),holder=food.Holder,pets=values});
                 if(writer!=null && remaining>0) Write(json);
                 history.Enqueue(json); while(history.Count>100) history.Dequeue();
@@ -95,7 +107,7 @@ namespace CyanPreview
         }
         public void Pickup(List<DesktopPet> pets,SharedFood food)
         {
-            if(disposed || failed) return;
+            if(disposed || failed || socialOnly) return;
             try
             {
                 if(writer==null)
@@ -118,6 +130,7 @@ namespace CyanPreview
         }
         void UpdateLabels(PetSample[] pets)
         {
+            if(!labelsVisible) return;
             var live=new HashSet<string>(); var placed=new List<Rect>();
             foreach(var p in pets)
             {
@@ -130,6 +143,7 @@ namespace CyanPreview
                     label.color=new Color(.65f,1,1,1); var renderer=obj.GetComponent<MeshRenderer>();
                     renderer.sharedMaterial=font.material; renderer.sortingOrder=30000; labels.Add(p.key,label);
                 }
+                label.gameObject.SetActive(true);
                 string action=p.recovering?"RECOVER":p.lunge?"LUNGE":p.threat?"THREAT":p.intent;
                 label.text=p.name+" | "+p.motion+" / "+p.feeding+"\n"+action+" HOLD:"+p.hold+" jaw:"+p.jaw.ToString("0.0")+" cd:"+p.cooldown+
                     "\ntarget:"+(p.hasTarget?p.target.ToString("F0"):"none")+" body:"+p.targetChunk+" contact:"+(p.contacts.Length==0?"no":"YES")+" voice:"+p.voice.ToString("0.00")+
