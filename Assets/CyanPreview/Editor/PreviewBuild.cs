@@ -19,7 +19,7 @@ namespace CyanPreview.Editor
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene("Assets/Scenes/Preview.unity", true) };
             PlayerSettings.companyName = "ErraticPu1se";
             PlayerSettings.productName = "Lizor";
-            PlayerSettings.bundleVersion = "0.2.0-preview.2";
+            PlayerSettings.bundleVersion = "0.2.0-stability-preview";
             PlayerSettings.defaultScreenWidth = 540;
             PlayerSettings.defaultScreenHeight = 900;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
@@ -98,6 +98,8 @@ namespace CyanPreview.Editor
         public static void Verify()
         {
             SetupChecks.Run();
+            WindowStabilityChecks.Run();
+            CursorInputChecks.Run();
             TrayChecks.Run();
             PresetChecks.Run();
             if (!ReferenceBridge.TryParseId("ID.7.12345", out var spawner, out var seed) || spawner != 7 || seed != 12345)
@@ -130,6 +132,10 @@ namespace CyanPreview.Editor
                 FallCatchChecks.Run(context);
                 UtilityChecks.Run(context);
                 CompanionChecks.Run(context);
+                WindowStabilityChecks.Motion(context);
+                CompanionChecks.IdleStability(context);
+                CompanionChecks.EdgeFootholds(context);
+                CompanionChecks.RestingForces(context);
                 TargetingChecks.Run(context);
                 DesktopEffectsChecks.Run(context);
                 RenderOptimizationChecks.Run(context);

@@ -155,7 +155,7 @@ namespace CyanPreview
             {
                 if (!native.Initialize()) throw new InvalidOperationException("Owned overlay window not found.");
                 desktopRenderer = new DesktopAlphaRenderer(native.WindowHandle, cameraView, transform);
-                native.HitTest = cursor => !settings.paused && motion.Contains(DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale));
+                native.PublishHitSnapshot(motion.CaptureHitSnapshot(native.WorkArea, settings.scale));
                 ready = true; RefreshWindows();
                 Debug.Log("DESKTOP_OVERLAY_READY " + native.WorkArea);
             }
@@ -201,6 +201,7 @@ namespace CyanPreview
             if (!ready || menuOpen) return;
             try
             {
+                if (!native.InputHealthy) throw new InvalidOperationException("Desktop mouse input stopped unexpectedly.");
                 refresh -= Time.unscaledDeltaTime;
                 if (refresh <= 0)
                 {
@@ -226,11 +227,12 @@ namespace CyanPreview
                 }
                 if(settings.paused)
                 {
-                    native.ClearButtonEvents(); buttonHeld=false; native.SetClickThrough(true);
+                    native.PublishHitSnapshot(DesktopHitSnapshot.Empty); native.ClearButtonEvents(); buttonHeld=false; native.SetClickThrough(true);
                     RefreshWindows();
                     pet.Draw(motion.Interpolation); view.Refresh(pet); desktopRenderer.Render(native.WorkArea,settings.scale);
                     return;
                 }
+                if (native.ConsumeInputOverflow()) { input.Cancel(); buttonHeld = false; native.ClearButtonEvents(); }
                 var cursor = native.Cursor;
                 var point = DesktopCoordinates.ToWorld(cursor, native.WorkArea, settings.scale);
                 motion.ObserveCursor(point);
@@ -259,7 +261,7 @@ namespace CyanPreview
                     if (button.Down)
                     {
                         buttonHeld = true; pressTime = button.Time; holdElapsed = 0;
-                        if (native.WorkArea.Contains(button.Position) && (motion.Contains(eventPoint) || (!button.ControllerFocused && !surfaces.IsWindowChrome(eventPoint, settings.scale) && !native.IsWindowControl(button.Position))))
+                        if (native.WorkArea.Contains(button.Position) && (button.Captured || (!motion.Contains(eventPoint) && !button.ControllerFocused && !surfaces.IsWindowChrome(eventPoint, settings.scale) && !native.IsWindowControl(button.Position))))
                             input.Press(eventPoint);
                     }
                     else
@@ -270,7 +272,7 @@ namespace CyanPreview
                 }
                 AdvanceHold(point, unchecked((uint)Environment.TickCount));
                 // The native button callback owns pet presses; other application drags pass through.
-                native.SetClickThrough(!input.CapturesPointer && (buttonHeld || !motion.Contains(point)));
+                native.SetClickThrough(true); // All pet buttons are handled by the independent hook.
                 using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Windows)) RefreshWindows();
                 if (input.Hover(point, Time.unscaledDeltaTime, buttonHeld, petAudio != null && petAudio.CanPettingCall)) petAudio.PettingCall();
                 using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Frame))
@@ -282,6 +284,7 @@ namespace CyanPreview
                     using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Mesh)) view.Refresh(pet);
                     desktopRenderer.Render(native.WorkArea, settings.scale);
                 }
+                native.PublishHitSnapshot(motion.CaptureHitSnapshot(native.WorkArea, settings.scale));
                 DesktopFrameProfile.EndFrame();
             }
             catch (Exception e) { Debug.LogException(e); Application.Quit(); }

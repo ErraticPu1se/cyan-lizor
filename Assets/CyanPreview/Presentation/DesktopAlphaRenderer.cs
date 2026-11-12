@@ -34,6 +34,7 @@ namespace CyanPreview
         byte[] bytes;
         readonly List<Renderer> renderers = new List<Renderer>();
         bool disposed;
+        int smallFrames;
         public DesktopAlphaRenderer(IntPtr window, Camera camera, Transform root)
         {
             if (window == IntPtr.Zero) throw new ArgumentException("An owned overlay window is required.", nameof(window));
@@ -52,6 +53,26 @@ namespace CyanPreview
             int width = Mathf.Min((int)workArea.width, Mathf.CeilToInt((right - left) / 32f) * 32);
             int height = Mathf.Min((int)workArea.height, Mathf.CeilToInt((bottom - top) / 32f) * 32);
             return new RectInt(Mathf.Min(left, (int)workArea.xMax - width), Mathf.Min(top, (int)workArea.yMax - height), width, height);
+        }
+        public static RectInt ReuseCaptureRect(RectInt requested, Rect workArea, Vector2Int capacity, ref int smallFrames)
+        {
+            int maxWidth=(int)workArea.width, maxHeight=(int)workArea.height;
+            bool fits=capacity.x>=requested.width && capacity.y>=requested.height && capacity.x<=maxWidth && capacity.y<=maxHeight;
+            bool muchSmaller=fits && (long)requested.width*requested.height*2<(long)capacity.x*capacity.y;
+            smallFrames=muchSmaller?smallFrames+1:0;
+            int width, height;
+            if(fits && smallFrames<120) { width=capacity.x; height=capacity.y; }
+            else
+            {
+                // Grow in bounded buckets; shrink only after two seconds of substantially smaller bounds.
+                width=Mathf.Min(maxWidth,Mathf.CeilToInt(requested.width/128f)*128);
+                height=Mathf.Min(maxHeight,Mathf.CeilToInt(requested.height/128f)*128);
+                if(!fits && capacity.x<=maxWidth && capacity.y<=maxHeight)
+                { width=Mathf.Max(width,capacity.x); height=Mathf.Max(height,capacity.y); }
+                smallFrames=0;
+            }
+            return new RectInt(Mathf.Clamp(requested.x,(int)workArea.xMin,(int)workArea.xMax-width),
+                Mathf.Clamp(requested.y,(int)workArea.yMin,(int)workArea.yMax-height),width,height);
         }
         public static void PackPixels(NativeArray<Color32> source, byte[] destination, int width, int height)
         {
@@ -97,6 +118,7 @@ namespace CyanPreview
             Bounds bounds; bool found;
             using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Bounds)) found = VisibleBounds(root, renderers, out bounds, DesktopCoordinates.ToWorld(workArea, workArea, scale));
             var rect = found ? CaptureRect(bounds, workArea, scale) : new RectInt((int)workArea.x, (int)workArea.y, 1, 1);
+            rect=ReuseCaptureRect(rect,workArea,target==null?Vector2Int.zero:new Vector2Int(target.width,target.height),ref smallFrames);
             DesktopFrameProfile.Pixels(rect.width * rect.height);
             using (DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Buffers)) EnsureSize(rect.width, rect.height);
             var center = DesktopCoordinates.ToWorld(rect.center, workArea, scale);
@@ -136,6 +158,7 @@ namespace CyanPreview
         void ReleaseBuffers()
         {
             if (camera != null) camera.targetTexture = null;
+            if(target!=null) target.Release();
             Release(target); Release(capture); target = null; capture = null;
             if (bitmap != IntPtr.Zero) { SelectObject(dc, previousBitmap); DeleteObject(bitmap); bitmap = IntPtr.Zero; }
             pixels = IntPtr.Zero; bytes = null;
