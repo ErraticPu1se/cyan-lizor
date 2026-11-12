@@ -7,6 +7,44 @@ namespace CyanPreview.Editor
     public static class CompanionChecks
     {
         static void Require(bool value, string message) { if (!value) throw new Exception(message); }
+        public static void VerifyIdleStability()
+        { using(var context=new ReferenceContext(System.IO.Path.GetFullPath("local-data"))) IdleStability(context); }
+        public static void IdleStability(ReferenceContext context)
+        {
+            float worst=0;
+            foreach(var scenario in new[]{"far","near","behind","rear-crossing","range-crossing","observe-boundary","cursor-disappears","centre"})
+            using(var pet=context.CreatePet())
+            {
+                pet.Generate("9320");
+                var motion=new PetMotion(pet,new BackgroundSurfaces(new Rect(-700,-400,1400,800)),42) {Roam=false,AutonomousJumps=false};
+                float maxBodyStep=0,maxHeadStep=0,maxJerk=0,bodyTravel=0,tailTravel=0;
+                Vector2 previousDelta=Vector2.zero;
+                var tail=((Array)Get(pet.Graphics,"tail")).GetValue(0);
+                for(int i=0;i<800;i++)
+                {
+                    Vector2 cursor=scenario=="far"?new Vector2(600,200):scenario=="near"?new Vector2(80,80):
+                        scenario=="behind"?new Vector2(-130,0):scenario=="rear-crossing"?new Vector2(-130,i%2==0?.1f:-.1f):
+                        scenario=="centre"?motion.Position:motion.HeadPosition+new Vector2(0,i%2==0?179.9f:180.1f);
+                    if(scenario=="observe-boundary") motion.ObserveCursor(motion.Position+new Vector2(0,i%2==0?209.9f:210.1f));
+                    else if(scenario=="cursor-disappears") motion.ObserveCursor(i%2==0?(Vector2?)new Vector2(100,50):null);
+                    else motion.LookAt(cursor);
+                    var before=motion.Position; var headBefore=motion.HeadPosition; var tailBefore=(Vector2)Get(tail,"pos");
+                    motion.Advance(.025f);
+                    if(i<200) continue;
+                    var delta=motion.Position-before;
+                    maxBodyStep=Mathf.Max(maxBodyStep,delta.magnitude); maxHeadStep=Mathf.Max(maxHeadStep,Vector2.Distance(headBefore,motion.HeadPosition));
+                    maxJerk=Mathf.Max(maxJerk,(delta-previousDelta).magnitude); previousDelta=delta;
+                    bodyTravel+=delta.magnitude; tailTravel+=Vector2.Distance(tailBefore,(Vector2)Get(tail,"pos"));
+                    Require(!float.IsNaN(motion.Position.x) && motion.Position.magnitude<60,"Idle body drifted or became non-finite");
+                }
+                Debug.Log($"IDLE_STABILITY {scenario} bodyStep={maxBodyStep:F3} headStep={maxHeadStep:F3} jerk={maxJerk:F3} bodyTravel={bodyTravel:F3} tailTravel={tailTravel:F3}");
+                worst=Mathf.Max(worst,maxBodyStep);
+                Require(maxHeadStep<.5f && maxJerk<.25f,"Idle gaze boundary produced abrupt head/body motion");
+                Require(bodyTravel>.1f && tailTravel>.1f,"Idle body/tail animation froze");
+            }
+            Require(worst<.15f,"Flat-background idle correction exceeded .15 units per tick");
+            Debug.Log("FLAT_BACKGROUND_IDLE_STABILITY_CHECK_PASSED");
+        }
         public static void Run(ReferenceContext context)
         {
             var surface = new BackgroundSurfaces(new Rect(-360, -180, 720, 360));

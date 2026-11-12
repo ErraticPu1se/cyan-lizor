@@ -28,6 +28,16 @@ namespace CyanPreview
         int jumpWait = 320, poseTicks;
         readonly Vector2[] restingPose = new Vector2[3];
         bool resting;
+        float idleBodyTurn, idleNeckTurn, idleLookSide=1;
+        float IdleAttention => lookTarget.HasValue ? 1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(150,210,Vector2.Distance(Position,lookTarget.Value))) : 0;
+        float StableIdleAngle(Vector2 forward,Vector2 direction)
+        {
+            float angle=Vector2.SignedAngle(forward,direction);
+            // A cursor crossing directly behind must not flip the neck between its two limits.
+            if(Mathf.Abs(angle)>150) return Mathf.Abs(angle)*idleLookSide;
+            if(Mathf.Abs(angle)>5) idleLookSide=Mathf.Sign(angle);
+            return angle;
+        }
         Vector2 grabOffset, grabAnchor, grabVelocity;
         int grabbedChunk, heldTicks;
         float turnDirection = 1;
@@ -109,7 +119,7 @@ namespace CyanPreview
         public void ObserveCursor(Vector2? point)
         {
             // Nearby pointer attention changes the pose without creating a movement goal.
-            LookAt(point.HasValue && (Vector2.Distance(HeadPosition, point.Value) <= 180 || poseTicks % 200 < 20) ? point : null);
+            LookAt(point.HasValue && (resting ? Vector2.Distance(Position,point.Value)<=210 : Vector2.Distance(HeadPosition,point.Value)<=180) ? point : null);
         }
         public void MoveTo(Vector2 point) { clickInvestigation = false; Behavior.Target(surfaces.Nearest(point, out _)); }
         public void ExploreClick(Vector2 point)
@@ -337,8 +347,17 @@ namespace CyanPreview
             bool airborne = State == PetMotionState.Airborne;
             poseTicks++;
             bool atRest = State == PetMotionState.Crawling && !hasDestination && !Recovery.Active && !RivalTarget.HasValue;
-            if (atRest && !resting) for (int i = 0; i < 3; i++) restingPose[i] = (Vector2)Get(chunks[i], "pos");
+            if (atRest && !resting)
+            {
+                for (int i = 0; i < 3; i++) restingPose[i] = (Vector2)Get(chunks[i], "pos");
+                idleBodyTurn=0;
+            }
             resting = atRest;
+            if(resting)
+            {
+                float requested=lookTarget.HasValue ? Mathf.Clamp(StableIdleAngle(restingPose[0]-restingPose[1],lookTarget.Value-restingPose[1]),-25,25)*IdleAttention : 0;
+                idleBodyTurn=Mathf.MoveTowards(idleBodyTurn,Mathf.Lerp(idleBodyTurn,requested,.08f),.75f);
+            }
             if (airborne)
             {
                 flightTicks++;
@@ -418,12 +437,7 @@ namespace CyanPreview
                         float amplitude = Behavior.Intent == PetIntent.Inspecting ? 1.4f : Behavior.Intent == PetIntent.Settling ? .8f : .45f;
                         var offset = new Vector2(Mathf.Sin(poseTicks * .035f + i), Mathf.Sin(poseTicks * .06f + i * .7f)) * amplitude;
                         var restTarget = restingPose[i];
-                        if (lookTarget.HasValue && Vector2.Distance(HeadPosition, lookTarget.Value) <= 180)
-                        {
-                            var forward = restingPose[0] - restingPose[1];
-                            float turn = Mathf.Clamp(Vector2.SignedAngle(forward, lookTarget.Value - restingPose[1]), -25, 25);
-                            restTarget = restingPose[1] + (Vector2)(Quaternion.Euler(0, 0, turn) * (restTarget - restingPose[1]));
-                        }
+                        restTarget = restingPose[1] + (Vector2)(Quaternion.Euler(0,0,idleBodyTurn)*(restTarget-restingPose[1]));
                         v += Vector2.ClampMagnitude(restTarget + offset - p, 12) * .12f;
                     }
                     if(RivalStance && RivalTarget.HasValue)
@@ -542,16 +556,26 @@ namespace CyanPreview
             if (pursuitJump && RivalTarget.HasValue) target=RivalTarget.Value;
             else if (State == PetMotionState.Charging || (State == PetMotionState.Airborne && propelled)) target = jumpTarget;
             else if (RivalTarget.HasValue) target=RivalTarget.Value;
-            else if (lookTarget.HasValue && Vector2.Distance(HeadPosition, lookTarget.Value) <= 180) target = lookTarget.Value;
+            else if (lookTarget.HasValue && (resting ? Vector2.Distance(Position,lookTarget.Value)<=210 : Vector2.Distance(HeadPosition,lookTarget.Value)<=180)) target = lookTarget.Value;
             else if (Behavior.InterestPoint.HasValue && lookTarget.HasValue) target = lookTarget.Value;
             else if (Behavior.ExplorationTarget.HasValue) target = Behavior.ExplorationTarget.Value;
             else if (Behavior.InterestPoint.HasValue) target = Behavior.InterestPoint.Value + new Vector2(Mathf.Sin(poseTicks * .035f) * 35, 18 + Mathf.Sin(poseTicks * .06f) * 12);
-            else if (Behavior.Intent == PetIntent.Idle && State == PetMotionState.Crawling && lookTarget.HasValue && poseTicks % 200 < 150) target = lookTarget.Value;
             Set(graphics, "lookPos", target);
             var aim = (target - draw[0, 0]).normalized;
+            // A cursor on the head has no stable direction; keep the neck facing forward.
+            if(resting && (target-draw[0,0]).sqrMagnitude<144) aim=forward;
             float bodyAngle = Mathf.Atan2(forward.y, forward.x) * Mathf.Rad2Deg;
             float targetAngle = Mathf.Atan2(aim.y, aim.x) * Mathf.Rad2Deg;
-            float neckAngle = bodyAngle + Mathf.Clamp(Mathf.DeltaAngle(bodyAngle, targetAngle), -80, 80);
+            float neckTurn=Mathf.Clamp(Mathf.DeltaAngle(bodyAngle,targetAngle),-80,80);
+            if(resting)
+            {
+                float requested=Mathf.Clamp(StableIdleAngle(forward,aim),-80,80);
+                if(lookTarget.HasValue && target==lookTarget.Value && !Behavior.InterestPoint.HasValue) requested*=IdleAttention;
+                idleNeckTurn=Mathf.MoveTowards(idleNeckTurn,Mathf.Lerp(idleNeckTurn,requested,.1f),4);
+                neckTurn=idleNeckTurn;
+            }
+            else idleNeckTurn=neckTurn;
+            float neckAngle = bodyAngle + neckTurn;
             aim = new Vector2(Mathf.Cos(neckAngle * Mathf.Deg2Rad), Mathf.Sin(neckAngle * Mathf.Deg2Rad));
             // Use the original head spring and neck constraint. DrawSprites derives
             // the head sprite angle from head.pos relative to the leading chunk.
