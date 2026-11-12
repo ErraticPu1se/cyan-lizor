@@ -54,5 +54,5 @@ counter/ID advanced normally).
 ## Before publication
 
 Have the two users who reported cursor lag test this candidate on their laptops.
-The release remains a prerelease while that feedback is collected. Keep main unchanged. Build and
+The release remains a prerelease while that feedback is collected. Main now includes this stability release. Build and
 package from this checkout; do not reuse a Windows development-branch binary.

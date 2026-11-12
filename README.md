@@ -8,9 +8,9 @@ Developed by ErraticPu1se. Any resemblance between that name and another iterato
 
 ## Download
 
-**[Download the Windows preview ZIP](https://github.com/ErraticPu1se/cyan-lizor/releases/download/v0.2.0-preview.2/CyanLizor-0.2.0-preview.2-win-x64.zip)** · [Release notes](https://github.com/ErraticPu1se/cyan-lizor/releases/tag/v0.2.0-preview.2)
+**[Download the Windows preview ZIP](https://github.com/ErraticPu1se/cyan-lizor/releases/download/v0.2.1-preview.1/Lizor-0.2.1-preview.1-win-x64.zip)** · [Release notes](https://github.com/ErraticPu1se/cyan-lizor/releases/tag/v0.2.1-preview.1)
 
-Download the packaged **CyanLizor** ZIP.
+Download the packaged **Lizor** ZIP.
 
 Do not use GitHub’s **Source code** archives or **Code → Download ZIP**. They are not the application.
 
@@ -29,7 +29,7 @@ Unity Hub, Python, and Docker are not required to run the packaged application.
 
 1. Extract the **entire ZIP** into a writable folder.
 2. Keep all included files and folders together.
-3. Run **CyanLizor.exe**.
+3. Run **Lizor.exe**.
 4. Check the automatically detected Rain World folder. If it is not found, click **Browse** or paste the installation folder containing `RainWorld_Data`.
 5. Click **Prepare local game assets** and wait for completion.
 6. Under **Your lizard**, enter an ID and click **Apply ID**.
@@ -39,18 +39,18 @@ Preparation reads your game installation without modifying it. Game graphics and
 
 Automatic detection checks Steam libraries, including additional library locations. Other installations can be selected manually. If **Start desktop pet** is unavailable, the panel explains what still needs attention.
 
-Keep the control panel open while the pet is active. The compact dark-grey and cyan panel includes an animated preview and an always-visible Start/Stop control.
+The compact dark-grey and cyan panel includes an animated preview and an always-visible Start/Stop control. Close the panel to keep Lizor running in the system tray. Double-click the **Liz** icon to reopen settings.
 
-Use **Stop desktop pet**, or close the control panel, to stop it.
+Use **Stop desktop pet** to stop the pet, or **Quit Lizor** in the panel or tray menu to exit the app.
 
-Your appearance ID, game folder, size, climbing mode, roaming, propulsion, click exploration, and sound preferences are remembered between launches. The lizard still waits for you to press Start.
+Your appearance ID, game folder, size, climbing mode, roaming, propulsion, click exploration, and sound preferences are remembered between launches. The lizard still waits for you to press Start. Saved presets let you switch between lizards; one pet can be active at a time.
 
 ## Behavior and interaction
 
 - Enter an ID to select the lizard’s generated appearance.
 - Adjust its desktop size. **Medium (1.2×)** is the default and reset size.
 - Allow it to roam, rest, crawl, and propel itself.
-- Optimized memory usage.
+- Improved cursor responsiveness, steadier resting posture, and optimized memory usage.
 - Choose **Edges only** to climb desktop borders and visible window edges.
 - Choose **Edges + backgrounds** to also climb the desktop background and window interiors.
 - Move the cursor nearby to attract its attention.
@@ -88,7 +88,7 @@ Right-clicks outside the lizard remain available to other applications. Naturall
 ## Planned additions
 
 - Feeding
-- Multiple simultaneous pets (they might fight with each other) and store presets
+- Multiple simultaneous pets (they might fight with each other)
 - Additional lizard species
 - white lizard camo with background
 - lizard spit might propel the cursor?
@@ -114,9 +114,9 @@ Be precise. “It behaved strangely” conveys nothing.
 The desktop log is located at:
 
 ```text
-%USERPROFILE%\AppData\LocalLow\ErraticPu1se\Cyan Lizor Preview\desktop-player.log
+%USERPROFILE%\AppData\LocalLow\ErraticPu1se\Lizor\desktop-player.log
 ```
 
-[Developer build instructions](docs/development.md) · [Source for this release](https://github.com/ErraticPu1se/cyan-lizor/tree/v0.2.0-preview.2)
+[Developer build instructions](docs/development.md) · [Source for this release](https://github.com/ErraticPu1se/cyan-lizor/tree/v0.2.1-preview.1)
 
 An unofficial project inspired by **Rain World**, created by Videocult and published by Akupara Games. This project does not distribute game assemblies, extracted graphics, audio, or decompiled sources. Third-party dependency notices accompany the download.
