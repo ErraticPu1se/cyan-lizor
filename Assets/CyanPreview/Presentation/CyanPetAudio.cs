@@ -20,6 +20,7 @@ namespace CyanPreview
         readonly System.Random voiceRandom;
         float idleVoice, bubbleTime, vocalCooldown, affectionCooldown, impactCooldown, biteCooldown;
         public const float VocalCooldownSeconds = 10;
+        public uint VocalRevision { get; private set; }
         PetIntent lastIntent;
         bool enabled = true, disposed;
         public bool Enabled
@@ -108,6 +109,7 @@ namespace CyanPreview
             if (!CanPettingCall) return false;
             voice.clip = affectionVoice; voice.volume = .55f; voice.Play();
             affectionCooldown = PettingContact.CooldownSeconds; vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay();
+            VocalRevision++;
             Debug.Log(reason+"_AFFECTION_PLAYED " + affectionVoice.name);
             return true;
         }
@@ -138,7 +140,7 @@ namespace CyanPreview
             // Drop repeat requests; never queue calls or extend the cooldown.
             if (!enabled || disposed || clip == null || vocalCooldown > 0 || voice.isPlaying) return false;
             voice.clip = clip; voice.volume = volume;
-            voice.Play(); vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay();
+            voice.Play(); vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay(); VocalRevision++;
             return true;
         }
         public void Advance(float seconds)
@@ -150,7 +152,7 @@ namespace CyanPreview
             impactCooldown = Mathf.Max(0, impactCooldown - seconds);
             biteCooldown=Mathf.Max(0,biteCooldown-seconds);
             var intent = motion.Behavior.Intent;
-            if (intent == PetIntent.Investigating && lastIntent != intent) Vocalize();
+            if (intent == PetIntent.Investigating && lastIntent != intent && !motion.Behavior.SoundInvestigation) Vocalize();
             lastIntent = intent;
             if (intent == PetIntent.Idle && motion.State == PetMotionState.Crawling && (idleVoice -= seconds) <= 0) Vocalize();
             float intensity = 0;

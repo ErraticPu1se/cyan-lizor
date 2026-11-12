@@ -78,11 +78,12 @@ namespace CyanPreview
             if(Surfaces.SupportLost) Motion.ReleaseSupport();
             else if(delta.sqrMagnitude>0) { Motion.Behavior.Rest(); Motion.ShiftWithSurface(delta,false); }
         }
-        public void Advance(float dt,bool paused)
+        public void Advance(float dt,bool paused,bool draw=true)
         {
             if(!paused) { Audio?.Advance(dt); if(!Feeding.Frozen) Motion.Advance(dt); Effects.Advance(dt); }
-            Pet.Draw(Motion.Interpolation); View.Refresh(Pet);
+            if(draw) Draw();
         }
+        public void Draw() { Pet.Draw(Motion.Interpolation); View.Refresh(Pet); }
         public void Dispose()
         { Input?.Cancel(); Audio?.Dispose(); Effects?.Dispose(); View?.Dispose(); Pet?.Dispose(); if(Root!=null) UnityEngine.Object.Destroy(Root); }
     }

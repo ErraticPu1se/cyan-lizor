@@ -173,6 +173,10 @@ namespace CyanPreview
                 native.HitTest=cursor=>!settings.paused && (food.Owner==FoodOwner.Placing || HitPet(World(cursor))!=null || HitFood(World(cursor)));
                 if(File.Exists(Path.Combine(Application.dataPath,"../pickup-diagnostics.enabled")))
                     diagnostics=new PickupDiagnostics(transform,Path.Combine(Application.persistentDataPath,"Diagnostics"));
+                if(File.Exists(Path.Combine(Application.dataPath,"../motion-diagnostics.enabled")))
+                    motionDiagnostics=new MotionDiagnostics(Path.Combine(Application.persistentDataPath,"Diagnostics"));
+                if(diagnostics==null && File.Exists(Path.Combine(Application.dataPath,"../social-diagnostics.enabled")))
+                    diagnostics=new PickupDiagnostics(transform,Path.Combine(Application.persistentDataPath,"Diagnostics"),true);
                 ready=true; RefreshWindows(); Debug.Log("DESKTOP_OVERLAY_READY pets="+pets.Count);
             }
             catch(Exception e) { Debug.LogException(e); Application.Quit(); }
@@ -302,8 +306,7 @@ namespace CyanPreview
                 var hovered=HitPet(point);
                 foreach(var p in pets)
                     if(p.Input.Hover(p.Local(point),dt,buttonHeld || hovered!=p || p.Feeding.UsingRoute || p.Motion.RivalTarget.HasValue,p.Audio!=null && p.Audio.CanPettingCall)) p.Audio.PettingCall();
-                diagnostics?.Record("before-contacts",pets,food); ResolvePetContacts(dt);
-                diagnostics?.Record("after-contacts",pets,food); AdvanceFeeding(dt);
+                AdvanceFeeding(dt);
                 diagnostics?.Record("after-feeding",pets,food); AdvanceScuffles(dt);
                 diagnostics?.Record("after-social",pets,food); DrawFrame(dt,false);
             }
@@ -316,16 +319,23 @@ namespace CyanPreview
             if(food.Owner==FoodOwner.Cursor) food.Move(Clamp(point));
             pointerPet?.Input.Hold(pointerPet.Local(point),Mathf.Max(0,elapsed-holdElapsed)); holdElapsed=elapsed;
         }
+        readonly PetSocialPerception socialPerception=new PetSocialPerception();
         PickupDiagnostics diagnostics;
+        MotionDiagnostics motionDiagnostics;
         void DrawFrame(float dt,bool paused)
         {
-            foreach(var p in pets) p.Advance(dt,paused);
+            socialPerception.Advance(pets,paused,dt);
+            foreach(var p in pets) { motionDiagnostics?.Observe(p); p.Advance(dt,paused,false); }
+            diagnostics?.Record("before-contacts",pets,food);
+            if(!paused) ResolvePetContacts(dt);
+            diagnostics?.Record("after-contacts",pets,food);
+            foreach(var p in pets) p.Draw();
             diagnostics?.Record("after-motion",pets,food);
             RefreshFoodVisual(); PublishFeedingStatus(); desktopRenderer.Render(native.WorkArea,1); DesktopFrameProfile.EndFrame();
         }
         void OnDestroy()
         {
-            diagnostics?.Dispose(); foodView?.Dispose(); desktopRenderer?.Dispose(); native?.Dispose();
+            motionDiagnostics?.Dispose(); diagnostics?.Dispose(); foodView?.Dispose(); desktopRenderer?.Dispose(); native?.Dispose();
             foreach(var p in pets) p.Dispose(); pets.Clear(); context?.Dispose();
         }
     }

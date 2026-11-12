@@ -18,7 +18,12 @@ namespace CyanPreview
         {
             if(State==PetMotionState.Grabbed) return;
             var p=BodyPosition(index); var next=surfaces.Constrain(p+delta,BodyRadius(index),out _);
-            TranslatePart(chunks[index],next-p);
+            var shift=next-p;
+            TranslatePart(chunks[index],shift);
+            // Contact resolution runs after simulation: keep rendered interpolation in sync.
+            var draw=(Vector2[,])Get(graphics,"drawPositions");
+            draw[index,0]+=shift; draw[index,1]+=shift;
+            if(index==0) TranslatePart(Get(graphics,"head"),shift);
             Set(chunks[index],"vel",Vector2.ClampMagnitude(BodyVelocity(index)+velocityDelta,18));
             resting=false;
         }

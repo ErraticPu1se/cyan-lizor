@@ -145,6 +145,15 @@ namespace CyanPreview.Editor
                 ContactBiteChecks.Run(context);
                 ContactBiteChecks.Pursuit(context);
                 PickupDiagnosticsChecks.Run(context);
+                MotionDiagnosticsChecks.Run(context);
+                WindowStabilityChecks.Run();
+                WindowStabilityChecks.Motion(context);
+                SocialCuriosityChecks.Run(context);
+                SocialRefinementChecks.Run(context);
+                RoamingContinuityChecks.Run(context);
+                ContactGlanceChecks.Run(context);
+                SoundInvestigationChecks.Run(context);
+                MovingAttentionChecks.Run(context);
                 RenderOptimizationChecks.Run(context);
                 InteractionUpgradeChecks.Run(context);
                 LandingRecoveryChecks.Run(context);

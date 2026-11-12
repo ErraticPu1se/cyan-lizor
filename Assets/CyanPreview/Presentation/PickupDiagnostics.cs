@@ -10,6 +10,8 @@ namespace CyanPreview
         [Serializable] public sealed class PetSample
         {
             public string key,name,motion,intent,feeding,contacts,rival;
+            public string socialLook;
+            public bool socialAligned;
             public int targetChunk=-1;
             public bool hold,hasTarget,hasDrive,threat,lunge,recovering;
             public Vector2 position,velocity,target,drive,frameDelta;
@@ -25,6 +27,7 @@ namespace CyanPreview
             public PetSample[] pets;
         }
         readonly Transform parent;
+        readonly bool socialOnly;
         readonly Dictionary<string,TextMesh> labels=new Dictionary<string,TextMesh>();
         readonly Dictionary<string,Vector2> starts=new Dictionary<string,Vector2>();
         readonly Queue<string> history=new Queue<string>();
@@ -39,8 +42,8 @@ namespace CyanPreview
         public string TracePath { get; private set; }
         public const int MaximumLines=5000;
         public const int MaximumBytes=8*1024*1024;
-        public PickupDiagnostics(Transform parent,string directory)
-        { this.parent=parent; this.directory=directory; font=Resources.GetBuiltinResource<Font>("Arial.ttf"); }
+        public PickupDiagnostics(Transform parent,string directory,bool socialOnly=false)
+        { this.socialOnly=socialOnly; this.parent=parent; this.directory=directory; font=Resources.GetBuiltinResource<Font>("Arial.ttf"); }
         public void BeginFrame(float seconds,List<DesktopPet> pets)
         {
             if(disposed || failed) return;
@@ -68,6 +71,8 @@ namespace CyanPreview
                 if(chunk>=0) contacts+=(contacts.Length==0?"":",")+other.Config.key+":"+chunk;
             }
             return new PetSample {key=p.Config.key,name=p.Config.name,motion=m.State.ToString(),intent=m.Behavior.Intent.ToString(),
+                socialAligned=m.SocialHeadAligned,
+                socialLook=m.SocialGaze.HasValue && m.GazeTarget==m.SocialGaze.Value ? m.Behavior.Social.SourceName+" ("+m.Behavior.Social.Cue+")" : null,
                 feeding=p.Feeding.Stage.ToString(),contacts=contacts,rival=rival,targetChunk=targetChunk,hold=m.Behavior.HoldPosition,hasTarget=target.HasValue,
                 bodyPositions=positions,bodyVelocities=velocities,hasDrive=drive.HasValue,position=p.WorldPosition,velocity=m.BodyVelocity(0)*p.Config.scale,
                 target=target.GetValueOrDefault()*p.Config.scale,drive=drive.GetValueOrDefault()*p.Config.scale,
@@ -129,9 +134,16 @@ namespace CyanPreview
                 label.text=p.name+" | "+p.motion+" / "+p.feeding+"\n"+action+" HOLD:"+p.hold+" jaw:"+p.jaw.ToString("0.0")+" cd:"+p.cooldown+
                     "\ntarget:"+(p.hasTarget?p.target.ToString("F0"):"none")+" body:"+p.targetChunk+" contact:"+(p.contacts.Length==0?"no":"YES")+" voice:"+p.voice.ToString("0.00")+
                     "\nmove:"+p.frameDelta.magnitude.ToString("0.0")+"px/frame grip:"+p.grips+(traceFull || lines>=MaximumLines?" TRACE FULL":"");
+                if(socialOnly)
+                {
+                    label.text=string.IsNullOrEmpty(p.socialLook)?"":(p.socialAligned?"Looking at: ":"Noticed: ")+p.socialLook;
+                    label.gameObject.SetActive(label.text.Length>0);
+                    if(label.text.Length==0) continue;
+                }
+                else if(!string.IsNullOrEmpty(p.socialLook)) label.text+="\n"+(p.socialAligned?"Looking at: ":"Noticed: ")+p.socialLook;
                 label.transform.localScale=Vector3.one;
                 var size=label.GetComponent<Renderer>().bounds.size;
-                float scale=Mathf.Min(72/Mathf.Max(1,size.y),360/Mathf.Max(1,size.x));
+                float scale=Mathf.Min((socialOnly?18:72)/Mathf.Max(1,size.y),360/Mathf.Max(1,size.x));
                 label.transform.localScale=Vector3.one*scale;
                 float width=size.x*scale, height=size.y*scale;
                 float x=Mathf.Clamp(p.position.x,viewport.xMin+width/2,viewport.xMax-width/2);

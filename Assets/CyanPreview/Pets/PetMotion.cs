@@ -29,6 +29,7 @@ namespace CyanPreview
         readonly Vector2[] restingPose = new Vector2[3];
         bool resting;
         float idleBodyTurn, idleNeckTurn, idleLookSide=1;
+        bool socialBodyTurn;
         float IdleAttention => lookTarget.HasValue ? 1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(150,210,Vector2.Distance(Position,lookTarget.Value))) : 0;
         float StableIdleAngle(Vector2 forward,Vector2 direction)
         {
@@ -50,8 +51,15 @@ namespace CyanPreview
         float accumulator;
         int chargeTicks, chargeDuration, cooldown, flightTicks;
         public float JumpPower => jumpPower;
+        public float BodyLength { get; private set; }
+        public uint FootstepRevision { get; private set; }
+        public Vector2? SocialGaze => !Behavior.InterestPoint.HasValue && !Behavior.TaskTarget.HasValue && !RivalTarget.HasValue ? Behavior.Social.GazePoint : null;
         public float SmokeLifeTicks => Mathf.Max(1, (70 * jumpPower - flightTicks) * 1.5f);
         public Vector2 HeadPosition => pet.HeadPosition;
+        public Vector2 GazeTarget => (Vector2)Get(graphics,"lookPos");
+        public bool SocialHeadAligned => SocialGaze.HasValue && GazeTarget==SocialGaze.Value &&
+            Vector2.Distance(Position,SocialGaze.Value)>12 &&
+            Vector2.Angle(HeadPosition-Position,SocialGaze.Value-Position)<=25;
         // Rain World CarryObject places held objects ahead of the front body chunk.
         public Vector2 MouthPosition => Position+(Position-(Vector2)Get(chunks[1],"pos")).normalized*(25*.95f);
         public float VoiceIntensity { get; set; }
@@ -92,6 +100,7 @@ namespace CyanPreview
             float bodyLength = Vector2.Distance((Vector2)Get(chunks[0], "pos"),(Vector2)Get(chunks[1], "pos"))
                 + Vector2.Distance((Vector2)Get(chunks[1], "pos"),(Vector2)Get(chunks[2], "pos"))
                 + (float)Get(chunks[0], "rad") + (float)Get(chunks[2], "rad");
+            BodyLength=bodyLength; Behavior.BodyLength=bodyLength;
             FallCatch = new FallCatchProgress(bodyLength);
             for (int i = 0; i < 4; i++)
             {
@@ -263,12 +272,13 @@ namespace CyanPreview
             if (pet.Graphics != graphics) throw new InvalidOperationException("Create a new movement controller after generating a pet.");
             if (float.IsNaN(seconds) || float.IsInfinity(seconds) || seconds < 0) throw new ArgumentOutOfRangeException(nameof(seconds));
             accumulator += Mathf.Min(seconds, .25f);
-            while (accumulator + .000001f >= TickSeconds) { accumulator -= TickSeconds; Step(); }
+            while (accumulator + .000001f >= TickSeconds) { accumulator -= TickSeconds; BeginMotionTrace(); Step(); EndMotionTrace(); }
         }
         void Step()
         {
             if (State == PetMotionState.Grabbed)
             {
+                Behavior.Social.Advance(TickSeconds);
                 heldTicks++;
                 var dragDelta = grabAnchor - (Vector2)Get(chunks[grabbedChunk], "pos");
                 // Carry only excess displacement on extreme cursor warps to bound joint stretch.
@@ -355,8 +365,17 @@ namespace CyanPreview
             resting = atRest;
             if(resting)
             {
-                float requested=lookTarget.HasValue ? Mathf.Clamp(StableIdleAngle(restingPose[0]-restingPose[1],lookTarget.Value-restingPose[1]),-25,25)*IdleAttention : 0;
-                idleBodyTurn=Mathf.MoveTowards(idleBodyTurn,Mathf.Lerp(idleBodyTurn,requested,.08f),.75f);
+                var socialLook=SocialGaze;
+                var attention=Behavior.Social.HoldingGlance && socialLook.HasValue ? socialLook : lookTarget ?? socialLook;
+                bool turnSocial=socialLook.HasValue && attention==socialLook;
+                if(socialBodyTurn && !turnSocial)
+                {
+                    for(int i=0;i<3;i++) restingPose[i]=BodyPosition(i);
+                    idleBodyTurn=0;
+                }
+                socialBodyTurn=turnSocial;
+                float requested=attention.HasValue ? Mathf.Clamp(StableIdleAngle(restingPose[0]-restingPose[1],attention.Value-restingPose[1]),socialBodyTurn?-180:-25,socialBodyTurn?180:25)*(attention==lookTarget?IdleAttention:1) : 0;
+                idleBodyTurn=Mathf.MoveTowards(idleBodyTurn,Mathf.Lerp(idleBodyTurn,requested,.08f),socialBodyTurn?2f:.75f);
             }
             if (airborne)
             {
@@ -396,6 +415,7 @@ namespace CyanPreview
                     var supportForce = Vector2.ClampMagnitude(support + inward * clearance - p, 6) * .18f;
                     v *= Recovery.VelocityRetention;
                     v += supportForce;
+                    if(motionSample!=null) { motionSample.normal[i]=inward; motionSample.support[i]=supportForce; }
                     if (State == PetMotionState.Crawling && hasDestination)
                     {
                         var beforeDrive = v;
@@ -428,7 +448,8 @@ namespace CyanPreview
                                 alignment = Mathf.Lerp(.5f, 1, (Vector2.Dot((leadTarget - p).normalized, (target - p).normalized) + 1) * .5f);
                         }
                         if (i < 2) v += (target - p).normalized * capabilities.CrawlSpeed * (Behavior.RunSpeed / .5f) * (i == 0 ? .55f : .35f) * alignment * Mathf.InverseLerp(.3f, .9f, facing);
-                        v = beforeDrive + (v - beforeDrive) * Recovery.DriveScale;
+                        v = beforeDrive + (v - beforeDrive) * Recovery.DriveScale * (Behavior.RoamStopping ? Mathf.Clamp01(Behavior.RunSpeed/.25f) : 1);
+                        if(motionSample!=null) motionSample.drive[i]=v-beforeDrive;
                     }
                     if (resting)
                     {
@@ -437,7 +458,8 @@ namespace CyanPreview
                         float amplitude = Behavior.Intent == PetIntent.Inspecting ? 1.4f : Behavior.Intent == PetIntent.Settling ? .8f : .45f;
                         var offset = new Vector2(Mathf.Sin(poseTicks * .035f + i), Mathf.Sin(poseTicks * .06f + i * .7f)) * amplitude;
                         var restTarget = restingPose[i];
-                        restTarget = restingPose[1] + (Vector2)(Quaternion.Euler(0,0,idleBodyTurn)*(restTarget-restingPose[1]));
+                        var pivot=socialBodyTurn?restingPose[2]:restingPose[1];
+                        restTarget = pivot + (Vector2)(Quaternion.Euler(0,0,idleBodyTurn)*(restTarget-pivot));
                         if(inward!=Vector2.zero)
                         {
                             // Support owns the wall-normal position; idle sway must not pull against it.
@@ -446,6 +468,7 @@ namespace CyanPreview
                             restingPose[i]+=inward*Vector2.Dot(p-restingPose[i],inward);
                         }
                         v += Vector2.ClampMagnitude(restTarget + offset - p, 12) * .12f;
+                        if(motionSample!=null) { motionSample.restTarget[i]=restTarget+offset; motionSample.idle[i]=Vector2.ClampMagnitude(restTarget+offset-p,12)*.12f; }
                     }
                     if(RivalStance && RivalTarget.HasValue)
                     {
@@ -464,7 +487,9 @@ namespace CyanPreview
                     }
                     p += v;
                 }
+                var beforeConstrain=p;
                 p = surfaces.Constrain(p, 8, out var hit);
+                if(motionSample!=null) motionSample.boundary[i]=p-beforeConstrain;
                 if (hit != Vector2.zero)
                 {
                     float speed = -Vector2.Dot(v, hit);
@@ -474,7 +499,9 @@ namespace CyanPreview
                 }
                 Set(chunks[i], "pos", p); Set(chunks[i], "vel", v);
             }
+            if(motionSample!=null) for(int i=0;i<3;i++) motionSample.beforeConnections[i]=BodyPosition(i);
             foreach (var connection in connections) Call(connection, "Update");
+            if(motionSample!=null) for(int i=0;i<3;i++) motionSample.connection[i]=BodyPosition(i)-motionSample.beforeConnections[i];
             foreach (var chunk in chunks) Set(chunk, "pos", surfaces.Constrain((Vector2)Get(chunk, "pos"), 8, out _));
             if (airborne && !propelled)
                 FallCatch.Advance(TickSeconds, ((Vector2)Get(chunks[1], "pos")).y, ((Vector2)Get(chunks[1], "vel")).y);
@@ -539,7 +566,10 @@ namespace CyanPreview
                     planted[i] = true; seeking[i] = false;
                 }
                 if (!flying && seeking[i] && Vector2.Distance(shoulder, anchors[i]) <= reach && Vector2.Distance((Vector2)Get(feet[i], "pos"), anchors[i]) < 2)
-                { planted[i] = true; seeking[i] = false; }
+                {
+                    if(!planted[i] && hasDestination && State==PetMotionState.Crawling && !Recovery.Active && BodyVelocity(i<2?0:2).sqrMagnitude>.04f) FootstepRevision++;
+                    planted[i] = true; seeking[i] = false;
+                }
                 if (planted[i]) gripAge[i]++;
             }
             UpdateGraphics();
@@ -576,9 +606,11 @@ namespace CyanPreview
             if (pursuitJump && RivalTarget.HasValue) target=RivalTarget.Value;
             else if (State == PetMotionState.Charging || (State == PetMotionState.Airborne && propelled)) target = jumpTarget;
             else if (RivalTarget.HasValue) target=RivalTarget.Value;
+            else if (SocialGaze.HasValue && Behavior.Social.HoldingGlance) target=SocialGaze.Value;
             else if (lookTarget.HasValue && (resting ? Vector2.Distance(Position,lookTarget.Value)<=210 : Vector2.Distance(HeadPosition,lookTarget.Value)<=180)) target = lookTarget.Value;
             else if (Behavior.InterestPoint.HasValue && lookTarget.HasValue) target = lookTarget.Value;
             else if (Behavior.ExplorationTarget.HasValue) target = Behavior.ExplorationTarget.Value;
+            else if (SocialGaze.HasValue) target = SocialGaze.Value;
             else if (Behavior.InterestPoint.HasValue) target = Behavior.InterestPoint.Value + new Vector2(Mathf.Sin(poseTicks * .035f) * 35, 18 + Mathf.Sin(poseTicks * .06f) * 12);
             Set(graphics, "lookPos", target);
             var aim = (target - draw[0, 0]).normalized;
@@ -601,7 +633,7 @@ namespace CyanPreview
             // the head sprite angle from head.pos relative to the leading chunk.
             Call(head, "Update");
             Set(head, "vel", (Vector2)Get(head, "vel") + aim * 3f);
-            Call(head, "ConnectToPoint", draw[0, 0] + forward * 11.4f,
+            Call(head, "ConnectToPoint", draw[0, 0] + (State==PetMotionState.Grabbed || (SocialGaze.HasValue && target==SocialGaze.Value) ? aim : forward) * 11.4f,
                 (float)Get(graphics, "headConnectionRad"), false, .2f, Get(chunks[0], "vel"), .5f, .1f);
             Set(graphics, "lastHeadDepthRotation", Get(graphics, "headDepthRotation"));
             Set(graphics, "headDepthRotation", Mathf.Lerp((float)Get(graphics, "headDepthRotation"), (float)Get(graphics, "depthRotation") * Vector2.Dot(aim, forward), .2f));

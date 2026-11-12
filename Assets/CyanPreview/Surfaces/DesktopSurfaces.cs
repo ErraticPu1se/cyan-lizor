@@ -52,8 +52,10 @@ namespace CyanPreview
                 if (onPlane) { oldEdge = position; normal = Vector2.zero; }
                 var fraction = new Vector2(Mathf.InverseLerp(oldBounds.xMin, oldBounds.xMax, oldEdge.x),
                     Mathf.InverseLerp(oldBounds.yMin, oldBounds.yMax, oldEdge.y));
-                var nextEdge = window.Bounds.min + Vector2.Scale(fraction, window.Bounds.size);
-                var delta = nextEdge - oldEdge;
+                // Compute changes directly: unchanged rectangles must yield exactly zero,
+                // rather than round-trip a point and cancel roaming on float noise.
+                var delta = (window.Bounds.min-oldBounds.min) + Vector2.Scale(fraction,window.Bounds.size-oldBounds.size);
+                var nextEdge = oldEdge + delta;
                 var nextPosition = position + delta;
                 // A hidden or off-screen support must release the pet, not teleport it.
                 var safeBounds = new Rect(Bounds.x + 8, Bounds.y + 8, Bounds.width - 16, Bounds.height - 16);
@@ -111,11 +113,9 @@ namespace CyanPreview
         }
         public Vector2 Nearest(Vector2 point, out Vector2 inward)
         {
-            if (SupportsFreeClimbing)
-            {
-                if (WindowAtEdge(point, out var nearby, out inward) != 0) return nearby;
-                return background.Nearest(point, out inward);
-            }
+            // Background support remains valid beside a frame. Do not magnetize
+            // the body to an edge just because it entered the edge-search radius.
+            if (SupportsFreeClimbing) return background.Nearest(point, out inward);
             var border = frame.Nearest(point, out inward);
             if (FindWindowEdge(point, Vector2.Distance(point, border), out var edge, out var normal) == 0) return border;
             inward = normal; return edge;
@@ -123,10 +123,11 @@ namespace CyanPreview
         public Vector2 Constrain(Vector2 point, float radius, out Vector2 normal) => frame.Constrain(point, radius, out normal);
         public Vector2 Advance(Vector2 point, float distance)
         {
+            if (SupportsFreeClimbing) return background.Advance(point,distance);
             long id = WindowAtEdge(point, out _, out _);
             foreach (var window in windows) if (window.Id == id)
                 return VisibleStep(point, new FrameSurfaces(window.Bounds).Advance(point, distance), id);
-            return SupportsFreeClimbing ? background.Advance(point, distance) : frame.Advance(point, distance);
+            return frame.Advance(point, distance);
         }
         public Vector2 Approach(Vector2 point, Vector2 target, float distance)
         {
