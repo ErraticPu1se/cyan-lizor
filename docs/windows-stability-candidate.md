@@ -1,7 +1,7 @@
 # Windows stability candidate
 
 Branch: `release/windows-stability`, based on main `57f5917`.
-Local player label: `0.2.0-stability-preview`; this is not a published tag.
+Release version: `v0.2.1-preview.1` (Windows stability preview).
 
 ## Scope
 
@@ -54,5 +54,5 @@ counter/ID advanced normally).
 ## Before publication
 
 Have the two users who reported cursor lag test this candidate on their laptops.
-Keep this branch unmerged and untagged until that feedback is reviewed. Build and
+The release remains a prerelease while that feedback is collected. Keep main unchanged. Build and
 package from this checkout; do not reuse a Windows development-branch binary.
