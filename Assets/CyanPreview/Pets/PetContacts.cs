@@ -22,6 +22,13 @@ namespace CyanPreview
             }
             return best;
         }
+        // LizardAI.Fighting slows for a close head-side confrontation, otherwise closes distance.
+        public static float ApproachSpeed(DesktopPet attacker,DesktopPet defender)
+        {
+            float head=Vector2.Distance(attacker.WorldPosition,defender.WorldPosition);
+            float rear=Vector2.Distance(attacker.WorldPosition,defender.Motion.BodyPosition(2)*defender.Config.scale);
+            return head<160*attacker.Config.scale && head<rear ? .2f : .8f;
+        }
         public static Vector2 TargetPoint(DesktopPet attacker,DesktopPet defender)
         {
             int contact=BiteContact(attacker,defender,out _);

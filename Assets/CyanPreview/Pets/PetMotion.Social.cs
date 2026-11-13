@@ -29,7 +29,9 @@ namespace CyanPreview
         }
         public void BiteHoming(Vector2 target,float strength)
         {
-            if(State!=PetMotionState.Crawling) return;
+            if(State!=PetMotionState.Crawling || GripCount==0 || !FacingRival(target)
+                || float.IsNaN(target.x) || float.IsNaN(target.y) || float.IsInfinity(target.x) || float.IsInfinity(target.y)
+                || float.IsNaN(strength) || float.IsInfinity(strength) || strength<=0) return;
             var direction=(target-Position).normalized;
             for(int i=0;i<chunks.Length;i++) Set(chunks[i],"vel",Vector2.ClampMagnitude(BodyVelocity(i)+direction*strength*(i==0?3:-1),14));
         }

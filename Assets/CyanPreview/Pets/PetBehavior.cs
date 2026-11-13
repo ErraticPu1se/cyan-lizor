@@ -25,10 +25,12 @@ namespace CyanPreview
             {
                 destination=null; CancelRoam(); Intent=PetIntent.Idle;
                 restlessness*=.45f;
+                if(Social.Cue!="voice" && !Social.Visible) Social.Clear();
             }
             return destination;
         }
-        public readonly PetCuriosity Social=new PetCuriosity();
+        public readonly PetCuriosity Social;
+        public bool FollowingSocial => SoundInvestigation && Social.Following;
         public bool SoundInvestigation { get; private set; }
         Vector2 soundSource;
         float soundSpacing;
@@ -39,6 +41,7 @@ namespace CyanPreview
         float restScore = .35f, exploreScore, cueScore, friendScore;
         public Vector2? InterestPoint => interest;
         public Vector2? TaskTarget { get; set; }
+        public float? TaskRunSpeed { get; set; }
         public bool HoldPosition { get; set; }
         public Vector2? ExplorationTarget => HoldPosition ? null : TaskTarget ?? (interest.HasValue && !arrived ? interest : null);
         public bool Roam { get; set; } = true;
@@ -55,11 +58,12 @@ namespace CyanPreview
         {
             random = new System.Random(seed);
             energy = personality?.Energy ?? .5f; sympathy = personality?.Sympathy ?? .5f;
+            Social=new PetCuriosity(sympathy);
             Rest();
         }
         public void Rest()
         {
-            CancelRoam(); SoundInvestigation=false;
+            CancelRoam(); SoundInvestigation=false; Social.Following=false;
             destination = interest = null; arrived = false; curiosity = cueScore = 0;
             blockedTicks = inspectionStepTicks = 0; Intent = PetIntent.Idle;
         }
@@ -67,10 +71,16 @@ namespace CyanPreview
         public void Target(Vector2 point,bool fromSound=false)
         {
             if (float.IsNaN(point.x) || float.IsNaN(point.y) || float.IsInfinity(point.x) || float.IsInfinity(point.y)) throw new ArgumentOutOfRangeException(nameof(point));
+            if(!fromSound) Social.Clear();
             CancelRoam(); SoundInvestigation=fromSound;
             destination = interest = point; arrived = false; ownerInvited = true;
             curiosity = 1.2f; cueScore = curiosity * Mathf.Lerp(.9f, 1.2f, sympathy);
             blockedTicks = inspectionStepTicks = 0; Intent = PetIntent.Investigating;
+        }
+        void EndSocialInvestigation(bool keepGlance=false)
+        {
+            SoundInvestigation=false; Social.Following=false; if(!keepGlance) Social.Clear(); destination=interest=null;
+            curiosity=cueScore=0; blockedTicks=0; Intent=PetIntent.Settling;
         }
         internal Vector2 NextRoamingDestination(Vector2 position,IPetSurfaces surfaces)
         {
@@ -99,10 +109,12 @@ namespace CyanPreview
         public Vector2? Update(Vector2 position, IPetSurfaces surfaces, bool canArrive = true)
         {
             Social.Advance(.025f);
+            if(SoundInvestigation && (!Social.Point.HasValue || !Social.ApproachAllowed || !Roam || HoldPosition || TaskTarget.HasValue))
+                EndSocialInvestigation(!Social.ApproachAllowed);
             if(HoldPosition) { CancelRoam(); Intent=PetIntent.Idle; RunSpeed=0; lastPosition=position; return null; }
             if(TaskTarget.HasValue)
             {
-                CancelRoam(); Intent=PetIntent.Task; RunSpeed=Mathf.Lerp(RunSpeed,.35f,.08f);
+                CancelRoam(); Intent=PetIntent.Task; RunSpeed=Mathf.Lerp(RunSpeed,TaskRunSpeed??.35f,TaskRunSpeed.HasValue?.15f:.08f);
                 lastPosition=position; return TaskTarget;
             }
             float travel = lastPosition.HasValue ? Mathf.Min(4, Vector2.Distance(position, lastPosition.Value)) : 0;
@@ -117,12 +129,12 @@ namespace CyanPreview
             if(RoamStopping) return SlowToRest();
             if(Intent==PetIntent.Roaming && roamBlockedTicks>=120) return SlowToRest();
             bool working = destination.HasValue || !canArrive;
-            fatigue = Mathf.Clamp01(fatigue + (working ? .00045f + travel * .00065f : -.0012f));
+            fatigue = Mathf.Clamp01(fatigue + (working ? .000225f + travel * .000325f : -.0012f));
             restlessness = Mathf.Clamp01(restlessness + (working ? -.0007f - travel * .0002f : Mathf.Lerp(.0006f, .0014f, energy)));
             if (owner.HasValue && lastOwner.HasValue && Vector2.Distance(owner.Value, lastOwner.Value) < 2) stableOwnerTicks++;
             else stableOwnerTicks = 0;
             lastOwner = owner;
-            if (interest.HasValue)
+            if (interest.HasValue && !FollowingSocial)
             {
                 if (!arrived && canArrive && Vector2.Distance(surfaces.Nearest(position, out _), interest.Value) < 18)
                 { arrived = true; destination = null; inspectionStepTicks = 0; Intent = PetIntent.Inspecting; }
@@ -151,7 +163,29 @@ namespace CyanPreview
                 soundSource=Social.Point.Value; soundSpacing=Social.Spacing;
                 var away=position-soundSource;
                 var point=surfaces.Nearest(soundSource+(away.sqrMagnitude>.01f?away.normalized:roamHeading)*soundSpacing,out _);
-                Target(point,true); Social.Clear(); cue=cueScore*1.2f;
+                Target(point,true); cue=cueScore*1.2f;
+            }
+            if(SoundInvestigation && (FollowingSocial || (arrived && Social.Visible && Social.CanApproach)))
+            {
+                float willingness=social*Mathf.Lerp(.8f,1.2f,energy);
+                if(willingness<=Mathf.Max(rest,explore,friend) || blockedTicks>120) EndSocialInvestigation();
+                else
+                {
+                    Social.Following=true; Intent=PetIntent.Socializing;
+                    var point=Social.LastSeenPoint.Value; var away=position-point;
+                    // Keep a dead band around personal space instead of correcting every tiny movement.
+                    if(away.magnitude>soundSpacing*1.25f)
+                        destination=surfaces.Nearest(point+away.normalized*soundSpacing,out _);
+                    else if(away.magnitude<=soundSpacing*1.05f || (destination.HasValue && Vector2.Distance(position,destination.Value)<8))
+                        destination=null;
+                    blockedTicks=destination.HasValue && canArrive && travel<.05f ? blockedTicks+1 : 0;
+                    if(!Social.Visible && !destination.HasValue) EndSocialInvestigation();
+                    else
+                    {
+                        RunSpeed=Mathf.Lerp(RunSpeed,destination.HasValue?Mathf.Lerp(.16f,.28f,energy)*(1-fatigue*.5f):0,.08f);
+                        return destination;
+                    }
+                }
             }
             if (Intent == PetIntent.Settling)
             {

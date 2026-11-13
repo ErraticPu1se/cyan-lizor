@@ -8,6 +8,7 @@ namespace CyanPreview.Editor
     public static class DesktopEffectsChecks
     {
         static void Require(bool condition, string message) { if (!condition) throw new Exception(message); }
+        public static void Verify() { using(var context=new ReferenceContext(Path.GetFullPath("local-data"))) Run(context); }
         public static void Run(ReferenceContext context)
         {
             var packed = new byte[8];
@@ -41,12 +42,12 @@ namespace CyanPreview.Editor
                         try
                         {
                             context.Manifest.gamePath = Path.Combine(gamePath, "nonexistent-audio-test");
-                            using (var unavailable = new CyanPetAudio(root.transform, context, motion, effects, pet.Seed)) { }
+                            using (var unavailable = new CyanPetAudio(root.transform, context, motion, effects, pet)) { }
                         }
                         catch (IOException) { rejected = true; }
                         finally { context.Manifest.gamePath = gamePath; }
                         Require(rejected && root.GetComponentsInChildren<AudioSource>().Length == 0, "Missing audio leaked playback objects");
-                        using (var audio = new CyanPetAudio(root.transform, context, motion, effects, pet.Seed))
+                        using (var audio = new CyanPetAudio(root.transform, context, motion, effects, pet))
                         {
                             Require(audio.Bite(true),"Local NPC jaw bite sound failed to load/play");
                             Require(!audio.Bite(false),"Repeated bite bypassed snap cooldown");
@@ -107,7 +108,7 @@ namespace CyanPreview.Editor
                             audio.Enabled = true; audio.Advance(0); audio.Dispose(); audio.Dispose(); audio.Enabled = false; Require(!audio.Bite(true),"Disposed bite played");
                             Require(motion.VoiceIntensity == 0, "Disposed audio retained voice state");
                         }
-                        using(var feedingAudio=new CyanPetAudio(root.transform,context,motion,effects,pet.Seed))
+                        using(var feedingAudio=new CyanPetAudio(root.transform,context,motion,effects,pet))
                         {
                             Require(feedingAudio.Vocalize(),"Food arrival call failed");
                             Require(feedingAudio.FoodPickupCall(),"Arrival call blocked pickup affection");
@@ -115,6 +116,37 @@ namespace CyanPreview.Editor
                             feedingAudio.Enabled=false; Require(!feedingAudio.FoodPickupCall(),"Muted pickup played");
                             feedingAudio.Dispose(); Require(!feedingAudio.FoodPickupCall(),"Disposed pickup played");
                         }
+                        var randomBefore=UnityEngine.Random.state;
+                        var shape=pet.BloodLustArticulation(out float duration,out float volume,out float pitch);
+                        Require(randomBefore.Equals(UnityEngine.Random.state),"Voice generation changed shared random state");
+                        var sameShape=pet.BloodLustArticulation(out float duration2,out float volume2,out float pitch2);
+                        Require(duration==duration2 && volume==volume2 && pitch==pitch2 && duration>0 && duration<2,"Voice identity or duration changed");
+                        for(int i=0;i<shape.GetLength(0);i++) for(int j=0;j<2;j++) Require(shape[i,j]==sameShape[i,j] && shape[i,j]>=0 && shape[i,j]<=1,"Invalid or unstable voice envelope");
+                        using(var combatAudio=new CyanPetAudio(root.transform,context,motion,effects,pet))
+                        {
+                            for(int i=0;i<400;i++) motion.Advance(.025f);
+                            Require(!combatAudio.CombatCall(),"Calm pet made combat call");
+                            motion.RivalTarget=Vector2.right*50;
+                            combatAudio.Enabled=false; Require(!combatAudio.CombatCall(),"Muted combat call played");
+                            combatAudio.Enabled=true;
+                            Require(combatAudio.CombatCall(),"BloodLust did not play");
+                            Require(combatAudio.VocalRevision==1,"Combat call was not published to social hearing");
+                            Require(!combatAudio.CombatCall() && !combatAudio.Vocalize(),"Combat bypassed shared voice cooldown");
+                            bool shaped=false;
+                            foreach(var source in root.GetComponentsInChildren<AudioSource>()) shaped|=source.loop && source.clip!=null && source.clip.name.StartsWith("LizardVoiceCyan");
+                            Require(shaped,"BloodLust did not shape regular cyan voice");
+                            motion.RivalTarget=null; combatAudio.Advance(.025f);
+                            foreach(var source in root.GetComponentsInChildren<AudioSource>()) Require(!source.loop && source.pitch==1,"Combat cancellation left voice shaping active");
+                            for(int i=0;i<40;i++) combatAudio.Advance(.25f);
+                            Require(combatAudio.Vocalize(),"Combat cooldown did not expire");
+                            foreach(var source in root.GetComponentsInChildren<AudioSource>()) source.Stop();
+                            Require(combatAudio.FoodPickupCall(),"Combat prevented pickup affection");
+                            motion.RivalTarget=Vector2.right*50;
+                            Require(!combatAudio.CombatCall(),"Combat interrupted affection");
+                            combatAudio.Dispose(); Require(!combatAudio.CombatCall(),"Disposed combat call played");
+                            motion.RivalTarget=null;
+                        }
+                        Debug.Log("BLOODLUST_COMBAT_MUTE_COOLDOWN_CANCELLATION_AFFECTION_CHECK_PASSED");
                         effects.Dispose(); effects.Dispose(); effects.HeadBubble(1); effects.Advance(.1f);
                         Require(effects.ParticleCount == 0, "Disposed effects accepted emissions");
                         int bursts = effects.BurstCount;

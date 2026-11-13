@@ -58,6 +58,7 @@ namespace CyanPreview
             foreach(var p in pets)
             {
                 if(p.Motion.RivalTarget.HasValue) { p.Motion.Behavior.TaskTarget=p.Feeding.Target; p.Motion.Behavior.HoldPosition=p.Feeding.UsingRoute; }
+                p.Motion.Behavior.TaskRunSpeed=null;
                 p.Motion.RivalTarget=null; p.Motion.RivalPursuingCarrier=false; p.Motion.RivalBiting=false; p.Motion.RivalStance=false; p.Motion.RivalPropelling=false; p.Motion.RivalRecovering=false;
             }
             socialStates=pets.ConvertAll(p=>new PetSocialStatus {key=p.Config.key,state=settings.allowFighting?"Calm":"Fighting off"}).ToArray();
@@ -96,8 +97,8 @@ namespace CyanPreview
                 bool canA=food.Holder!=a.Config.key && PetContacts.Available(a);
                 bool canB=food.Holder!=b.Config.key && PetContacts.Available(b);
                 // Decide both jaws from the same contact snapshot; order never chooses a winner.
-                var decisionA=a.Bite.Advance(dt,true,canA,nearA,contactA>=0,a.Motion.FacingRival(a.Local(targetA)),a.Motion.State==PetMotionState.Crawling && a.Motion.GripCount>0);
-                var decisionB=b.Bite.Advance(dt,true,canB,nearB,contactB>=0,b.Motion.FacingRival(b.Local(targetB)),b.Motion.State==PetMotionState.Crawling && b.Motion.GripCount>0);
+                var decisionA=a.Bite.Advance(dt,true,canA,nearA,contactA>=0,a.Motion.FacingRival(a.Local(targetA)),a.Motion.State==PetMotionState.Crawling && a.Motion.GripCount>0, Vector2.Distance(a.WorldPosition,targetA)<=a.Pet.Species.Biting.AttemptRadius*a.Config.scale);
+                var decisionB=b.Bite.Advance(dt,true,canB,nearB,contactB>=0,b.Motion.FacingRival(b.Local(targetB)),b.Motion.State==PetMotionState.Crawling && b.Motion.GripCount>0, Vector2.Distance(b.WorldPosition,targetB)<=b.Pet.Species.Biting.AttemptRadius*b.Config.scale);
                 ApplyBite(a,b,decisionA,contactA); ApplyBite(b,a,decisionB,contactB);
                 ConfigureRival(a,b,nearA,contactA>=0); ConfigureRival(b,a,nearB,contactB>=0);
                 socialStates[i].state=BiteStatus(a,fight); socialStates[j].state=BiteStatus(b,fight);
@@ -127,6 +128,7 @@ namespace CyanPreview
                 // ReturnPrey owns the carrier's destination; its occupied mouth cannot attack.
                 pet.Motion.RivalTarget=null; pet.Motion.RivalJaw=0; pet.Motion.RivalBiting=false;
                 pet.Motion.RivalStance=pet.Motion.RivalLunging=pet.Motion.RivalPropelling=pet.Motion.RivalRecovering=false;
+                pet.Motion.Behavior.TaskRunSpeed=null;
                 pet.Motion.Behavior.TaskTarget=pet.Feeding.Target;
                 pet.Motion.Behavior.HoldPosition=pet.Feeding.UsingRoute;
                 pet.Motion.AutonomousJumps=false;
@@ -143,6 +145,7 @@ namespace CyanPreview
             pet.Motion.RivalRecovering=pet.Bite.Recovering;
             pet.Motion.RivalStance=pet.Bite.Threatening && !pursuingCarrier;
             pet.Motion.Behavior.HoldPosition=pet.Bite.Recovering || pet.Bite.Lunging || (!pursuingCarrier && (pet.Bite.Threatening || contact));
+            pet.Motion.Behavior.TaskRunSpeed=PetContacts.ApproachSpeed(pet,rival);
             pet.Motion.Behavior.TaskTarget=target;
             pet.Motion.AutonomousJumps=pursuingCarrier && pet.Config.jumps && !pet.Motion.Behavior.HoldPosition;
         }
@@ -150,7 +153,7 @@ namespace CyanPreview
         {
             if(decision==BiteDecision.None) return;
             var target=contact>=0?defender.Motion.BodyPosition(contact)*defender.Config.scale:PetContacts.TargetPoint(attacker,defender);
-            if(decision==BiteDecision.Home) { attacker.Motion.BiteHoming(attacker.Local(target),attacker.Pet.Species.Biting.Homing); return; }
+            if(decision==BiteDecision.Home) { attacker.Motion.BiteHoming(attacker.Local(target),attacker.Pet.Species.Biting.Homing*attacker.Bite.HomingTicks); return; }
             if(!attacker.Motion.BiteToward(attacker.Local(target))) return;
             bool hit=decision==BiteDecision.Hit && contact>=0 && PetContacts.Available(defender);
             attacker.Audio?.Bite(hit);

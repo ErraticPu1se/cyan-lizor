@@ -35,6 +35,29 @@ namespace CyanPreview
         public string Summary { get; private set; }
         public Vector2 HeadPosition => (Vector2)Get(Get(Graphics, "head"), "pos");
 
+        public float[,] BloodLustArticulation(out float duration, out float volume, out float pitch)
+        {
+            EnsureAlive();
+            var saved = UnityEngine.Random.state;
+            try
+            {
+                // shortcut: use the game's articulation generator with an isolated seed, not its room-dependent full voice controller.
+                UnityEngine.Random.InitState(Seed ^ 7841);
+                float length=35f*UnityEngine.Random.Range(.5f,1.5f);
+                float maxVolume=.5f*UnityEngine.Random.Range(.7f,1.3f);
+                pitch=UnityEngine.Random.Range(.8f,1.2f);
+                var common=context.New("LizardVoice+VoiceArticulation", null, 80f, 1f);
+                var art=context.New("LizardVoice+VoiceArticulation", null, length, maxVolume);
+                var modifiers=(float[,])Get(art,"modifier");
+                for(int i=0;i<modifiers.GetLength(0);i++)
+                    for(int channel=0;channel<2;channel++)
+                        modifiers[i,channel]=Mathf.Lerp(modifiers[i,channel],(float)Call(common,"ReturnMod",(float)i/(modifiers.GetLength(0)-1),channel),.5f);
+                duration=length/40f; volume=maxVolume*1.7f;
+                return modifiers;
+            }
+            finally { UnityEngine.Random.state = saved; }
+        }
+
         internal ReferenceBridge(ReferenceContext context, LizardSpecies species)
         {
             this.context = context;

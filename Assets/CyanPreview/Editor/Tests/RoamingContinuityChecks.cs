@@ -38,7 +38,7 @@ namespace CyanPreview.Editor
                 Debug.Log("ROAM_BOUT seed="+seed+" ticks="+moving+" bodyLengths="+travel/m.BodyLength);
                 Check(started && stopped && slowed,"Roam did not complete through gradual settling");
                 Check(travel>m.BodyLength*3 && moving>100,"Roaming still ends after a short shuffle");
-                for(int i=0;i<60;i++) { m.Advance(.025f); Check(m.Behavior.Intent==PetIntent.Idle,"Rest immediately restarted roaming"); }
+                for(int i=0;i<60;i++) { m.Advance(.025f); Check(m.Behavior.Intent==PetIntent.Idle,"Rest immediately changed to "+m.Behavior.Intent+" cue="+m.Behavior.Social.Cue); }
                 m.MoveTo(m.Position+Vector2.right*200); m.Advance(.025f);
                 Check(m.Behavior.Intent==PetIntent.Investigating,"Click failed to interrupt rest");
             }

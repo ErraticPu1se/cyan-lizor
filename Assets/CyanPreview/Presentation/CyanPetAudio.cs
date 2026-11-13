@@ -21,6 +21,10 @@ namespace CyanPreview
         float idleVoice, bubbleTime, vocalCooldown, affectionCooldown, impactCooldown, biteCooldown;
         public const float VocalCooldownSeconds = 10;
         public uint VocalRevision { get; private set; }
+        readonly float[,] bloodLust;
+        readonly float bloodDuration, bloodVolume, bloodPitch;
+        float bloodTime;
+        bool bloodPlaying;
         PetIntent lastIntent;
         bool enabled = true, disposed;
         public bool Enabled
@@ -30,11 +34,12 @@ namespace CyanPreview
             {
                 if (disposed || enabled == value) return;
                 enabled = value;
-                if (!value) { charge.Stop(); voice.Stop(); bite.Stop(); foreach (var source in launch) source.Stop(); foreach (var source in impacts) if (source != null) source.Stop(); motion.VoiceIntensity = 0; }
+                if (!value) { ResetVoiceShape(); charge.Stop(); voice.Stop(); bite.Stop(); foreach (var source in launch) source.Stop(); foreach (var source in impacts) if (source != null) source.Stop(); motion.VoiceIntensity = 0; }
             }
         }
-        public CyanPetAudio(Transform parent, ReferenceContext context, PetMotion motion, CyanJumpEffects effects, int seed)
+        public CyanPetAudio(Transform parent, ReferenceContext context, PetMotion motion, CyanJumpEffects effects, ReferenceBridge pet)
         {
+            int seed=pet.Seed;
             this.motion = motion; this.effects = effects;
             voiceRandom = new System.Random(seed ^ 9319);
             idleVoice = NextIdleDelay();
@@ -55,6 +60,7 @@ namespace CyanPreview
                 // shortcut: deterministic A/B/C voice selection, not the game's voice personality generator.
                 voice.clip = context.LoadSound("LizardVoiceCyan" + "ABC"[(int)((uint)seed % 3)]);
                 regularVoice = voice.clip;
+                bloodLust = pet.BloodLustArticulation(out bloodDuration, out bloodVolume, out bloodPitch);
                 var affection = motion.Species.AffectionSound(seed);
                 if (affection != null)
                     try { affectionVoice = context.LoadSound(affection); }
@@ -107,6 +113,7 @@ namespace CyanPreview
         bool PlayAffection(string reason)
         {
             if (!CanPettingCall) return false;
+            ResetVoiceShape();
             voice.clip = affectionVoice; voice.volume = .55f; voice.Play();
             affectionCooldown = PettingContact.CooldownSeconds; vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay();
             VocalRevision++;
@@ -139,9 +146,28 @@ namespace CyanPreview
         {
             // Drop repeat requests; never queue calls or extend the cooldown.
             if (!enabled || disposed || clip == null || vocalCooldown > 0 || voice.isPlaying) return false;
+            ResetVoiceShape();
             voice.clip = clip; voice.volume = volume;
             voice.Play(); vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay(); VocalRevision++;
             return true;
+        }
+        bool CanChallenge => motion.RivalTarget.HasValue && motion.State==PetMotionState.Crawling
+            && !motion.RivalRecovering;
+        public bool CombatCall()
+        {
+            if(!CanChallenge || !PlayVoice(regularVoice, .4f)) return false;
+            bloodPlaying=true; bloodTime=0; voice.loop=true;
+            ApplyBloodLustShape();
+            return true;
+        }
+        void ResetVoiceShape() { bloodPlaying=false; bloodTime=0; voice.loop=false; voice.pitch=1; }
+        void ApplyBloodLustShape()
+        {
+            float position=Mathf.Clamp01(bloodTime/bloodDuration)*(bloodLust.GetLength(0)-1);
+            int first=Mathf.FloorToInt(position), next=Mathf.Min(first+1,bloodLust.GetLength(0)-1);
+            float blend=position-first;
+            voice.volume=Mathf.Clamp01(Mathf.Lerp(bloodLust[first,0],bloodLust[next,0],blend)*bloodVolume*.4f);
+            voice.pitch=Mathf.Lerp(.5f,1.5f,Mathf.Lerp(bloodLust[first,1],bloodLust[next,1],blend))*bloodPitch;
         }
         public void Advance(float seconds)
         {
@@ -151,10 +177,18 @@ namespace CyanPreview
             affectionCooldown = Mathf.Max(0, affectionCooldown - seconds);
             impactCooldown = Mathf.Max(0, impactCooldown - seconds);
             biteCooldown=Mathf.Max(0,biteCooldown-seconds);
+            if(bloodPlaying)
+            {
+                bloodTime+=seconds;
+                if(!CanChallenge || bloodTime>=bloodDuration) { voice.Stop(); ResetVoiceShape(); }
+                else ApplyBloodLustShape();
+            }
+            // Rain World's hunting rate is .0125 per 40 Hz tick; scuffles reuse it with the shared call cooldown.
+            if(CanChallenge && vocalCooldown<=0 && seconds>0 && voiceRandom.NextDouble()<1-Mathf.Exp(-.5f*seconds)) CombatCall();
             var intent = motion.Behavior.Intent;
-            if (intent == PetIntent.Investigating && lastIntent != intent && !motion.Behavior.SoundInvestigation) Vocalize();
+            if (!motion.RivalTarget.HasValue && intent == PetIntent.Investigating && lastIntent != intent && !motion.Behavior.SoundInvestigation) Vocalize();
             lastIntent = intent;
-            if (intent == PetIntent.Idle && motion.State == PetMotionState.Crawling && (idleVoice -= seconds) <= 0) Vocalize();
+            if (!motion.RivalTarget.HasValue && intent == PetIntent.Idle && motion.State == PetMotionState.Crawling && (idleVoice -= seconds) <= 0) Vocalize();
             float intensity = 0;
             if (enabled && voice.isPlaying)
             {

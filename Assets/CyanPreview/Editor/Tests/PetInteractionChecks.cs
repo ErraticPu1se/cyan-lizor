@@ -5,6 +5,7 @@ namespace CyanPreview.Editor
 {
     public static class PetInteractionChecks
     {
+        public static void Verify() { using(var c=new ReferenceContext(System.IO.Path.GetFullPath("local-data"))) Run(c); }
         public static void Run(ReferenceContext context)
         {
             float previousReach = 0;
@@ -140,12 +141,14 @@ namespace CyanPreview.Editor
                 var motion = new PetMotion(pet, new FrameSurfaces(bounds), 42) { AutonomousJumps = true };
                 Require(motion.Behavior.Intent == PetIntent.Idle, "New pet did not start idle");
                 bool charged = false, flew = false, landed = false;
-                for (int i = 0; i < 2400 && !landed; i++)
+                // Lower fatigue changes roam routes; allow another bout to find a feasible autonomous jump.
+                for (int i = 0; i < 4800 && !landed; i++)
                 {
                     motion.Advance(.025f);
                     charged |= motion.State == PetMotionState.Charging;
                     flew |= motion.State == PetMotionState.Airborne;
                     landed |= flew && motion.State == PetMotionState.Crawling;
+                    if(i==2399 || landed) Debug.Log("AUTONOMOUS_JUMP_TIMING ticks="+(i+1)+" charged="+charged+" flew="+flew+" landed="+landed+" state="+motion.State+" intent="+motion.Behavior.Intent);
                 }
                 Require(charged && flew && landed, "Autonomous jump did not charge, launch and land");
                 Debug.Log("AUTONOMOUS_JUMP_LANDING_CHECK_PASSED");

@@ -136,6 +136,7 @@ namespace CyanPreview.Editor
                 UtilityChecks.Run(context);
                 CompanionChecks.Run(context);
                 CompanionChecks.IdleStability(context);
+                HeadResponseChecks.Run(context);
                 CompanionChecks.EdgeFootholds(context);
                 CompanionChecks.RestingForces(context);
                 TargetingChecks.Run(context);
@@ -144,6 +145,7 @@ namespace CyanPreview.Editor
                 MultiplePetChecks.SharedFeeding(context);
                 MultiplePetChecks.CarrierCompetition(context);
                 ContactBiteChecks.Run(context);
+                CombatApproachChecks.Run(context);
                 ContactBiteChecks.Pursuit(context);
                 PickupDiagnosticsChecks.Run(context);
                 DevelopmentInputChecks.Run(context);
@@ -156,6 +158,7 @@ namespace CyanPreview.Editor
                 ContactGlanceChecks.Run(context);
                 SoundInvestigationChecks.Run(context);
                 MovingAttentionChecks.Run(context);
+                SocialFollowingChecks.Run();
                 RenderOptimizationChecks.Run(context);
                 InteractionUpgradeChecks.Run(context);
                 LandingRecoveryChecks.Run(context);

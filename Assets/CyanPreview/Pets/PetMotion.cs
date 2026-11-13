@@ -30,6 +30,8 @@ namespace CyanPreview
         bool resting;
         float idleBodyTurn, idleNeckTurn, idleLookSide=1;
         bool socialBodyTurn;
+        int cursorLookTicks;
+        bool cursorOwnsLook, cursorMissing;
         float IdleAttention => lookTarget.HasValue ? 1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(150,210,Vector2.Distance(Position,lookTarget.Value))) : 0;
         float StableIdleAngle(Vector2 forward,Vector2 direction)
         {
@@ -53,7 +55,7 @@ namespace CyanPreview
         public float JumpPower => jumpPower;
         public float BodyLength { get; private set; }
         public uint FootstepRevision { get; private set; }
-        public Vector2? SocialGaze => !Behavior.InterestPoint.HasValue && !Behavior.TaskTarget.HasValue && !RivalTarget.HasValue ? Behavior.Social.GazePoint : null;
+        public Vector2? SocialGaze => (!Behavior.InterestPoint.HasValue || Behavior.FollowingSocial) && !Behavior.TaskTarget.HasValue && !RivalTarget.HasValue ? Behavior.Social.GazePoint : null;
         public float SmokeLifeTicks => Mathf.Max(1, (70 * jumpPower - flightTicks) * 1.5f);
         public Vector2 HeadPosition => pet.HeadPosition;
         public Vector2 GazeTarget => (Vector2)Get(graphics,"lookPos");
@@ -123,12 +125,15 @@ namespace CyanPreview
             try { return pet.Context.New("Limb", graphics, chunks[index < 2 ? 0 : 2], index, 2.5f, .7f, .99f, 6f, .6f); }
             finally { UnityEngine.Random.state = state; }
         }
-        public void LookAt(Vector2? point) { lookTarget = point; }
+        public void LookAt(Vector2? point) { lookTarget = point; cursorOwnsLook=cursorMissing=false; cursorLookTicks=0; }
         public LizardSpecies Species => pet.Species;
         public void ObserveCursor(Vector2? point)
         {
             // Nearby pointer attention changes the pose without creating a movement goal.
-            LookAt(point.HasValue && (resting ? Vector2.Distance(Position,point.Value)<=210 : Vector2.Distance(HeadPosition,point.Value)<=180) ? point : null);
+            bool visible=point.HasValue && (resting ? Vector2.Distance(Position,point.Value)<=210 : Vector2.Distance(HeadPosition,point.Value)<=180);
+            if(visible) { lookTarget=point; cursorOwnsLook=true; cursorMissing=false; cursorLookTicks=6; }
+            else if(cursorOwnsLook && cursorLookTicks>0) cursorMissing=true;
+            else LookAt(null);
         }
         public void MoveTo(Vector2 point) { clickInvestigation = false; Behavior.Target(surfaces.Nearest(point, out _)); }
         public void ExploreClick(Vector2 point)
@@ -284,6 +289,8 @@ namespace CyanPreview
         }
         void Step()
         {
+            // Brief cursor loss must not alternate attention and neutral pose every tick.
+            if(cursorOwnsLook && cursorMissing && cursorLookTicks>0 && --cursorLookTicks==0) LookAt(null);
             if (State == PetMotionState.Grabbed)
             {
                 Behavior.Social.Advance(TickSeconds);
@@ -627,11 +634,17 @@ namespace CyanPreview
             float bodyAngle = Mathf.Atan2(forward.y, forward.x) * Mathf.Rad2Deg;
             float targetAngle = Mathf.Atan2(aim.y, aim.x) * Mathf.Rad2Deg;
             float neckTurn=Mathf.Clamp(Mathf.DeltaAngle(bodyAngle,targetAngle),-80,80);
+            bool cursorAttention=lookTarget.HasValue && target==lookTarget.Value;
+            bool socialAttention=SocialGaze.HasValue && target==SocialGaze.Value;
             if(resting)
             {
                 float requested=Mathf.Clamp(StableIdleAngle(forward,aim),-80,80);
-                if(lookTarget.HasValue && target==lookTarget.Value && !Behavior.InterestPoint.HasValue) requested*=IdleAttention;
-                idleNeckTurn=Mathf.MoveTowards(idleNeckTurn,Mathf.Lerp(idleNeckTurn,requested,.1f),4);
+                bool attending=cursorAttention || socialAttention;
+                // Keep the neck responsive through the useful range; soften only its outer boundary.
+                if(cursorAttention && !socialAttention && !Behavior.InterestPoint.HasValue)
+                    requested*=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(195,210,Vector2.Distance(Position,lookTarget.Value)));
+                bool deliberateTurn=attending && Mathf.Abs(requested-idleNeckTurn)>12;
+                idleNeckTurn=Mathf.MoveTowards(idleNeckTurn,Mathf.Lerp(idleNeckTurn,requested,deliberateTurn?.65f:.1f),deliberateTurn?30:4);
                 neckTurn=idleNeckTurn;
             }
             else idleNeckTurn=neckTurn;
@@ -639,9 +652,10 @@ namespace CyanPreview
             aim = new Vector2(Mathf.Cos(neckAngle * Mathf.Deg2Rad), Mathf.Sin(neckAngle * Mathf.Deg2Rad));
             // Use the original head spring and neck constraint. DrawSprites derives
             // the head sprite angle from head.pos relative to the leading chunk.
+            // Aim the neck support too: a forward-only anchor fights an intentional glance.
             Call(head, "Update");
             Set(head, "vel", (Vector2)Get(head, "vel") + aim * 3f);
-            Call(head, "ConnectToPoint", draw[0, 0] + (State==PetMotionState.Grabbed || (SocialGaze.HasValue && target==SocialGaze.Value) ? aim : forward) * 11.4f,
+            Call(head, "ConnectToPoint", draw[0, 0] + (resting || State==PetMotionState.Grabbed || cursorAttention || socialAttention ? aim : forward) * 11.4f,
                 (float)Get(graphics, "headConnectionRad"), false, .2f, Get(chunks[0], "vel"), .5f, .1f);
             Set(graphics, "lastHeadDepthRotation", Get(graphics, "headDepthRotation"));
             Set(graphics, "headDepthRotation", Mathf.Lerp((float)Get(graphics, "headDepthRotation"), (float)Get(graphics, "depthRotation") * Vector2.Dot(aim, forward), .2f));

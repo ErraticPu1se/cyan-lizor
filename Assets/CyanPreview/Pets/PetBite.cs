@@ -21,6 +21,7 @@ namespace CyanPreview
         int delay, snap, recovery, preparation, lunge, closeAttempts;
         readonly int preparationTicks;
         public float Jaw { get; private set; }
+        public int HomingTicks { get; private set; }
         public int CooldownTicks => delay;
         public bool Snapping => snap>0;
         public bool Recovering => recovery>0;
@@ -34,10 +35,11 @@ namespace CyanPreview
             random=new System.Random(seed); this.tuning=tuning;
             preparationTicks=(tuning?.PreparationTicks??35)+(int)(random.NextDouble()*12*(1-Mathf.Clamp01(aggression)));
         }
-        public void Cancel() { Jaw=0; preparation=0; lunge=0; snap=0; closeAttempts=0; }
+        public void Cancel() { HomingTicks=0; Jaw=0; preparation=0; lunge=0; snap=0; closeAttempts=0; }
         public void ReceiveHit() { recovery=tuning?.RecoveryTicks??40; Cancel(); }
-        public BiteDecision Advance(float seconds,bool engaged,bool canBite,bool near,bool contact,bool aligned=true,bool canLunge=true)
+        public BiteDecision Advance(float seconds,bool engaged,bool canBite,bool near,bool contact,bool aligned=true,bool canLunge=true,bool canHome=false)
         {
+            HomingTicks=0;
             if(float.IsNaN(seconds)||float.IsInfinity(seconds)||seconds<=0) return BiteDecision.None;
             clock+=Mathf.Min(seconds,.1f); BiteDecision decision=BiteDecision.None;
             while(clock>=.025f)
@@ -68,12 +70,14 @@ namespace CyanPreview
                 if(!near) { preparation=0; Jaw=Mathf.Max(0,Jaw-.05f); continue; }
                 // Ready the jaw on approach, including flight; only a grounded, aligned pet lunges.
                 Jaw=Mathf.Min(1,Jaw+.05f);
+                if(canHome && canLunge && aligned && Jaw>.9f && decision!=BiteDecision.Hit && decision!=BiteDecision.Miss)
+                { HomingTicks++; decision=BiteDecision.Home; }
                 if(!canLunge || !aligned) { preparation=0; continue; }
                 preparation++;
-                if(preparation>=preparationTicks) { preparation=0; lunge=tuning.LungeTicks; }
+                if(preparation>=preparationTicks) { preparation=0; lunge=tuning.LungeTicks; HomingTicks=0; if(decision==BiteDecision.Home) decision=BiteDecision.None; }
             }
             return decision;
         }
-        void Snap(bool afterLunge=true) { Jaw=0; delay=tuning.DelayTicks; snap=5; lunge=0; preparation=0; recovery=afterLunge?tuning.RecoveryTicks:0; closeAttempts=0; }
+        void Snap(bool afterLunge=true) { HomingTicks=0; Jaw=0; delay=tuning.DelayTicks; snap=5; lunge=0; preparation=0; recovery=afterLunge?tuning.RecoveryTicks:0; closeAttempts=0; }
     }
 }

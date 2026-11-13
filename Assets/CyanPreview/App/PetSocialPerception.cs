@@ -49,7 +49,8 @@ namespace CyanPreview
                 DesktopPet best=null; float strength=0; string cue="sight";
                 foreach(var source in pets)
                 {
-                    if(source==listener || !Observable(source)) continue;
+                    if(source==listener) continue;
+                    if(!Observable(source)) { if(social.Source==source.Config.key) social.Clear(); continue; }
                     float distance=Vector2.Distance(listener.WorldPosition,source.WorldPosition)/(listener.Motion.BodyLength*listener.Config.scale);
                     social.TrackVisual(source.Config.key,listener.Local(source.WorldPosition),listener.Motion.BodyLength,distance<SightBodyLengths?dt:0,source.Motion.State==PetMotionState.Grabbed);
                     float speed=movement[source.Config.key].speed;

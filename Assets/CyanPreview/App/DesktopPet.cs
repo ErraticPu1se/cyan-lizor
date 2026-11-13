@@ -61,7 +61,7 @@ namespace CyanPreview
             if(worldPosition.HasValue) { var p=Surfaces.Nearest(Local(worldPosition.Value),out var n)+n*14; Motion.ShiftWithSurface(p-Motion.Position); }
             Input=new PetInteraction(Motion) {ClickToExplore=config.clickToExplore};
             Effects=new CyanJumpEffects(Root.transform,Motion,Pet.EffectColor,Pet.Seed);
-            try { Audio=new CyanPetAudio(Root.transform,context,Motion,Effects,Pet.Seed) {Enabled=config.sound}; }
+            try { Audio=new CyanPetAudio(Root.transform,context,Motion,Effects,Pet) {Enabled=config.sound}; }
             catch(Exception e) { Audio=null; Debug.LogWarning("Pet audio unavailable: "+e.Message); }
             FoodRevision=-1; FollowingFood=false;
         }
