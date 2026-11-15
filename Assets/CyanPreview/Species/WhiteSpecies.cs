@@ -10,8 +10,8 @@ namespace CyanPreview
         // Motion settings are immutable; each pet owns its simulation state.
         public override MotionTuning Motion { get; } = 
             new MotionTuning(new AttentionTuning(
-                deliverateSmoothing: .3f,
-                deliberateDegressPerTick: 12f)
+                deliberateSmoothing: .3f,
+                deliberateDegreesPerTick: 12f)
         );
         public override string Id => "white";
         public override bool CanCamouflage => true;
