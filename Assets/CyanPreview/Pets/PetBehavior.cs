@@ -10,7 +10,28 @@ namespace CyanPreview
     public sealed class PetBehavior
     {
         readonly System.Random random;
-        readonly float energy, sympathy;
+        readonly float energy, sympathy, restPreference, nervous;
+        readonly System.Random tongueRandom;
+        float flickCooldown, flickNovelty=1;
+        public const float CursorFlickCooldownSeconds=4;
+        public void CursorFlickStarted() { flickCooldown=CursorFlickCooldownSeconds; flickNovelty=.7f; }
+        public float CursorFlickUtility {get;private set;}
+        public bool CanConsiderCursorFlick(float distance) => flickCooldown<=0 && PetTongue.CursorInRange(distance,BodyLength);
+        public bool ChooseCursorFlick(float distance)
+        {
+            CursorFlickUtility=0;
+            if(!CanConsiderCursorFlick(distance)) return false;
+            float distanceInterest=Mathf.Lerp(.55f,1.6f,Mathf.SmoothStep(0,1,Mathf.InverseLerp(BodyLength,BodyLength*3,distance)));
+            float weight=distanceInterest*Mathf.Lerp(1.1f,1.5f,sympathy)*(1-fatigue*.25f)*(1-nervous*.25f)*flickNovelty;
+            float roll=(float)tongueRandom.NextDouble();
+            CursorFlickUtility=weight*(.25f+roll);
+            // Convert the old randomized utility comparison to its probability, then double it (capped at 100%).
+            float alternative=Mathf.Max(.65f,restScore*.6f,exploreScore,friendScore,Social.Utility);
+            float previousChance=weight>0?Mathf.Clamp01(1.25f-alternative/weight):0;
+            return roll>1-Mathf.Min(1,previousChance*2);
+        }
+        float cursorInterest;
+        int cursorInvestigationCooldown;
         Vector2 roamHeading=Vector2.right;
         public float BodyLength { get; set; }=50;
         float roamRemaining,roamBudget;
@@ -54,11 +75,13 @@ namespace CyanPreview
         public float Fatigue => fatigue;
         public float Restlessness => restlessness;
         public string DecisionSummary => $"Rest {restScore:0.00} / Explore {exploreScore:0.00} / Click {cueScore:0.00} / Owner {friendScore:0.00}\nExertion {fatigue:0.00} / Restlessness {restlessness:0.00}";
-        public PetBehavior(int seed, PetPersonality personality = null)
+        public PetBehavior(int seed, PetPersonality personality = null,float restPreference=0)
         {
+            this.restPreference=Mathf.Clamp01(restPreference);
             random = new System.Random(seed);
+            tongueRandom=new System.Random(seed ^ 49271); nervous=personality?.Nervous??.5f;
             energy = personality?.Energy ?? .5f; sympathy = personality?.Sympathy ?? .5f;
-            Social=new PetCuriosity(sympathy);
+            Social=new PetCuriosity(sympathy,personality?.Dominance??.5f,personality?.Nervous??.5f);
             Rest();
         }
         public void Rest()
@@ -109,6 +132,7 @@ namespace CyanPreview
         public Vector2? Update(Vector2 position, IPetSurfaces surfaces, bool canArrive = true)
         {
             Social.Advance(.025f);
+            flickCooldown=Mathf.Max(0,flickCooldown-.025f); flickNovelty=Mathf.Min(1,flickNovelty+.002f);
             if(SoundInvestigation && (!Social.Point.HasValue || !Social.ApproachAllowed || !Roam || HoldPosition || TaskTarget.HasValue))
                 EndSocialInvestigation(!Social.ApproachAllowed);
             if(HoldPosition) { CancelRoam(); Intent=PetIntent.Idle; RunSpeed=0; lastPosition=position; return null; }
@@ -130,9 +154,12 @@ namespace CyanPreview
             if(Intent==PetIntent.Roaming && roamBlockedTicks>=120) return SlowToRest();
             bool working = destination.HasValue || !canArrive;
             fatigue = Mathf.Clamp01(fatigue + (working ? .000225f + travel * .000325f : -.0012f));
-            restlessness = Mathf.Clamp01(restlessness + (working ? -.0007f - travel * .0002f : Mathf.Lerp(.0006f, .0014f, energy)));
+            restlessness = Mathf.Clamp01(restlessness + (working ? -.0007f - travel * .0002f : Mathf.Lerp(.0006f, .0014f, energy)*Mathf.Lerp(1,.2f,restPreference)));
             if (owner.HasValue && lastOwner.HasValue && Vector2.Distance(owner.Value, lastOwner.Value) < 2) stableOwnerTicks++;
             else stableOwnerTicks = 0;
+            if(cursorInvestigationCooldown>0) cursorInvestigationCooldown--;
+            bool cursorMoving=owner.HasValue && lastOwner.HasValue && Vector2.Distance(owner.Value,lastOwner.Value)>.5f;
+            cursorInterest=Mathf.Clamp01(cursorInterest+(Roam && cursorInvestigationCooldown==0 && cursorMoving && canArrive && !interest.HasValue ? .01f : -.003f));
             lastOwner = owner;
             if (interest.HasValue && !FollowingSocial)
             {
@@ -143,13 +170,15 @@ namespace CyanPreview
                 curiosity = Mathf.Max(0, curiosity - (arrived ? .006f : .00015f));
                 if (blockedTicks > 240) curiosity = Mathf.Max(0, curiosity - .02f);
             }
-            restScore = Mathf.Lerp(restScore, .25f + fatigue * .65f, .08f);
+            restScore = Mathf.Lerp(restScore, .25f + fatigue * .65f + restPreference*Mathf.Lerp(.24f,.14f,energy), .08f);
             exploreScore = Roam ? Mathf.Lerp(exploreScore, restlessness * Mathf.Lerp(.65f, 1, energy) * (1 - fatigue * .6f), .08f) : 0;
             cueScore = interest.HasValue ? Mathf.Lerp(cueScore, curiosity * Mathf.Lerp(.9f, 1.2f, sympathy), .08f) : 0;
             float friendWant = 0;
-            if (Roam && ownerInvited && owner.HasValue && stableOwnerTicks > 80 && !interest.HasValue)
+            if (restPreference==0 && Roam && ownerInvited && owner.HasValue && stableOwnerTicks > 80 && !interest.HasValue)
                 friendWant = Mathf.InverseLerp(130, 400, Vector2.Distance(position, surfaces.Nearest(owner.Value, out _))) * .55f * (1 - fatigue);
-            friendScore = Roam && stableOwnerTicks > 80 ? Mathf.Lerp(friendScore, friendWant, .08f) : 0;
+            if(restPreference>0 && Roam && owner.HasValue && cursorInvestigationCooldown==0 && !interest.HasValue)
+                friendWant=Mathf.Max(friendWant,cursorInterest*Mathf.Lerp(.65f,.95f,sympathy));
+            friendScore = Roam && (stableOwnerTicks > 80 || restPreference>0) ? Mathf.Lerp(friendScore, friendWant, .08f) : 0;
             // Continuation hysteresis prevents near-equal choices flickering.
             float rest = restScore * (Intent == PetIntent.Idle || Intent == PetIntent.Settling ? 1.2f : 1);
             float explore = exploreScore * (Intent == PetIntent.Roaming ? 1.2f : 1);
@@ -174,7 +203,9 @@ namespace CyanPreview
                     Social.Following=true; Intent=PetIntent.Socializing;
                     var point=Social.LastSeenPoint.Value; var away=position-point;
                     // Keep a dead band around personal space instead of correcting every tiny movement.
-                    if(away.magnitude>soundSpacing*1.25f)
+                    var yieldPoint=Social.YieldFrom(position);
+                    if(yieldPoint.HasValue) destination=surfaces.Nearest(yieldPoint.Value,out _);
+                    else if(away.magnitude>soundSpacing*1.25f)
                         destination=surfaces.Nearest(point+away.normalized*soundSpacing,out _);
                     else if(away.magnitude<=soundSpacing*1.05f || (destination.HasValue && Vector2.Distance(position,destination.Value)<8))
                         destination=null;
@@ -218,17 +249,31 @@ namespace CyanPreview
                 destination = null; arrived = true; curiosity = cueScore = 0;
                 Intent = PetIntent.Settling;
             }
+            else if(Roam && Intent!=PetIntent.Roaming && Social.YieldFrom(position).HasValue)
+            {
+                Intent=PetIntent.Socializing;
+                destination=surfaces.Nearest(Social.YieldTarget.Value,out _);
+            }
             else if (Social.Point.HasValue && (Intent!=PetIntent.Roaming || Social.Cue=="voice") && ((Social.HoldingGlance && Intent!=PetIntent.Roaming) || social>Mathf.Max(rest,explore,friend)))
             {
                 Intent=PetIntent.Socializing;
                 var point=Social.Point.Value; var away=position-point;
-                destination=Roam && Social.CanApproach && away.magnitude>Social.Spacing*1.1f
+                destination=Roam && Social.CanApproach && (restPreference==0 || social>Mathf.Max(rest,explore,friend)) && away.magnitude>Social.Spacing*1.1f
                     ? (Vector2?)surfaces.Nearest(point+(away.sqrMagnitude>.01f?away.normalized:Vector2.right)*Social.Spacing,out _) : null;
             }
             else if (friend > Mathf.Max(rest, exploreScore) && owner.HasValue)
             {
-                Intent = PetIntent.FollowingOwner;
-                destination = surfaces.Nearest(owner.Value, out _);
+                if(restPreference>0)
+                {
+                    var away=position-owner.Value;
+                    if(away.magnitude>BodyLength*1.5f)
+                    {
+                        Target(surfaces.Nearest(owner.Value+away.normalized*BodyLength*1.25f,out _));
+                        cursorInvestigationCooldown=1200; cursorInterest=friendScore=0;
+                    }
+                    else { destination=null; Intent=PetIntent.Idle; }
+                }
+                else { Intent = PetIntent.FollowingOwner; destination = surfaces.Nearest(owner.Value, out _); }
             }
             else if (explore > rest)
             {

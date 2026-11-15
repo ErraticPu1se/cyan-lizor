@@ -20,7 +20,7 @@ namespace CyanPreview
             food.Cancel(); CancelPointer();
             foreach(var p in pets)
             {
-                p.Feeding.RequestReturn(); p.FollowingFood=false;
+                p.Tongue?.Cancel(); ClearTongueTurn(p); p.AfterFlickTarget=null; p.Motion.TongueActive=false; p.Feeding.RequestReturn(); p.FollowingFood=false;
                 p.Motion.Behavior.TaskTarget=p.Feeding.Target; p.Motion.Behavior.HoldPosition=p.Feeding.UsingRoute;
                 if(!p.Feeding.Active) p.Motion.Behavior.Rest();
             }
@@ -69,6 +69,7 @@ namespace CyanPreview
             foreach(var p in pets)
             {
                 var f=p.Feeding; var m=p.Motion; string key=p.Config.key;
+                if(AdvanceTongue(p,dt)) continue;
                 if(food.Holder==key && food.Owner==FoodOwner.Pet && m.State==PetMotionState.Grabbed)
                 { food.Drop(Clamp(p.WorldMouth)); ResetInterest(p); }
                 bool owner=food.Holder==key;
@@ -89,7 +90,7 @@ namespace CyanPreview
                             m.ExploreClick(f.ChooseInspectionPoint(m.Position,p.Surfaces)); m.LookAt(f.Food); p.Audio?.Vocalize();
                         }
                     }
-                    else if(food.Owner==FoodOwner.Pet || food.Owner==FoodOwner.Cursor)
+                    else if(food.Owner==FoodOwner.Pet || food.Owner==FoodOwner.Cursor || food.Owner==FoodOwner.Tongue)
                     {
                         if(f.Active || !p.FollowingFood) ResetInterest(p);
                         p.FollowingFood=true;
@@ -135,14 +136,14 @@ namespace CyanPreview
                     var target=f.Stage==FeedingStage.Entering?f.Den:f.ReturnPoint;
                     m.LookAt(target); if(Vector2.Distance(m.Position,target)>35) m.TryTaskJump(target);
                 }
-                m.AutonomousJumps=p.Config.jumps && !f.UsingRoute && !p.FollowingFood;
+                m.AutonomousJumps=p.Pet.Species.Movement.CanPropel && !f.UsingRoute && !p.FollowingFood;
             }
         }
         void RefreshFoodVisual()
         {
             var owner=pets.Find(p=>p.Config.key==food.Holder);
             if(owner!=null && (owner.Feeding.Stage==FeedingStage.Carrying || owner.Feeding.Stage==FeedingStage.Entering)) owner.View.HoldFood(foodView,owner.Pet);
-            else foodView.Show(food.Owner==FoodOwner.Placing || food.Owner==FoodOwner.Loose || food.Owner==FoodOwner.Cursor,food.Position);
+            else foodView.Show(food.Owner==FoodOwner.Placing || food.Owner==FoodOwner.Loose || food.Owner==FoodOwner.Cursor || food.Owner==FoodOwner.Tongue,food.Position);
         }
         void PublishFeedingStatus()
         {

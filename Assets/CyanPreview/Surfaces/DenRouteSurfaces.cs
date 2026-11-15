@@ -3,7 +3,7 @@ using UnityEngine;
 namespace CyanPreview
 {
     // A private extension of this pet's normal climbing area; other pets retain their normal desktop bounds.
-    public sealed class DenRouteSurfaces : IPetSurfaces, IEdgeCatchSurfaces
+    public sealed class DenRouteSurfaces : IPetSurfaces, IEdgeCatchSurfaces, IPoleSupports, IWindowFloors
     {
         readonly IPetSurfaces desktop;
         readonly Rect bounds;
@@ -12,6 +12,22 @@ namespace CyanPreview
         public bool Active => route != null;
         IPetSurfaces Current => !Active ? desktop : (IPetSurfaces)background;
         public bool SupportsFreeClimbing => Current.SupportsFreeClimbing;
+        public void BeginFloorStep() { if(desktop is IWindowFloors floors) floors.BeginFloorStep(); }
+        public bool TryFloor(Vector2 point,long owner,out SurfaceSupport support)
+        { if(!Active && desktop is IWindowFloors floors) return floors.TryFloor(point,owner,out support); support=default; return false; }
+        public bool TryLand(Vector2 previous,Vector2 next,float radius,out SurfaceSupport support)
+        { if(!Active && desktop is IWindowFloors floors) return floors.TryLand(previous,next,radius,out support); support=default; return false; }
+        public bool TryPole(Vector2 point,long windowId,int segment,out SurfaceSupport support)
+        {
+            if(Current is IPoleSupports poles) return poles.TryPole(point,windowId,segment,out support);
+            support=default; return false;
+        }
+        public SurfaceSupport SupportAt(Vector2 point) => Current.SupportAt(point);
+        public bool TryCatchSupport(Vector2 point,float reach,out SurfaceSupport support)
+        {
+            if(Current is IEdgeCatchSurfaces edges) return edges.TryCatchSupport(point,reach,out support);
+            support=default; return false;
+        }
         public DenRouteSurfaces(IPetSurfaces desktop, Rect bounds)
         { this.desktop = desktop ?? throw new ArgumentNullException(nameof(desktop)); this.bounds = bounds; }
         public void Open(float denDistance)

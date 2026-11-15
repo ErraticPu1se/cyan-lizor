@@ -15,6 +15,7 @@ namespace CyanPreview
         public int schema = 2, controllerPid;
         public ClimbingMode climbingMode = ClimbingMode.EdgesAndBackgrounds;
         public string id, cache;
+        public string species="cyan";
         public const float DefaultScale = 1.2f;
         public float scale = DefaultScale;
         public bool sound = true;
@@ -193,7 +194,7 @@ namespace CyanPreview
             for(int i=pets.Count-1;i>=0;i--)
             {
                 var p=pets[i];
-                if(Array.Exists(roster,c=>c.key==p.Config.key)) continue;
+                if(Array.Exists(roster,c=>c.key==p.Config.key && c.species==p.Pet.Species.Id)) continue;
                 foodView.Show(false,Vector2.zero); food.Remove(p.Config.key,Clamp(p.WorldMouth));
                 if(pointerPet==p) CancelPointer(); p.Dispose(); pets.RemoveAt(i); scuffles.Clear();
             }
@@ -293,7 +294,7 @@ namespace CyanPreview
                         else if(HitPet(eventPoint)==null && !HitFood(eventPoint) && !button.ControllerFocused && !native.IsWindowControl(button.Position))
                         {
                             var nearest=NearestPet(eventPoint);
-                            if(nearest!=null && !nearest.Surfaces.IsWindowChrome(nearest.Local(eventPoint),nearest.Config.scale)) nearest.Motion.ExploreClick(nearest.Local(eventPoint));
+                            if(nearest!=null && !nearest.Surfaces.IsWindowChrome(nearest.Local(eventPoint),nearest.Config.scale)) CursorClick(nearest,nearest.Local(eventPoint));
                         }
                     }
                     else
@@ -330,7 +331,7 @@ namespace CyanPreview
         void DrawFrame(float dt,bool paused)
         {
             socialPerception.Advance(pets,paused,dt);
-            foreach(var p in pets) { motionDiagnostics?.Observe(p); p.Advance(dt,paused,false); }
+            foreach(var p in pets) { motionDiagnostics?.Observe(p); p.Advance(dt,paused,false); if(!paused) p.UpdateCamouflage(dt,native); }
             diagnostics?.Record("before-contacts",pets,food);
             if(!paused) ResolvePetContacts(dt);
             diagnostics?.Record("after-contacts",pets,food);

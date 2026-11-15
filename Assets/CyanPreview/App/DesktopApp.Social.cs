@@ -57,6 +57,7 @@ namespace CyanPreview
             { manualPair=null; manualMessage="Scuffle cancelled because a pet was removed or rebuilt."; socialRefresh=0; }
             foreach(var p in pets)
             {
+                p.Conflict.Advance(settings.paused?0:dt);
                 if(p.Motion.RivalTarget.HasValue) { p.Motion.Behavior.TaskTarget=p.Feeding.Target; p.Motion.Behavior.HoldPosition=p.Feeding.UsingRoute; }
                 p.Motion.Behavior.TaskRunSpeed=null;
                 p.Motion.RivalTarget=null; p.Motion.RivalPursuingCarrier=false; p.Motion.RivalBiting=false; p.Motion.RivalStance=false; p.Motion.RivalPropelling=false; p.Motion.RivalRecovering=false;
@@ -89,6 +90,18 @@ namespace CyanPreview
                 }
                 if(!fight.Active) continue;
                 engaged.Add(a.Config.key); engaged.Add(b.Config.key);
+                float distance=Vector2.Distance(a.WorldPosition,b.WorldPosition)/scale;
+                if(food.Holder!=a.Config.key) a.Conflict.ObserveThreat(dt,b.Pet.Personality.Dominance,distance<180 && (b.Bite.Threatening||b.Bite.Lunging),a.Motion.State==PetMotionState.Crawling && a.Motion.GripCount>0);
+                if(food.Holder!=b.Config.key) b.Conflict.ObserveThreat(dt,a.Pet.Personality.Dominance,distance<180 && (a.Bite.Threatening||a.Bite.Lunging),b.Motion.State==PetMotionState.Crawling && b.Motion.GripCount>0);
+                if(a.Conflict.HasYielded || b.Conflict.HasYielded)
+                {
+                    a.Bite.Cancel(); b.Bite.Cancel();
+                    if(!a.Conflict.Retreating && !b.Conflict.Retreating) { fight.Interrupt(); continue; }
+                    ConfigureRetreat(a,b); ConfigureRetreat(b,a);
+                    socialStates[i].state=a.Conflict.Retreating?"Retreating":"Watching";
+                    socialStates[j].state=b.Conflict.Retreating?"Retreating":"Watching";
+                    continue;
+                }
                 var targetA=PetContacts.TargetPoint(a,b); var targetB=PetContacts.TargetPoint(b,a);
                 a.Motion.RivalTarget=a.Local(targetA); b.Motion.RivalTarget=b.Local(targetB);
                 int contactA=PetContacts.BiteContact(a,b,out bool nearA), contactB=PetContacts.BiteContact(b,a,out bool nearB);
@@ -104,7 +117,7 @@ namespace CyanPreview
                 socialStates[i].state=BiteStatus(a,fight); socialStates[j].state=BiteStatus(b,fight);
             }
             foreach(var pet in pets) if(!engaged.Contains(pet.Config.key))
-            { pet.Bite.Advance(dt,false,false,false,false); pet.Bite.Cancel(); pet.Motion.RivalLunging=false; }
+            { pet.Conflict.Cancel(); pet.Bite.Advance(dt,false,false,false,false); pet.Bite.Cancel(); pet.Motion.RivalLunging=false; }
 
             socialRefresh-=dt;
             if(socialRefresh<=0 && !string.IsNullOrEmpty(settingsFile))
@@ -147,7 +160,23 @@ namespace CyanPreview
             pet.Motion.Behavior.HoldPosition=pet.Bite.Recovering || pet.Bite.Lunging || (!pursuingCarrier && (pet.Bite.Threatening || contact));
             pet.Motion.Behavior.TaskRunSpeed=PetContacts.ApproachSpeed(pet,rival);
             pet.Motion.Behavior.TaskTarget=target;
-            pet.Motion.AutonomousJumps=pursuingCarrier && pet.Config.jumps && !pet.Motion.Behavior.HoldPosition;
+            pet.Motion.AutonomousJumps=pursuingCarrier && pet.Pet.Species.Movement.CanPropel && !pet.Motion.Behavior.HoldPosition;
+        }
+        void ConfigureRetreat(DesktopPet pet,DesktopPet rival)
+        {
+            if(food.Holder==pet.Config.key) { ConfigureRival(pet,rival,false,false); return; }
+            var motion=pet.Motion;
+            if(pet.Conflict.Retreating && !pet.Conflict.Destination.HasValue)
+            {
+                var away=motion.Position-pet.Local(rival.WorldPosition);
+                pet.Conflict.Destination=pet.Den.Nearest(motion.Position+(away.sqrMagnitude>.01f?away.normalized:Vector2.right)*motion.BodyLength*2,out _);
+            }
+            motion.RivalTarget=pet.Conflict.Retreating?pet.Conflict.Destination:pet.Local(rival.WorldPosition);
+            motion.RivalLunging=motion.RivalPropelling=motion.RivalStance=motion.RivalRecovering=motion.RivalBiting=false;
+            motion.RivalJaw=0; motion.RivalPursuingCarrier=false; motion.AutonomousJumps=false;
+            motion.Behavior.HoldPosition=!pet.Conflict.Retreating;
+            motion.Behavior.TaskTarget=pet.Conflict.Destination;
+            motion.Behavior.TaskRunSpeed=.35f;
         }
         void ApplyBite(DesktopPet attacker,DesktopPet defender,BiteDecision decision,int contact)
         {
@@ -160,7 +189,7 @@ namespace CyanPreview
             if(!hit) return;
             var direction=(target-attacker.WorldPosition).normalized;
             defender.Motion.ContactCorrection(contact,Vector2.zero,direction*5/defender.Config.scale);
-            defender.Bite.ReceiveHit();
+            defender.Bite.ReceiveHit(); defender.Conflict.NoticeHit(attacker.Pet.Personality.Dominance);
             if(food.DropFromBite(defender.Config.key,Clamp(defender.WorldMouth))) ResetInterest(defender);
         }
         void ResolvePetContacts(float dt)

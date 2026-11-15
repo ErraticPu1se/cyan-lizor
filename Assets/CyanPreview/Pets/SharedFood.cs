@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 namespace CyanPreview
 {
-    public enum FoodOwner { None, Placing, Loose, Cursor, Pet, Den }
+    public enum FoodOwner { None, Placing, Loose, Cursor, Pet, Den, Tongue }
     // One authoritative owner; interest is maintained independently by every pet.
     public sealed class SharedFood
     {
@@ -16,15 +16,19 @@ namespace CyanPreview
         public void Place(Vector2 p) { if(Owner!=FoodOwner.Placing) return; Move(p); Owner=FoodOwner.Loose; Revision++; }
         public bool Take(string pet)
         { if(!Available || string.IsNullOrEmpty(pet)) return false; Holder=pet; Owner=FoodOwner.Pet; return true; }
+        public bool TakeTongue(string pet)
+        { if(!Available || string.IsNullOrEmpty(pet)) return false; Holder=pet; Owner=FoodOwner.Tongue; return true; }
+        public bool SwallowTongue(string pet)
+        { if(Owner!=FoodOwner.Tongue || Holder!=pet) return false; Owner=FoodOwner.Pet; return true; }
         public bool TakeCursor() { if(!Available) return false; Owner=FoodOwner.Cursor; Holder=null; Revision++; return true; }
         public void Drop(Vector2 p)
-        { if(Owner!=FoodOwner.Pet && Owner!=FoodOwner.Cursor) return; Move(p); Holder=null; Owner=FoodOwner.Loose; Revision++; }
+        { if(Owner!=FoodOwner.Pet && Owner!=FoodOwner.Cursor && Owner!=FoodOwner.Tongue) return; Move(p); Holder=null; Owner=FoodOwner.Loose; Revision++; }
         public bool DropFromBite(string victim,Vector2 position)
         { if(Owner!=FoodOwner.Pet || Holder!=victim) return false; Drop(position); return true; }
         public bool EnterDen(string pet)
         { if(Owner!=FoodOwner.Pet || Holder!=pet) return false; Owner=FoodOwner.Den; Revision++; return true; }
         public void Remove(string pet,Vector2 drop)
-        { if(Holder!=pet) return; if(Owner==FoodOwner.Pet) Drop(drop); else Cancel(); }
+        { if(Holder!=pet) return; if(Owner==FoodOwner.Pet || Owner==FoodOwner.Tongue) Drop(drop); else Cancel(); }
         public void Cancel() { Owner=FoodOwner.None; Holder=null; Revision++; }
     }
     public enum ScufflePhase { Calm, Posture, Bite, Recoil, Cooldown, Approaching }

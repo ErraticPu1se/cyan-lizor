@@ -43,6 +43,13 @@ namespace CyanPreview
         }
         // Reset is used only when the host also rebuilds motion (display/size change or disposal).
         public void Cancel() { Change(FeedingStage.None); }
+        public void CatchAtMouth(Vector2 head)
+        {
+            Entrance=new Vector2(Mathf.Clamp(head.x,bounds.xMin+60,bounds.xMax-60),bounds.yMin+14);
+            Den=new Vector2(Entrance.x,bounds.yMin-DenDistance);
+            ReturnPoint=new Vector2(Entrance.x,bounds.yMin+Mathf.Min(bounds.height*.6f,220));
+            Change(FeedingStage.Carrying);
+        }
         public void RequestReturn()
         { if(UsingRoute) Change(FeedingStage.Emerging); else Cancel(); }
         public void Advance(float seconds,Vector2 head,Vector2 mouth,bool grabbed,Rect area,bool grounded=true, Rect? occupied=null)
@@ -68,10 +75,7 @@ namespace CyanPreview
             {
                 if(Vector2.Distance(head,Food)<35)
                 {
-                    Entrance=new Vector2(Mathf.Clamp(head.x,area.xMin+60,area.xMax-60),area.yMin+14);
-                    Den=new Vector2(Entrance.x,area.yMin-DenDistance);
-                    ReturnPoint=new Vector2(Entrance.x,area.yMin+Mathf.Min(area.height*.6f,220));
-                    Change(FeedingStage.Carrying);
+                    CatchAtMouth(head);
                 }
                 else if(elapsed>60) Cancel();
             }

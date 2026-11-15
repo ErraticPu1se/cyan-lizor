@@ -11,6 +11,7 @@ namespace CyanPreview
         readonly PetMotion motion;
         readonly CyanJumpEffects effects;
         readonly AudioSource charge, voice, bite;
+        readonly AudioClip[] tongueClips=new AudioClip[4];
         readonly AudioClip[] biteHits=new AudioClip[7], biteMisses=new AudioClip[7];
         readonly AudioSource[] impacts = new AudioSource[3];
         readonly AudioClip regularVoice, affectionVoice;
@@ -47,6 +48,13 @@ namespace CyanPreview
             try
             {
                 charge = Source(); voice = Source(); bite=Source();
+                if(pet.Species.CanTongueFeed)
+                {
+                    string[] names={"lizCharge1D","lizSpit1A","Squish1A","Squish2I"};
+                    for(int i=0;i<names.Length;i++)
+                        try { tongueClips[i]=context.LoadSound(names[i]); }
+                        catch(System.IO.IOException e) { Debug.LogWarning(e.Message); }
+                }
                 // Local sounds.txt: Lizard_Jaws_Grab_NPC and Lizard_Jaws_Shut_Miss_Creature.
                 try
                 {
@@ -58,7 +66,7 @@ namespace CyanPreview
                 for (int i = 0; i < launch.Length; i++) launch[i] = Source();
                 launch[0].clip = context.LoadSound("Flip3C"); launch[2].clip = context.LoadSound("CoralBreakA_7");
                 // shortcut: deterministic A/B/C voice selection, not the game's voice personality generator.
-                voice.clip = context.LoadSound("LizardVoiceCyan" + "ABC"[(int)((uint)seed % 3)]);
+                voice.clip = context.LoadSound(motion.Species.VoiceSound(seed));
                 regularVoice = voice.clip;
                 bloodLust = pet.BloodLustArticulation(out bloodDuration, out bloodVolume, out bloodPitch);
                 var affection = motion.Species.AffectionSound(seed);
@@ -120,6 +128,8 @@ namespace CyanPreview
             Debug.Log(reason+"_AFFECTION_PLAYED " + affectionVoice.name);
             return true;
         }
+        public void TongueSound(int stage,bool gentle=false)
+        { if(!disposed && enabled && stage>=0 && stage<4 && tongueClips[stage]!=null) bite.PlayOneShot(tongueClips[stage],(stage==0||stage==3?.3f:.4f)*(gentle?.5f:1)); }
         void Landed(float speed) { Impact(speed); }
         public bool Impact(float speed)
         {

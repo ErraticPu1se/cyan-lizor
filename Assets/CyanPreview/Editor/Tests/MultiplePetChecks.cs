@@ -19,7 +19,7 @@ namespace CyanPreview.Editor
             legacy.pets=new DesktopPetConfiguration[0]; Reject(legacy.ValidateRoster,"Empty roster accepted");
             legacy.pets=new[]{a,b,DesktopPetConfiguration.From(legacy,"c"),DesktopPetConfiguration.From(legacy,"d")}; Reject(legacy.ValidateRoster,"Pet cap bypassed");
             legacy.pets=new[]{a}; a.scale=float.NaN; Reject(legacy.ValidateRoster,"NaN scale accepted"); a.scale=1;
-            a.species="white"; Reject(legacy.ValidateRoster,"Unsupported species accepted"); a.species="cyan";
+            a.species="unknown"; Reject(legacy.ValidateRoster,"Unsupported species accepted"); a.species="cyan";
             a.key="bad|key"; Reject(legacy.ValidateRoster,"Menu identity separator accepted");
             var food=new SharedFood(); Check(food.Begin() && !food.Begin(),"Duplicate morsel placement"); food.Place(Vector2.one);
             Check(food.Take("a") && !food.Take("b") && !food.TakeCursor(),"Two holders acquired one morsel");
@@ -135,7 +135,7 @@ namespace CyanPreview.Editor
                     challenger.Advance(.025f,false);
                 }
                 Check(Vector2.Distance(challenger.WorldPosition,carrier.WorldPosition)<Vector2.Distance(start,carrier.WorldPosition)-20,"Automatic chase exposed a target without approaching it");
-                Check(!challenger.Motion.AutonomousJumps,"Chase ignored disabled jumping");
+                Check(challenger.Motion.AutonomousJumps,"Legacy preference disabled species pursuit propulsion");
                 settings.allowFighting=false; Call(host,"AdvanceScuffles",.025f); Call(host,"AdvanceFeeding",.025f);
                 Check(pets.All(p=>!p.Motion.RivalTarget.HasValue) && challenger.FollowingFood,"Fighting off did not restore peaceful food following");
                 settings.allowFighting=true; pairs.Clear(); Call(host,"AdvanceScuffles",.025f);

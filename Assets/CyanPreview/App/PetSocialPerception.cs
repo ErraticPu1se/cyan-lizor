@@ -64,7 +64,7 @@ namespace CyanPreview
                     if(score>strength) { strength=score; best=source; cue=kind; }
                 }
                 if(best!=null) social.Notice(best.Config.key,listener.Local(best.WorldPosition),strength,
-                    SpacingBodyLengths*Mathf.Max(listener.Motion.BodyLength*listener.Config.scale,best.Motion.BodyLength*best.Config.scale)/listener.Config.scale,best.Config.name,cue,best.Motion.State!=PetMotionState.Grabbed,movement[best.Config.key].speed>.2f);
+                    SpacingBodyLengths*Mathf.Max(listener.Motion.BodyLength*listener.Config.scale,best.Motion.BodyLength*best.Config.scale)/listener.Config.scale,best.Config.name,cue,best.Motion.State!=PetMotionState.Grabbed,movement[best.Config.key].speed>.2f,best.Pet.Personality.Dominance);
             }
         }
     }

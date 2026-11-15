@@ -7,11 +7,13 @@ namespace CyanPreview
     {
         PetPresetStore presets;
         string presetName="", presetWarning;
-        bool showPresets, confirmPresetDelete;
+        bool showPresets, confirmPresetDelete, speciesOpen;
+        string selectedSpecies="cyan";
         CompanionPreferences CurrentPreferences() => new CompanionPreferences { gameFolder=gameFolder, scale=desktopScale,
             climbingMode=desktopClimbingMode,sound=desktopSounds,roam=desktopRoam,jumps=autonomousJumps,clickToExplore=desktopClicks };
         void ApplyPresetValues(PetPreset value)
         {
+            selectedSpecies=value.species;
             id=value.appearanceId; desktopScale=value.scale; desktopClimbingMode=value.climbingMode;
             desktopSounds=value.sound; desktopRoam=value.roam; autonomousJumps=value.jumps; desktopClicks=value.clickToExplore;
             presetName=value.name; confirmPresetDelete=false;
@@ -28,7 +30,9 @@ namespace CyanPreview
         void SavePreset()
         {
             if(presets==null || !ReferenceBridge.TryParseId(appliedId??id,out _,out _)) return;
-            presets.SaveCurrent(PetPreset.Capture(appliedId??id,CurrentPreferences()));
+            var value=PetPreset.Capture(appliedId??id,CurrentPreferences());
+            value.species=reference?.Species.Id??presets.Data.Current.species;
+            presets.SaveCurrent(value);
         }
         void SelectPreset(PetPresetCollection next)
         {
@@ -54,26 +58,35 @@ namespace CyanPreview
         void DrawPresets()
         {
             GUILayout.BeginVertical(theme.Card);
-            if(Section("Saved pets"+(presets!=null?" · "+presets.Data.Current.name:""),ref showPresets))
+            GUILayout.Label("Choose your lizard",theme.Heading);
+            if(Section("Species · "+LizardSpecies.Find(selectedSpecies).DisplayName,ref speciesOpen))
+                foreach(var species in LizardSpecies.AvailableIds)
+                    if(GUILayout.Button(LizardSpecies.Find(species).DisplayName,selectedSpecies==species?theme.Selected:GUI.skin.button))
+                    { selectedSpecies=species; speciesOpen=false; confirmPresetDelete=false; }
+            if(Section("Saved presets · "+LizardSpecies.Find(selectedSpecies).DisplayName,ref showPresets))
             {
                 if(!string.IsNullOrEmpty(presetWarning)) GUILayout.Label(presetWarning,theme.Small);
                 if(presets!=null)
                 {
-                    GUILayout.Label("Select a preset for your primary pet. Changes save automatically.",theme.Small);
+                    bool any=false;
                     foreach(var item in presets.Data.pets.ToArray())
                     {
+                        if(item.species!=selectedSpecies) continue;
+                        any=true;
                         if(GUILayout.Button(item.name+" · "+item.appearanceId,item.key==presets.Data.selected?theme.Selected:GUI.skin.button))
                         {
                             try { SavePreset(); var next=presets.Data.Copy(); next.selected=item.key; SelectPreset(next); }
                             catch(Exception e) { Fail(e); }
                         }
                     }
+                    if(!any) GUILayout.Label("No saved presets for this species yet. Apply an ID below to create one.",theme.Small);
+                    GUI.enabled=selectedSpecies==presets.Data.Current.species;
                     presetName=GUILayout.TextField(presetName,40);
                     GUILayout.BeginHorizontal();
                     if(GUILayout.Button("Save as new"))
-                    { try { SavePreset(); presets.Duplicate(presetName); ApplyPresetValues(presets.Data.Current); } catch(Exception e) { Fail(e); } }
+                    { try { SavePreset(); SelectPreset(PetSelection.Create(presets.Data,selectedSpecies,id,CurrentPreferences(),presetName)); } catch(Exception e) { Fail(e); } }
                     if(GUILayout.Button("Rename")) { try { presets.Rename(presetName); presetName=presets.Data.Current.name; } catch(Exception e) { Fail(e); } }
-                    GUI.enabled=presets.Data.pets.Count>1;
+                    GUI.enabled=selectedSpecies==presets.Data.Current.species && presets.Data.pets.Count>1;
                     if(GUILayout.Button("Delete")) confirmPresetDelete=true;
                     GUI.enabled=true; GUILayout.EndHorizontal();
                     if(confirmPresetDelete)
@@ -86,6 +99,16 @@ namespace CyanPreview
                     }
                 }
             }
+            GUILayout.Label("Appearance ID · "+LizardSpecies.Find(selectedSpecies).DisplayName,theme.Small);
+            GUILayout.BeginHorizontal(); GUI.SetNextControlName("CreatureId");
+            id=GUILayout.TextField(id,64,GUILayout.Height(34));
+            GUI.enabled=context!=null && ReferenceBridge.TryParseId(id,out _,out _);
+            if(GUILayout.Button("Apply ID",theme.Primary,GUILayout.Width(94),GUILayout.Height(34))) Generate();
+            GUI.enabled=true; GUILayout.EndHorizontal();
+            GUILayout.Label("Seed number or ID.spawner.number",theme.Small);
+            if(reference!=null && selectedSpecies!=reference.Species.Id)
+                GUILayout.Label("Browsing only. Apply ID creates a new preset; your current pet is unchanged.",theme.Small);
+            if(selectedSpecies=="white") GUILayout.Label("Blends into its background after resting. Uses its tongue to catch loose food.",theme.Small);
             GUILayout.EndVertical();
         }
     }

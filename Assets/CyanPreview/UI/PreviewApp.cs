@@ -93,7 +93,7 @@ namespace CyanPreview
             try
             {
                 if(reference != null) throw new InvalidOperationException("Restart the app to change reference installations.");
-                context?.Dispose(); context=null; context=new ReferenceContext(cache); reference=context.CreatePet();
+                context?.Dispose(); context=null; context=new ReferenceContext(cache); reference=context.CreatePet(presets?.Data.Current.species??"cyan");
                 PlayerPrefs.SetString("ReferenceCache",cache); Generate();
             }
             catch(Exception e) { Fail(e); }
@@ -102,6 +102,10 @@ namespace CyanPreview
         {
             try
             {
+                if(reference.Species.Id!=selectedSpecies)
+                {
+                    SavePreset(); SelectPreset(PetSelection.Create(presets.Data,selectedSpecies,id,CurrentPreferences())); return;
+                }
                 reference.Generate(id); phase=0; RefreshPreview();
                 status=reference.Identity+"  ·  "+reference.Species.DisplayName+"  ·  "+reference.Manifest.gameVersion;
                 error=null; appliedId=id; PlayerPrefs.SetString("LastId",id); PlayerPrefs.Save();
@@ -113,7 +117,7 @@ namespace CyanPreview
             reference.Pose(phase,depth); reference.Draw(); view.Refresh(reference);
         }
         void Fail(Exception e) { error=e.Message; Debug.LogException(e); }
-        DesktopSettings PrimaryConfiguration() => new DesktopSettings {id=reference.Identity,cache=cache,scale=desktopScale,
+        DesktopSettings PrimaryConfiguration() => new DesktopSettings {id=reference.Identity,species=reference.Species.Id,cache=cache,scale=desktopScale,
             paused=trayState.Paused,climbingMode=desktopClimbingMode,clickToExplore=desktopClicks,sound=desktopSounds,vocalizeRequest=desktopVocalizeRequest,feedRequest=desktopFeedRequest,cancelFeedRequest=desktopCancelFeedRequest,roam=desktopRoam,jumps=autonomousJumps};
         System.Collections.IEnumerator InitializeTray()
         {
@@ -273,15 +277,6 @@ namespace CyanPreview
             GUILayout.BeginVertical(theme.Card);
             GUILayout.Label("Your lizard",theme.Heading);
             GUILayout.Space(8);
-            GUILayout.Label("Appearance ID",theme.Small);
-            GUILayout.BeginHorizontal(); GUI.SetNextControlName("CreatureId");
-            id=GUILayout.TextField(id,64,GUILayout.Height(34));
-            GUI.enabled=reference!=null && ReferenceBridge.TryParseId(id,out _,out _);
-            if(GUILayout.Button("Apply ID",theme.Primary,GUILayout.Width(94),GUILayout.Height(34))) Generate();
-            GUI.enabled=true; GUILayout.EndHorizontal();
-            GUILayout.Label("Seed number or ID.spawner.number",theme.Small);
-            if(!ReferenceBridge.TryParseId(id,out _,out _)) GUILayout.Label("Enter a whole-number seed or ID.spawner.number.",theme.Small);
-            GUILayout.Space(10);
             GUILayout.Label("Desktop size  "+desktopScale.ToString("0.00")+"×");
             GUILayout.BeginHorizontal();
             SizePreset("Small · 1×",1); SizePreset("Medium · 1.2×",DesktopSettings.DefaultScale);
@@ -295,7 +290,7 @@ namespace CyanPreview
             GUILayout.BeginVertical(theme.Card);
             if(Section("Movement",ref movementOpen))
             {
-                ToggleRow("Roam independently",ref desktopRoam); ToggleRow("Allow cyan propulsion",ref autonomousJumps);
+                ToggleRow("Roam independently",ref desktopRoam);
                 GUILayout.Space(6); GUILayout.Label("Climbing mode",theme.Small);
                 GUILayout.BeginHorizontal();
                 ModeChoice("Edges only",ClimbingMode.EdgesOnly); ModeChoice("Edges + backgrounds",ClimbingMode.EdgesAndBackgrounds);

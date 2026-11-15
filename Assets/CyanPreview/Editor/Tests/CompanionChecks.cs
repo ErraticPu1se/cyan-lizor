@@ -137,7 +137,8 @@ namespace CyanPreview.Editor
                     for(int i=0;i<3;i++)
                     {
                         var pos=motion.BodyPosition(i); var support=surfaces.Nearest(pos,out var normal); if(normal==Vector2.zero) continue;
-                        float gap=Vector2.Dot(support+normal*14-pos,normal);
+                        float clearance=motion.OnPole?(i==0?8:i==1?10:12):14;
+                        float gap=Vector2.Dot(support+normal*clearance-pos,normal);
                         float restPull=Vector2.Dot(rest[i]-pos,normal);
                         error+=Mathf.Abs(gap); if(gap*restPull<0) opposed+=Mathf.Min(Mathf.Abs(gap)*.18f,Mathf.Abs(restPull)*.12f); samples++;
                     }

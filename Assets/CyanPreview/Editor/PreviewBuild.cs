@@ -159,6 +159,15 @@ namespace CyanPreview.Editor
                 SoundInvestigationChecks.Run(context);
                 MovingAttentionChecks.Run(context);
                 SocialFollowingChecks.Run();
+                TemperamentChecks.Run(context);
+                SurfaceSeparationChecks.Run();
+                PolePostureChecks.Run(context);
+                ReflectionCacheChecks.Run();
+                WhiteSpeciesChecks.Run(context);
+                CamouflageSelectionChecks.Run(context);
+                WhitePatienceChecks.Run();
+                CamouflageRecoveryChecks.Run(context);
+                TongueChecks.Run(context);
                 RenderOptimizationChecks.Run(context);
                 InteractionUpgradeChecks.Run(context);
                 LandingRecoveryChecks.Run(context);

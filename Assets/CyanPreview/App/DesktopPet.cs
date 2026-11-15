@@ -8,13 +8,16 @@ namespace CyanPreview
     {
         public string key,id,name,species="cyan";
         public float scale=1.2f;
+        // Keep legacy jumps data for saved-preset compatibility; movement uses the species trait.
         public bool roam=true,jumps=true,sound=true,clickToExplore=true;
         public ClimbingMode climbingMode=ClimbingMode.EdgesAndBackgrounds;
         public void Validate()
         {
-            if(string.IsNullOrWhiteSpace(key)||key.Length>64||key.IndexOf('|')>=0||!ReferenceBridge.TryParseId(id,out _,out _)||species!="cyan"||float.IsNaN(scale)||float.IsInfinity(scale)||scale<.5f||scale>2||!Enum.IsDefined(typeof(ClimbingMode),climbingMode)) throw new InvalidDataException("Invalid desktop pet configuration");
+            if(string.IsNullOrWhiteSpace(key)||key.Length>64||key.IndexOf('|')>=0||!ReferenceBridge.TryParseId(id,out _,out _)||float.IsNaN(scale)||float.IsInfinity(scale)||scale<.5f||scale>2||!Enum.IsDefined(typeof(ClimbingMode),climbingMode)) throw new InvalidDataException("Invalid desktop pet configuration");
+            try { LizardSpecies.Find(species); }
+            catch(NotSupportedException e) { throw new InvalidDataException("Unsupported desktop pet species",e); }
         }
-        public static DesktopPetConfiguration From(DesktopSettings s,string key="primary",string name="Current pet") => new DesktopPetConfiguration {key=key,name=name,id=s.id,scale=s.scale,roam=s.roam,jumps=s.jumps,sound=s.sound,clickToExplore=s.clickToExplore,climbingMode=s.climbingMode};
+        public static DesktopPetConfiguration From(DesktopSettings s,string key="primary",string name="Current pet") => new DesktopPetConfiguration {key=key,name=name,id=s.id,species=s.species,scale=s.scale,roam=s.roam,jumps=s.jumps,sound=s.sound,clickToExplore=s.clickToExplore,climbingMode=s.climbingMode};
         public static DesktopPetConfiguration From(PetPreset p) => new DesktopPetConfiguration {key=Guid.NewGuid().ToString("N"),name=p.name,id=p.appearanceId,species=p.species,scale=p.scale,roam=p.roam,jumps=p.jumps,sound=p.sound,clickToExplore=p.clickToExplore,climbingMode=p.climbingMode};
         public DesktopSettings MenuSettings() => new DesktopSettings {id=id,scale=scale,roam=roam,jumps=jumps,sound=sound,clickToExplore=clickToExplore,climbingMode=climbingMode};
         public void ApplyMenu(DesktopMenuAction action)
@@ -28,6 +31,7 @@ namespace CyanPreview
         public readonly GameObject Root;
         public PetMotion Motion { get; private set; }
         public PetBite Bite { get; private set; }
+        public PetConflictResponse Conflict { get; private set; }
         public PetInteraction Input { get; private set; }
         public DesktopSurfaces Surfaces { get; private set; }
         public DenRouteSurfaces Den { get; private set; }
@@ -37,6 +41,11 @@ namespace CyanPreview
         public int FoodRevision=-1;
         public bool FollowingFood;
         public float Attention;
+        public PetCamouflage Camouflage {get;private set;}
+        public PetTongue Tongue {get;private set;}
+        public Vector2? AfterFlickTarget {get;set;}
+        public Vector2? PendingTongueClick {get;set;}
+        public float TongueTurnTime {get;set;}
         readonly ReferenceContext context;
         public Vector2 WorldPosition => Motion.Position*Config.scale;
         public Vector2 WorldMouth => Motion.MouthPosition*Config.scale;
@@ -53,22 +62,27 @@ namespace CyanPreview
         {
             Input?.Cancel(); Audio?.Dispose(); Effects?.Dispose(); Feeding.Cancel(); Config=config;
             Root.transform.localScale=Vector3.one*config.scale;
-            Surfaces=new DesktopSurfaces(new Rect(worldBounds.position/config.scale,worldBounds.size/config.scale)) {Mode=config.climbingMode};
+            Surfaces=new DesktopSurfaces(new Rect(worldBounds.position/config.scale,worldBounds.size/config.scale),Pet.Species.Movement) {Mode=config.climbingMode};
             Den=new DenRouteSurfaces(Surfaces,Surfaces.Bounds);
             Pet.Generate(config.id); Pet.Pose(0,.7f);
+            Conflict=new PetConflictResponse(Pet.Personality.Dominance,Pet.Personality.Nervous);
             Bite=new PetBite(Pet.Seed ^ Config.key.GetHashCode(),Pet.Species.Biting,Pet.Personality.Aggression);
-            Motion=new PetMotion(Pet,Den) {Roam=config.roam,AutonomousJumps=config.jumps};
+            Motion=new PetMotion(Pet,Den) {Roam=config.roam,AutonomousJumps=Pet.Species.Movement.CanPropel};
             if(worldPosition.HasValue) { var p=Surfaces.Nearest(Local(worldPosition.Value),out var n)+n*14; Motion.ShiftWithSurface(p-Motion.Position); }
             Input=new PetInteraction(Motion) {ClickToExplore=config.clickToExplore};
             Effects=new CyanJumpEffects(Root.transform,Motion,Pet.EffectColor,Pet.Seed);
             try { Audio=new CyanPetAudio(Root.transform,context,Motion,Effects,Pet) {Enabled=config.sound}; }
             catch(Exception e) { Audio=null; Debug.LogWarning("Pet audio unavailable: "+e.Message); }
+            AfterFlickTarget=PendingTongueClick=null; TongueTurnTime=0;
+            Tongue=Pet.Species.CanTongueFeed?new PetTongue():null;
+            if(Tongue!=null) Tongue.Sound+=stage=>Audio?.TongueSound(stage,Tongue.Curious);
             FoodRevision=-1; FollowingFood=false;
+            Camouflage=Pet.Species.CanCamouflage?new PetCamouflage():null;
         }
         public void Configure(DesktopPetConfiguration config,bool paused)
         {
             if(Surfaces.Mode!=config.climbingMode) { Surfaces.Mode=config.climbingMode; Motion.RefreshSurfaceSupport(); }
-            Config=config; Motion.Roam=config.roam; Motion.AutonomousJumps=config.jumps && !FollowingFood && !Feeding.UsingRoute; Input.ClickToExplore=config.clickToExplore;
+            Config=config; Motion.Roam=config.roam; Motion.AutonomousJumps=Pet.Species.Movement.CanPropel && !FollowingFood && !Feeding.UsingRoute; Input.ClickToExplore=config.clickToExplore;
             if(Audio!=null) Audio.Enabled=config.sound&&!paused;
         }
         public void RefreshWindows(IEnumerable<DesktopWindow> snapshot)
@@ -80,10 +94,34 @@ namespace CyanPreview
         }
         public void Advance(float dt,bool paused,bool draw=true)
         {
-            if(!paused) { Audio?.Advance(dt); if(!Feeding.Frozen) Motion.Advance(dt); Effects.Advance(dt); }
+            if(!paused)
+            {
+                Audio?.Advance(dt);
+                using(DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Motion)) if(!Feeding.Frozen) Motion.Advance(dt);
+                using(DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Effects)) Effects.Advance(dt);
+            }
             if(draw) Draw();
         }
-        public void Draw() { Pet.Draw(Motion.Interpolation); View.Refresh(Pet); }
+        public void UpdateCamouflage(float dt,WindowsDesktop desktop)
+        {
+            if(Camouflage==null) return;
+            bool idle=Motion.State==PetMotionState.Crawling && Motion.Behavior.Intent==PetIntent.Idle
+                && !Input.CapturesPointer && !Feeding.Active && !Motion.RivalTarget.HasValue;
+            if(Camouflage.Advance(dt,idle,Motion.BodyPosition(1)))
+            {
+                Color color;
+                if(DesktopBackgroundSampler.TrySample(desktop.WindowHandle,desktop.WorkArea,
+                    Motion.BodyPosition(0)*Config.scale,Motion.BodyPosition(1)*Config.scale,Motion.BodyPosition(2)*Config.scale,out color))
+                    Camouflage.Accept(color);
+            }
+            Pet.ApplyCamouflage(Camouflage.Color,Camouflage.Amount);
+        }
+        public void Draw()
+        {
+            TongueGraphics.Apply(Pet,Tongue);
+            using(DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Draw)) Pet.Draw(Motion.Interpolation);
+            using(DesktopFrameProfile.Measure(DesktopFrameProfile.Stage.Mesh)) View.Refresh(Pet);
+        }
         public void Dispose()
         { Input?.Cancel(); Audio?.Dispose(); Effects?.Dispose(); View?.Dispose(); Pet?.Dispose(); if(Root!=null) UnityEngine.Object.Destroy(Root); }
     }
