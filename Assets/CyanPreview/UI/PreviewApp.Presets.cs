@@ -7,11 +7,13 @@ namespace CyanPreview
     {
         PetPresetStore presets;
         string presetName="", presetWarning;
-        bool showPresets, confirmPresetDelete;
+        bool confirmPresetDelete;
+        string selectedSpecies="cyan";
         CompanionPreferences CurrentPreferences() => new CompanionPreferences { gameFolder=gameFolder, scale=desktopScale,
             climbingMode=desktopClimbingMode,sound=desktopSounds,roam=desktopRoam,jumps=autonomousJumps,clickToExplore=desktopClicks };
         void ApplyPresetValues(PetPreset value)
         {
+            selectedSpecies=value.species;
             id=value.appearanceId; desktopScale=value.scale; desktopClimbingMode=value.climbingMode;
             desktopSounds=value.sound; desktopRoam=value.roam; autonomousJumps=value.jumps; desktopClicks=value.clickToExplore;
             presetName=value.name; confirmPresetDelete=false;
@@ -28,7 +30,9 @@ namespace CyanPreview
         void SavePreset()
         {
             if(presets==null || !ReferenceBridge.TryParseId(appliedId??id,out _,out _)) return;
-            presets.SaveCurrent(PetPreset.Capture(appliedId??id,CurrentPreferences()));
+            var value=PetPreset.Capture(appliedId??id,CurrentPreferences());
+            value.species=reference?.Species.Id??presets.Data.Current.species;
+            presets.SaveCurrent(value);
         }
         void SelectPreset(PetPresetCollection next)
         {
@@ -50,43 +54,6 @@ namespace CyanPreview
             }
             catch(Exception e) { Fail(e); }
             finally { candidate?.Dispose(); }
-        }
-        void DrawPresets()
-        {
-            GUILayout.BeginVertical(theme.Card);
-            if(Section("Saved pets"+(presets!=null?" · "+presets.Data.Current.name:""),ref showPresets))
-            {
-                if(!string.IsNullOrEmpty(presetWarning)) GUILayout.Label(presetWarning,theme.Small);
-                if(presets!=null)
-                {
-                    GUILayout.Label("One desktop pet at a time. Changes save automatically.",theme.Small);
-                    foreach(var item in presets.Data.pets.ToArray())
-                    {
-                        if(GUILayout.Button(item.name+" · "+item.appearanceId,item.key==presets.Data.selected?theme.Selected:GUI.skin.button))
-                        {
-                            try { SavePreset(); var next=presets.Data.Copy(); next.selected=item.key; SelectPreset(next); }
-                            catch(Exception e) { Fail(e); }
-                        }
-                    }
-                    presetName=GUILayout.TextField(presetName,40);
-                    GUILayout.BeginHorizontal();
-                    if(GUILayout.Button("Save as new"))
-                    { try { SavePreset(); presets.Duplicate(presetName); ApplyPresetValues(presets.Data.Current); } catch(Exception e) { Fail(e); } }
-                    if(GUILayout.Button("Rename")) { try { presets.Rename(presetName); presetName=presets.Data.Current.name; } catch(Exception e) { Fail(e); } }
-                    GUI.enabled=presets.Data.pets.Count>1;
-                    if(GUILayout.Button("Delete")) confirmPresetDelete=true;
-                    GUI.enabled=true; GUILayout.EndHorizontal();
-                    if(confirmPresetDelete)
-                    {
-                        GUILayout.Label("Delete this saved pet? Another preset will become active.",theme.Small);
-                        GUILayout.BeginHorizontal();
-                        if(GUILayout.Button("Confirm delete")) SelectPreset(presets.WithoutCurrent());
-                        if(GUILayout.Button("Cancel")) confirmPresetDelete=false;
-                        GUILayout.EndHorizontal();
-                    }
-                }
-            }
-            GUILayout.EndVertical();
         }
     }
 }

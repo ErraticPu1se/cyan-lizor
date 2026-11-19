@@ -131,13 +131,14 @@ namespace CyanPreview.Editor
                 {
                     motion.ObserveCursor(null); var before=motion.Position; var tailBefore=(Vector2)Get(tail,"pos"); motion.Advance(.025f);
                     if(tick<200) continue;
-                    if((bool)Get(motion,"hasDestination")) driveTicks++;
+                    if(motion.DiagnosticDriveTarget.HasValue || motion.Behavior.TaskTarget.HasValue) driveTicks++;
                     travel+=Vector2.Distance(before,motion.Position); tailTravel+=Vector2.Distance(tailBefore,(Vector2)Get(tail,"pos")); maxStep=Mathf.Max(maxStep,Vector2.Distance(before,motion.Position));
                     var rest=(Vector2[])Get(motion,"restingPose");
                     for(int i=0;i<3;i++)
                     {
                         var pos=motion.BodyPosition(i); var support=surfaces.Nearest(pos,out var normal); if(normal==Vector2.zero) continue;
-                        float gap=Vector2.Dot(support+normal*14-pos,normal);
+                        float clearance=motion.OnPole?(i==0?8:i==1?10:12):14;
+                        float gap=Vector2.Dot(support+normal*clearance-pos,normal);
                         float restPull=Vector2.Dot(rest[i]-pos,normal);
                         error+=Mathf.Abs(gap); if(gap*restPull<0) opposed+=Mathf.Min(Mathf.Abs(gap)*.18f,Mathf.Abs(restPull)*.12f); samples++;
                     }

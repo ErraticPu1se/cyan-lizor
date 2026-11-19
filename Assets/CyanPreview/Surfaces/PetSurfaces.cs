@@ -3,19 +3,44 @@ using UnityEngine;
 
 namespace CyanPreview
 {
+    public enum SurfaceKind { Floor, Wall, Ceiling, Pole, Background }
+    public readonly struct SurfaceSupport
+    {
+        public readonly SurfaceKind Kind;
+        public readonly Vector2 Point, Normal;
+        public readonly long WindowId;
+        public readonly int Segment;
+        public SurfaceSupport(SurfaceKind kind,Vector2 point,Vector2 normal,long windowId=0,int segment=-1)
+        { Kind=kind; Point=point; Normal=normal; WindowId=windowId; Segment=segment; }
+    }
+
     // Geometry is supplied by the host; simulation never enumerates OS windows.
     public interface IPetSurfaces
     {
         bool SupportsFreeClimbing { get; }
+        SurfaceSupport SupportAt(Vector2 point);
         Vector2 Nearest(Vector2 point, out Vector2 inward);
         Vector2 Constrain(Vector2 point, float radius, out Vector2 normal);
         Vector2 Advance(Vector2 point, float distance);
         Vector2 Approach(Vector2 point, Vector2 destination, float distance);
     }
 
+    public interface IWindowFloors
+    {
+        void BeginFloorStep();
+        bool TryFloor(Vector2 point,long owner,out SurfaceSupport support);
+        bool TryLand(Vector2 previous,Vector2 next,float radius,out SurfaceSupport support);
+    }
+
+    public interface IPoleSupports
+    {
+        bool TryPole(Vector2 point,long windowId,int segment,out SurfaceSupport support);
+    }
+
     public interface IEdgeCatchSurfaces
     {
         bool TryCatchEdge(Vector2 point, float reach, out Vector2 edge, out Vector2 normal);
+        bool TryCatchSupport(Vector2 point,float reach,out SurfaceSupport support);
     }
 
     public sealed class FrameSurfaces : IPetSurfaces, IEdgeCatchSurfaces
@@ -23,6 +48,13 @@ namespace CyanPreview
         public bool SupportsFreeClimbing => false;
         public Rect Bounds { get; }
         public FrameSurfaces(Rect bounds) { Bounds = bounds; }
+        public SurfaceSupport SupportAt(Vector2 point)
+        {
+            var p=Nearest(point,out var n);
+            return new SurfaceSupport(n.y>.5f?SurfaceKind.Floor:n.y<-.5f?SurfaceKind.Ceiling:SurfaceKind.Wall,p,n);
+        }
+        public bool TryCatchSupport(Vector2 point,float reach,out SurfaceSupport support)
+        { support=SupportAt(point); return TryCatchEdge(point,reach,out _,out _); }
         public Vector2 Nearest(Vector2 p, out Vector2 inward)
         {
             p = new Vector2(Mathf.Clamp(p.x, Bounds.xMin, Bounds.xMax), Mathf.Clamp(p.y, Bounds.yMin, Bounds.yMax));
@@ -74,9 +106,23 @@ namespace CyanPreview
 
     public sealed class MovementCapabilities
     {
-        public readonly bool ClimbWalls;
+        public readonly bool ClimbWalls, ClimbPoles, ClimbBackgrounds;
+        public bool CanPropel => LaunchMax>0;
         public readonly float CrawlSpeed, LaunchMin, LaunchMax;
-        public MovementCapabilities(bool climbWalls, float crawlSpeed, float launchMin = 0, float launchMax = 0)
-        { ClimbWalls = climbWalls; CrawlSpeed = crawlSpeed; LaunchMin = launchMin; LaunchMax = launchMax; }
+        public MovementCapabilities(bool climbWalls, float crawlSpeed, float launchMin = 0, float launchMax = 0,
+            bool? climbPoles=null,bool? climbBackgrounds=null)
+        { ClimbWalls=climbWalls; ClimbPoles=climbPoles??climbWalls; ClimbBackgrounds=climbBackgrounds??climbWalls;
+          CrawlSpeed=crawlSpeed; LaunchMin=launchMin; LaunchMax=launchMax; }
+        public bool Supports(SurfaceKind kind)
+        {
+            switch(kind)
+            {
+                case SurfaceKind.Floor: return true;
+                case SurfaceKind.Wall: case SurfaceKind.Ceiling: return ClimbWalls;
+                case SurfaceKind.Pole: return ClimbPoles;
+                case SurfaceKind.Background: return ClimbBackgrounds;
+                default: return false;
+            }
+        }
     }
 }

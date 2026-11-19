@@ -23,7 +23,7 @@ namespace CyanPreview.Editor
                 store.Duplicate("Twin"); Check(store.Data.pets.Count==2 && store.Data.pets[0].key!=store.Data.pets[1].key && store.Data.pets[0].appearanceId==store.Data.pets[1].appearanceId,"Duplicate appearance shares identity");
                 store.Rename("Second"); Check(store.Data.pets[0].name=="My cyan","Rename changed another pet");
                 Reject(()=>store.Rename("  "),"Empty name accepted");
-                var invalid=store.Data.Copy(); invalid.Current.species="white"; Reject(()=>store.Commit(invalid),"Unsupported species accepted");
+                var invalid=store.Data.Copy(); invalid.Current.species="unknown"; Reject(()=>store.Commit(invalid),"Unsupported species accepted");
                 invalid=store.Data.Copy(); invalid.Current.scale=float.NaN; Reject(()=>store.Commit(invalid),"Nonfinite size accepted");
                 invalid=store.Data.Copy(); invalid.Current.appearanceId="bad"; Reject(()=>store.Commit(invalid),"Invalid appearance accepted");
                 invalid=store.Data.Copy(); invalid.selected="missing"; Reject(()=>store.Commit(invalid),"Missing selection accepted");

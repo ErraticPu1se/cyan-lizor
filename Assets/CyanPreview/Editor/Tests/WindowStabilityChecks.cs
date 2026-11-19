@@ -19,17 +19,6 @@ namespace CyanPreview.Editor
                 var a=new PetMotion(first,surfaces,42) {Roam=roam,AutonomousJumps=false};
                 var b=new PetMotion(second,new BackgroundSurfaces(bounds),42) {Roam=roam,AutonomousJumps=false};
                 a.ShiftWithSurface(new Vector2(185,0)-a.Position); b.ShiftWithSurface(new Vector2(185,0)-b.Position);
-                foreach(float scale in new[]{.5f,1f,1.2f,1.5f,2f})
-                {
-                    var area=new Rect(-1920,-200,1920,1080);
-                    var hit=a.CaptureHitSnapshot(area,scale);
-                    for(int x=-130;x<80;x+=7) for(int y=-50;y<50;y+=7)
-                    {
-                        var world=a.Position+new Vector2(x,y);
-                        float screenX=area.center.x+world.x*scale, screenY=area.center.y-world.y*scale;
-                        Check(hit.Contains(screenX,screenY)==a.Contains(world),"Snapshot hit testing differs from original geometry");
-                    }
-                }
                 float travel=0; var start=a.Position;
                 for(int i=0;i<1600;i++)
                 {

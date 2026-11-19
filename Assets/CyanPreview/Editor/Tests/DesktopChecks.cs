@@ -43,7 +43,7 @@ namespace CyanPreview.Editor
             var back = new DesktopWindow(1, new Rect(-100, -100, 200, 200));
             var cover = new DesktopWindow(2, new Rect(-120, -120, 240, 240));
             surfaces.UpdateWindows(new[] { back });
-            Require(surfaces.WindowAtEdge(new Vector2(110, 0), out var edge, out var normal) == 1 && edge.x == 100 && normal == Vector2.left, "Window edge attachment failed");
+            Require(surfaces.WindowAtEdge(new Vector2(110, 0), out var edge, out var normal) == 1 && edge.x == 100 && normal == Vector2.right, "Outside pole attachment pointed through window");
             surfaces.UpdateWindows(new[] { cover, back });
             Require(surfaces.WindowAtEdge(new Vector2(100, 0), out _, out _) == 2, "Covered window edge remained active");
             surfaces.UpdateWindows(new DesktopWindow[0]);
