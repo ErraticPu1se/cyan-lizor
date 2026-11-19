@@ -19,6 +19,7 @@ namespace CyanPreview
         readonly ReferenceContext context;
         internal ReferenceContext Context => context;
         bool disposed;
+        Texture2D whiteLevel,whitePalette;
         public Guid PetId { get; } = Guid.NewGuid();
         public LizardSpecies Species { get; }
         public ReferenceManifest Manifest => context.Manifest;
@@ -34,6 +35,29 @@ namespace CyanPreview
         public Color EffectColor { get; private set; }
         public string Summary { get; private set; }
         public Vector2 HeadPosition => (Vector2)Get(Get(Graphics, "head"), "pos");
+
+        public float[,] BloodLustArticulation(out float duration, out float volume, out float pitch)
+        {
+            EnsureAlive();
+            var saved = UnityEngine.Random.state;
+            try
+            {
+                // shortcut: use the game's articulation generator with an isolated seed, not its room-dependent full voice controller.
+                UnityEngine.Random.InitState(Seed ^ 7841);
+                float length=35f*UnityEngine.Random.Range(.5f,1.5f);
+                float maxVolume=.5f*UnityEngine.Random.Range(.7f,1.3f);
+                pitch=UnityEngine.Random.Range(.8f,1.2f);
+                var common=context.New("LizardVoice+VoiceArticulation", null, 80f, 1f);
+                var art=context.New("LizardVoice+VoiceArticulation", null, length, maxVolume);
+                var modifiers=(float[,])Get(art,"modifier");
+                for(int i=0;i<modifiers.GetLength(0);i++)
+                    for(int channel=0;channel<2;channel++)
+                        modifiers[i,channel]=Mathf.Lerp(modifiers[i,channel],(float)Call(common,"ReturnMod",(float)i/(modifiers.GetLength(0)-1),channel),.5f);
+                duration=length/40f; volume=maxVolume*1.7f;
+                return modifiers;
+            }
+            finally { UnityEngine.Random.state = saved; }
+        }
 
         internal ReferenceBridge(ReferenceContext context, LizardSpecies species)
         {
@@ -75,6 +99,7 @@ namespace CyanPreview
                 Set(Graphics, "lastCulled", false);
                 SetupCamera();
                 Leaser = context.New("RoomCamera+SpriteLeaser", Graphics, Camera);
+                ApplyCamouflage(Color.white,0);
                 Pose(0, .7f);
                 Draw();
                 var iv = Get(Graphics, "iVars");
@@ -106,6 +131,20 @@ namespace CyanPreview
             var palette = context.Blank("RoomPalette");
             Set(palette, "blackColor", new Color(.025f, .03f, .04f, 1));
             Set(Camera, "currentPalette", palette);
+            // shortcut: neutral backdrop until desktop camouflage sampling is implemented.
+            if(Species.Id=="white")
+            {
+                if(whiteLevel==null)
+                {
+                    whiteLevel=new Texture2D(1,1); whiteLevel.SetPixel(0,0,Color.white); whiteLevel.Apply();
+                    whitePalette=new Texture2D(1,8); whitePalette.SetPixels(Enumerable.Repeat(Color.white,8).ToArray()); whitePalette.Apply();
+                }
+                var persistentType=rainWorld.GetType().GetField("persistentData").FieldType;
+                var persistent=FormatterServices.GetUninitializedObject(persistentType);
+                Set(persistent,"cameraTextures",new Texture2D[,] {{whiteLevel,whiteLevel}});
+                Set(rainWorld,"persistentData",persistent); Set(Camera,"game",session);
+                Set(Camera,"paletteTexture",whitePalette);
+            }
         }
 
         static void Position(object part, Vector2 point)
@@ -169,7 +208,13 @@ namespace CyanPreview
                 Set(limb, "flip", distance < 0 ? 1f : -1f);
             }
             foreach (string name in new[] { "depthRotation", "lastDepthRotation", "headDepthRotation", "lastHeadDepthRotation" }) Set(Graphics, name, depth);
-            Set(Graphics, "headColorSetter", 1f);
+            Set(Graphics, "headColorSetter", Species.CanCamouflage ? 0f : 1f);
+            if(Species.CanCamouflage)
+            {
+                // Preview phase runs at .8 seconds; use the mean resting blink rate (40 Hz).
+                float blink=(float)new System.Random(Seed ^ 19391).NextDouble()+phase*.15f;
+                Set(Graphics,"blink",blink); Set(Graphics,"lastBlink",blink);
+            }
             Set(Graphics, "breath", 0f);
             Set(Graphics, "lastBreath", 0f);
             // Settle only cosmetic springs. Never run room physics or creature AI.
@@ -196,6 +241,12 @@ namespace CyanPreview
             }
             finally { UnityEngine.Random.state = random; }
         }
+        public void ApplyCamouflage(Color color,float amount)
+        {
+            if(!Species.CanCamouflage) return;
+            Set(Graphics,"whiteCamoColor",color); Set(Graphics,"whitePickUpColor",color);
+            Set(Graphics,"whiteCamoColorAmount",Mathf.Clamp01(amount));
+        }
         public void Draw(float interpolation = 1f)
         {
             EnsureAlive();
@@ -209,6 +260,7 @@ namespace CyanPreview
         {
             if (disposed) return;
             disposed = true;
+            Release(whiteLevel); Release(whitePalette);
             Graphics = Lizard = Camera = Leaser = Container = null;
             context.RemovePet(this);
         }

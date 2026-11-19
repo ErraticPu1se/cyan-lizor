@@ -78,43 +78,61 @@ namespace CyanPreview
         public object New(string name, params object[] args) => Activator.CreateInstance(Type(name), Flags, null, args, CultureInfo.InvariantCulture);
         public object Blank(string name) => FormatterServices.GetUninitializedObject(Type(name));
         public object Static(string type, string member) => Get(Type(type), member);
-        public static object Get(object target, string name)
+        // Cache metadata only; never retain creatures or graphics instances. All reference calls run on Unity's main thread.
+        static readonly Dictionary<Type,Dictionary<string,MemberInfo>> reads=new Dictionary<Type,Dictionary<string,MemberInfo>>();
+        static readonly Dictionary<Type,Dictionary<string,MemberInfo>> writes=new Dictionary<Type,Dictionary<string,MemberInfo>>();
+        sealed class Invocation
         {
-            var type = target as Type ?? target.GetType();
-            for (var t = type; t != null; t = t.BaseType)
-            {
-                var field = t.GetField(name, Flags | BindingFlags.DeclaredOnly);
-                if (field != null) return field.GetValue(target is Type ? null : target);
-                var property = t.GetProperty(name, Flags | BindingFlags.DeclaredOnly);
-                if (property != null) return property.GetValue(target is Type ? null : target, null);
-            }
-            throw new MissingMemberException(type.FullName, name);
+            public MethodInfo Method;
+            public ParameterInfo[] Parameters;
         }
-        public static void Set(object target, string name, object value)
+        static readonly Dictionary<Type,Dictionary<string,Invocation[]>> invocations=new Dictionary<Type,Dictionary<string,Invocation[]>>();
+        static MemberInfo Member(Type type,string name,bool write)
         {
-            var type = target as Type ?? target.GetType();
-            for (var t = type; t != null; t = t.BaseType)
+            var cache=write?writes:reads;
+            if(!cache.TryGetValue(type,out var members)) cache[type]=members=new Dictionary<string,MemberInfo>();
+            if(members.TryGetValue(name,out var found)) return found;
+            for(var t=type;t!=null;t=t.BaseType)
             {
-                var field = t.GetField(name, Flags | BindingFlags.DeclaredOnly);
-                if (field != null) { field.SetValue(target is Type ? null : target, value); return; }
-                var property = t.GetProperty(name, Flags | BindingFlags.DeclaredOnly);
-                if (property != null && property.GetSetMethod(true) != null)
-                { property.SetValue(target is Type ? null : target, value, null); return; }
+                var field=t.GetField(name,Flags|BindingFlags.DeclaredOnly);
+                if(field!=null) { members[name]=field; return field; }
+                var property=t.GetProperty(name,Flags|BindingFlags.DeclaredOnly);
+                if(property!=null && (!write || property.GetSetMethod(true)!=null)) { members[name]=property; return property; }
             }
-            throw new MissingMemberException(type.FullName, name);
+            throw new MissingMemberException(type.FullName,name);
         }
-        public static object Call(object target, string name, params object[] args)
+        public static object Get(object target,string name)
         {
-            var type = target as Type ?? target.GetType();
-            var methods = type.GetMethods(Flags).Where(m => m.Name == name && m.GetParameters().Length == args.Length);
-            foreach (var method in methods)
+            var member=Member(target as Type??target.GetType(),name,false);
+            var instance=target is Type?null:target;
+            return member is FieldInfo field?field.GetValue(instance):((PropertyInfo)member).GetValue(instance,null);
+        }
+        public static void Set(object target,string name,object value)
+        {
+            var member=Member(target as Type??target.GetType(),name,true);
+            var instance=target is Type?null:target;
+            if(member is FieldInfo field) field.SetValue(instance,value);
+            else ((PropertyInfo)member).SetValue(instance,value,null);
+        }
+        public static object Call(object target,string name,params object[] args)
+        {
+            var type=target as Type??target.GetType();
+            if(!invocations.TryGetValue(type,out var methods)) invocations[type]=methods=new Dictionary<string,Invocation[]>();
+            if(!methods.TryGetValue(name,out var candidates))
             {
-                var p = method.GetParameters();
-                if (!p.Select((item, i) => args[i] == null || item.ParameterType.IsInstanceOfType(args[i])).All(v => v)) continue;
-                try { return method.Invoke(target is Type ? null : target, args); }
-                catch (TargetInvocationException e) { throw new InvalidOperationException(type.Name + "." + name + ": " + e.InnerException, e.InnerException); }
+                candidates=type.GetMethods(Flags).Where(m=>m.Name==name).Select(m=>new Invocation {Method=m,Parameters=m.GetParameters()}).ToArray();
+                methods[name]=candidates;
             }
-            throw new MissingMethodException(type.FullName, name);
+            foreach(var candidate in candidates)
+            {
+                if(candidate.Parameters.Length!=args.Length) continue;
+                bool matches=true;
+                for(int i=0;i<args.Length;i++) if(args[i]!=null && !candidate.Parameters[i].ParameterType.IsInstanceOfType(args[i])) { matches=false; break; }
+                if(!matches) continue;
+                try { return candidate.Method.Invoke(target is Type?null:target,args); }
+                catch(TargetInvocationException e) { throw new InvalidOperationException(type.Name+"."+name+": "+e.InnerException,e.InnerException); }
+            }
+            throw new MissingMethodException(type.FullName,name);
         }
         public Array TypedArray(string type, params object[] values)
         {

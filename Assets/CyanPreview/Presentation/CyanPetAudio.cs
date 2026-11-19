@@ -10,15 +10,22 @@ namespace CyanPreview
         readonly GameObject root;
         readonly PetMotion motion;
         readonly CyanJumpEffects effects;
-        readonly AudioSource charge, voice;
+        readonly AudioSource charge, voice, bite;
+        readonly AudioClip[] tongueClips=new AudioClip[4];
+        readonly AudioClip[] biteHits=new AudioClip[7], biteMisses=new AudioClip[7];
         readonly AudioSource[] impacts = new AudioSource[3];
         readonly AudioClip regularVoice, affectionVoice;
         readonly AudioSource[] launch = new AudioSource[3];
         readonly AudioClip[] charges = new AudioClip[3], clangs = new AudioClip[3];
         readonly float[] samples = new float[128];
         readonly System.Random voiceRandom;
-        float idleVoice, bubbleTime, vocalCooldown, affectionCooldown, impactCooldown;
+        float idleVoice, bubbleTime, vocalCooldown, affectionCooldown, impactCooldown, biteCooldown;
         public const float VocalCooldownSeconds = 10;
+        public uint VocalRevision { get; private set; }
+        readonly float[,] bloodLust;
+        readonly float bloodDuration, bloodVolume, bloodPitch;
+        float bloodTime;
+        bool bloodPlaying;
         PetIntent lastIntent;
         bool enabled = true, disposed;
         public bool Enabled
@@ -28,25 +35,40 @@ namespace CyanPreview
             {
                 if (disposed || enabled == value) return;
                 enabled = value;
-                if (!value) { charge.Stop(); voice.Stop(); foreach (var source in launch) source.Stop(); foreach (var source in impacts) if (source != null) source.Stop(); motion.VoiceIntensity = 0; }
+                if (!value) { ResetVoiceShape(); charge.Stop(); voice.Stop(); bite.Stop(); foreach (var source in launch) source.Stop(); foreach (var source in impacts) if (source != null) source.Stop(); motion.VoiceIntensity = 0; }
             }
         }
-        public CyanPetAudio(Transform parent, ReferenceContext context, PetMotion motion, CyanJumpEffects effects, int seed)
+        public CyanPetAudio(Transform parent, ReferenceContext context, PetMotion motion, CyanJumpEffects effects, ReferenceBridge pet)
         {
+            int seed=pet.Seed;
             this.motion = motion; this.effects = effects;
             voiceRandom = new System.Random(seed ^ 9319);
             idleVoice = NextIdleDelay();
             root = new GameObject("Cyan pet audio"); root.transform.SetParent(parent, false);
             try
             {
-                charge = Source(); voice = Source();
+                charge = Source(); voice = Source(); bite=Source();
+                if(pet.Species.CanTongueFeed)
+                {
+                    string[] names={"lizCharge1D","lizSpit1A","Squish1A","Squish2I"};
+                    for(int i=0;i<names.Length;i++)
+                        try { tongueClips[i]=context.LoadSound(names[i]); }
+                        catch(System.IO.IOException e) { Debug.LogWarning(e.Message); }
+                }
+                // Local sounds.txt: Lizard_Jaws_Grab_NPC and Lizard_Jaws_Shut_Miss_Creature.
+                try
+                {
+                    for(int i=0;i<7;i++) { biteHits[i]=context.LoadSound("lizBite2"+(char)('A'+i)); biteMisses[i]=context.LoadSound("lizBite3"+(char)('A'+i)); }
+                }
+                catch(System.IO.IOException e) { Debug.LogWarning("Bite sound unavailable: "+e.Message); }
                 charges[0] = context.LoadSound("CyanChargeSm"); charges[1] = context.LoadSound("CyanChargeM"); charges[2] = context.LoadSound("CyanChargeL");
                 clangs[0] = context.LoadSound("Clang2A"); clangs[1] = context.LoadSound("Clang1H"); clangs[2] = context.LoadSound("Clang1G");
                 for (int i = 0; i < launch.Length; i++) launch[i] = Source();
                 launch[0].clip = context.LoadSound("Flip3C"); launch[2].clip = context.LoadSound("CoralBreakA_7");
                 // shortcut: deterministic A/B/C voice selection, not the game's voice personality generator.
-                voice.clip = context.LoadSound("LizardVoiceCyan" + "ABC"[(int)((uint)seed % 3)]);
+                voice.clip = context.LoadSound(motion.Species.VoiceSound(seed));
                 regularVoice = voice.clip;
+                bloodLust = pet.BloodLustArticulation(out bloodDuration, out bloodVolume, out bloodPitch);
                 var affection = motion.Species.AffectionSound(seed);
                 if (affection != null)
                     try { affectionVoice = context.LoadSound(affection); }
@@ -89,14 +111,25 @@ namespace CyanPreview
         }
         float NextIdleDelay() => 30 + (float)voiceRandom.NextDouble() * 30;
         public bool CanPettingCall => !disposed && enabled && affectionVoice != null && affectionCooldown <= 0 && !voice.isPlaying;
-        public bool PettingCall()
+        public bool PettingCall() => PlayAffection("PETTING");
+        public bool FoodPickupCall()
+        {
+            if(disposed || !enabled || affectionVoice==null || affectionCooldown>0) return false;
+            // Pickup may replace the arrival call, but never overlaps voices or bypasses the affection cooldown.
+            voice.Stop(); return PlayAffection("FOOD_PICKUP");
+        }
+        bool PlayAffection(string reason)
         {
             if (!CanPettingCall) return false;
+            ResetVoiceShape();
             voice.clip = affectionVoice; voice.volume = .55f; voice.Play();
             affectionCooldown = PettingContact.CooldownSeconds; vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay();
-            Debug.Log("PETTING_AFFECTION_PLAYED " + affectionVoice.name);
+            VocalRevision++;
+            Debug.Log(reason+"_AFFECTION_PLAYED " + affectionVoice.name);
             return true;
         }
+        public void TongueSound(int stage,bool gentle=false)
+        { if(!disposed && enabled && stage>=0 && stage<4 && tongueClips[stage]!=null) bite.PlayOneShot(tongueClips[stage],(stage==0||stage==3?.3f:.4f)*(gentle?.5f:1)); }
         void Landed(float speed) { Impact(speed); }
         public bool Impact(float speed)
         {
@@ -110,14 +143,41 @@ namespace CyanPreview
             impactCooldown = .15f;
             return true;
         }
+        public bool Bite(bool contact)
+        {
+            if(disposed || !enabled || biteCooldown>0) return false;
+            var clips=contact?biteHits:biteMisses;
+            var clip=clips[voiceRandom.Next(clips.Length)]; if(clip==null) return false;
+            bite.Stop(); bite.clip=clip; bite.volume=contact?.3f:.5f; bite.pitch=1; bite.Play(); biteCooldown=.3f;
+            return true;
+        }
         public bool Vocalize() => PlayVoice(regularVoice, .4f);
         bool PlayVoice(AudioClip clip, float volume)
         {
             // Drop repeat requests; never queue calls or extend the cooldown.
             if (!enabled || disposed || clip == null || vocalCooldown > 0 || voice.isPlaying) return false;
+            ResetVoiceShape();
             voice.clip = clip; voice.volume = volume;
-            voice.Play(); vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay();
+            voice.Play(); vocalCooldown = VocalCooldownSeconds; idleVoice = NextIdleDelay(); VocalRevision++;
             return true;
+        }
+        bool CanChallenge => motion.RivalTarget.HasValue && motion.State==PetMotionState.Crawling
+            && !motion.RivalRecovering;
+        public bool CombatCall()
+        {
+            if(!CanChallenge || !PlayVoice(regularVoice, .4f)) return false;
+            bloodPlaying=true; bloodTime=0; voice.loop=true;
+            ApplyBloodLustShape();
+            return true;
+        }
+        void ResetVoiceShape() { bloodPlaying=false; bloodTime=0; voice.loop=false; voice.pitch=1; }
+        void ApplyBloodLustShape()
+        {
+            float position=Mathf.Clamp01(bloodTime/bloodDuration)*(bloodLust.GetLength(0)-1);
+            int first=Mathf.FloorToInt(position), next=Mathf.Min(first+1,bloodLust.GetLength(0)-1);
+            float blend=position-first;
+            voice.volume=Mathf.Clamp01(Mathf.Lerp(bloodLust[first,0],bloodLust[next,0],blend)*bloodVolume*.4f);
+            voice.pitch=Mathf.Lerp(.5f,1.5f,Mathf.Lerp(bloodLust[first,1],bloodLust[next,1],blend))*bloodPitch;
         }
         public void Advance(float seconds)
         {
@@ -126,10 +186,19 @@ namespace CyanPreview
             vocalCooldown = Mathf.Max(0, vocalCooldown - seconds);
             affectionCooldown = Mathf.Max(0, affectionCooldown - seconds);
             impactCooldown = Mathf.Max(0, impactCooldown - seconds);
+            biteCooldown=Mathf.Max(0,biteCooldown-seconds);
+            if(bloodPlaying)
+            {
+                bloodTime+=seconds;
+                if(!CanChallenge || bloodTime>=bloodDuration) { voice.Stop(); ResetVoiceShape(); }
+                else ApplyBloodLustShape();
+            }
+            // Rain World's hunting rate is .0125 per 40 Hz tick; scuffles reuse it with the shared call cooldown.
+            if(CanChallenge && vocalCooldown<=0 && seconds>0 && voiceRandom.NextDouble()<1-Mathf.Exp(-.5f*seconds)) CombatCall();
             var intent = motion.Behavior.Intent;
-            if (intent == PetIntent.Investigating && lastIntent != intent) Vocalize();
+            if (!motion.RivalTarget.HasValue && intent == PetIntent.Investigating && lastIntent != intent && !motion.Behavior.SoundInvestigation) Vocalize();
             lastIntent = intent;
-            if (intent == PetIntent.Idle && motion.State == PetMotionState.Crawling && (idleVoice -= seconds) <= 0) Vocalize();
+            if (!motion.RivalTarget.HasValue && intent == PetIntent.Idle && motion.State == PetMotionState.Crawling && (idleVoice -= seconds) <= 0) Vocalize();
             float intensity = 0;
             if (enabled && voice.isPlaying)
             {
@@ -149,7 +218,7 @@ namespace CyanPreview
         {
             if (disposed) return; disposed = true;
             motion.StateChanged -= StateChanged; motion.JumpLaunched -= Launched; motion.Landed -= Landed;
-            motion.VoiceIntensity = 0; charge.Stop(); voice.Stop(); foreach (var source in launch) source.Stop(); foreach (var source in impacts) if (source != null) source.Stop();
+            motion.VoiceIntensity = 0; charge.Stop(); voice.Stop(); bite.Stop(); foreach (var source in launch) source.Stop(); foreach (var source in impacts) if (source != null) source.Stop();
             Release(root);
         }
     }

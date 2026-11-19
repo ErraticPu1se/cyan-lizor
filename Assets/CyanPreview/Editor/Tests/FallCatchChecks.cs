@@ -34,6 +34,7 @@ namespace CyanPreview.Editor
             Check(!noEdge.TryCatchEdge(new Vector2(110,0),24,out _,out _),"Closed window retained a catch target");
             foreach(var mode in new[] {ClimbingMode.EdgesOnly,ClimbingMode.EdgesAndBackgrounds})
             foreach(bool desktopEdge in new[] {false,true})
+            foreach(bool outsidePole in new[] {false,true})
             using(var pet=context.CreatePet())
             using(var other=context.CreatePet())
             {
@@ -43,7 +44,7 @@ namespace CyanPreview.Editor
                 var motion=new PetMotion(pet,surfaces,8) {Roam=false,AutonomousJumps=false};
                 var second=new PetMotion(other,new DesktopSurfaces(Bounds) {Mode=mode},8) {Roam=false};
                 var secondPosition=second.Position;
-                PlaceAndRelease(pet,motion,new Vector2(desktopEdge?286:86,150));
+                PlaceAndRelease(pet,motion,new Vector2(desktopEdge?286:outsidePole?114:86,150));
                 float initialY=((Vector2)Get(((Array)Get(pet.Lizard,"bodyChunks")).GetValue(1),"pos")).y;
                 int sounds=0; motion.Landed+=speed=>sounds++;
                 bool caught=false;
@@ -58,7 +59,7 @@ namespace CyanPreview.Editor
                         Check(motion.GripCount>0,"Catch had no planted foot"); caught=true; break;
                     }
                 }
-                Check(caught,"Failed delayed catch: "+mode+" desktop="+desktopEdge);
+                Check(caught,"Failed delayed catch: "+mode+" desktop="+desktopEdge+" outsidePole="+outsidePole);
                 Check(sounds==0,"Edge grip emitted floor impact sound");
                 Check(second.Position==secondPosition && !second.FallCatch.Ready,"Catch changed another pet with same ID");
                 for(int i=0;i<20;i++) motion.Advance(.025f);

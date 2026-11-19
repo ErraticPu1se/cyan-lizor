@@ -127,3 +127,13 @@ The preview head light is a separate per-view additive pass. Species data suppli
 its radius; pet state supplies its position and generated color. It currently
 approximates light spill against the preview background. Full terrain lighting,
 room darkness and shadows are a separate rendering integration task.
+
+## Windows multiple-pet prototype (2026-11-11)
+
+`feature/windows-multiple-pets` starts from the approved cyan feeding-hop prototype. One Windows overlay and one `ReferenceContext` serve up to three independent `DesktopPet` instances. Each instance has a runtime key separate from its appearance ID, its own motion/surface/interaction/audio state, and a scaled presentation root. Native coordinates and shared food use screen-pixel world units; each pet converts these to its own motion coordinates. Removing or rebuilding one instance does not release shared resources.
+
+The selected saved preset remains the primary pet. The Desktop pets card adds independent copies of saved presets; their right-click changes are session-only. Existing versioned presets and companion preferences retain their format and values. The active roster and fighting toggle are transient controller-to-overlay settings, not persisted replacements for the user's presets.
+
+`SharedFood` owns the single morsel. Interest is per pet, but custody is exclusive: loose, cursor, pet, or committed den entry. A loose morsel can be held after the same 0.1-second delay as a pet. Mouth-held food cannot be dragged directly. Grabbing its carrier or a scuffle can drop it. The first successful pickup wins; others follow at a small distance until den entry commits, then abandon pursuit. The existing bottom-edge hop/eat/return task remains in use. Placement projects onto a reachable surface, including edge-only climbing.
+
+`PetScuffle` tracks pair-local tension, posture, bite, recoil, and cooldown. Aggression changes tension growth; dominance difference can end the encounter early. This adapts the inspected Rain World rivalry/posture/submission ideas, not its damage pipeline. The host uses the original FightingStance/head graphics with bounded movement impulses. There are no health changes, damage attacks, killing, or permanent grudges. Only one encounter per pet can run at once; grabbing, disabling fighting, or den entry interrupts it. Fighting starts disabled.

@@ -13,6 +13,9 @@ namespace CyanPreview
         static readonly long[] ticks = new long[12];
         static readonly int[] calls = new int[12];
         static long started = Stopwatch.GetTimestamp(), pixelCount;
+        static readonly double[] intervals=new double[1024];
+        static int intervalCount;
+        static long lastFrame;
         static int frames, resizes, lastGc = GC.CollectionCount(0);
         public struct Scope : IDisposable
         {
@@ -27,6 +30,9 @@ namespace CyanPreview
         public static void EndFrame()
         {
             if (!Enabled) return;
+            long now=Stopwatch.GetTimestamp();
+            if(lastFrame!=0 && intervalCount<intervals.Length) intervals[intervalCount++]=(now-lastFrame)*1000.0/Stopwatch.Frequency;
+            lastFrame=now;
             frames++;
             double seconds = (Stopwatch.GetTimestamp() - started) / (double)Stopwatch.Frequency;
             if (seconds < 5) return;
@@ -37,6 +43,14 @@ namespace CyanPreview
                 text.Append(" ").Append((Stage)i).Append("Ms=").Append(ms.ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
                 ticks[i] = 0; calls[i] = 0;
             }
+            if(intervalCount>0)
+            {
+                Array.Sort(intervals,0,intervalCount);
+                text.Append(" intervalP95Ms=").Append(intervals[(int)((intervalCount-1)*.95)].ToString("F2",System.Globalization.CultureInfo.InvariantCulture));
+                text.Append(" intervalMaxMs=").Append(intervals[intervalCount-1].ToString("F2",System.Globalization.CultureInfo.InvariantCulture));
+                intervalCount=0;
+            }
+            text.Append(" managedMB=").Append((GC.GetTotalMemory(false)/1048576.0).ToString("F1",System.Globalization.CultureInfo.InvariantCulture));
             text.Append(" resizes=").Append(resizes).Append(" avgPixels=").Append(pixelCount / Math.Max(1, frames)).Append(" gc0=").Append(GC.CollectionCount(0) - lastGc);
             UnityEngine.Debug.Log(text.ToString());
             frames = 0; resizes = 0; pixelCount = 0; lastGc = GC.CollectionCount(0); started = Stopwatch.GetTimestamp();

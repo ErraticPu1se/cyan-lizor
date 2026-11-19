@@ -19,9 +19,9 @@ namespace CyanPreview.Editor
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene("Assets/Scenes/Preview.unity", true) };
             PlayerSettings.companyName = "ErraticPu1se";
             PlayerSettings.productName = "Lizor";
-            PlayerSettings.bundleVersion = "0.2.1-preview.1";
+            PlayerSettings.bundleVersion = "next-release-local";
             PlayerSettings.defaultScreenWidth = 540;
-            PlayerSettings.defaultScreenHeight = 900;
+            PlayerSettings.defaultScreenHeight = 840;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
             PlayerSettings.resizableWindow = true;
             PlayerSettings.runInBackground = true;
@@ -98,10 +98,11 @@ namespace CyanPreview.Editor
         public static void Verify()
         {
             SetupChecks.Run();
-            WindowStabilityChecks.Run();
             CursorInputChecks.Run();
             TrayChecks.Run();
             PresetChecks.Run();
+            FeedingChecks.Run();
+            MultiplePetChecks.Run();
             if (!ReferenceBridge.TryParseId("ID.7.12345", out var spawner, out var seed) || spawner != 7 || seed != 12345)
                 throw new Exception("Full ID parser failed");
             foreach (var invalid in new[] { "", "ID.a.2", "1.2.3", "2147483648", "ID.1.2.3" })
@@ -109,6 +110,7 @@ namespace CyanPreview.Editor
             using (var context = new ReferenceContext(Path.GetFullPath("local-data")))
             using (var reference = context.CreatePet())
             {
+                ReleasePanelChecks.Run(context);
                 UnityEngine.Random.InitState(99);
                 var state = UnityEngine.Random.state;
                 reference.Generate("12345");
@@ -127,17 +129,46 @@ namespace CyanPreview.Editor
                 if (reference.Summary != first || reference.EffectColor != color)
                     throw new Exception("Prior generations changed the result");
                 VerifyIndependentPets(context, reference);
+                FeedingChecks.Motion(context);
+
                 DesktopChecks.Run(context);
                 ClimbingModeChecks.Run(context);
                 FallCatchChecks.Run(context);
                 UtilityChecks.Run(context);
                 CompanionChecks.Run(context);
-                WindowStabilityChecks.Motion(context);
                 CompanionChecks.IdleStability(context);
+                HeadResponseChecks.Run(context);
                 CompanionChecks.EdgeFootholds(context);
                 CompanionChecks.RestingForces(context);
                 TargetingChecks.Run(context);
                 DesktopEffectsChecks.Run(context);
+                MultiplePetChecks.Motion(context);
+                MultiplePetChecks.SharedFeeding(context);
+                MultiplePetChecks.CarrierCompetition(context);
+                ContactBiteChecks.Run(context);
+                CombatApproachChecks.Run(context);
+                ContactBiteChecks.Pursuit(context);
+                PickupDiagnosticsChecks.Run(context);
+                DevelopmentInputChecks.Run(context);
+                MotionDiagnosticsChecks.Run(context);
+                WindowStabilityChecks.Run();
+                WindowStabilityChecks.Motion(context);
+                SocialCuriosityChecks.Run(context);
+                SocialRefinementChecks.Run(context);
+                RoamingContinuityChecks.Run(context);
+                ContactGlanceChecks.Run(context);
+                SoundInvestigationChecks.Run(context);
+                MovingAttentionChecks.Run(context);
+                SocialFollowingChecks.Run();
+                TemperamentChecks.Run(context);
+                SurfaceSeparationChecks.Run();
+                PolePostureChecks.Run(context);
+                ReflectionCacheChecks.Run();
+                WhiteSpeciesChecks.Run(context);
+                CamouflageSelectionChecks.Run(context);
+                WhitePatienceChecks.Run();
+                CamouflageRecoveryChecks.Run(context);
+                TongueChecks.Run(context);
                 RenderOptimizationChecks.Run(context);
                 InteractionUpgradeChecks.Run(context);
                 LandingRecoveryChecks.Run(context);

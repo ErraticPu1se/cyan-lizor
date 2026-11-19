@@ -18,7 +18,7 @@ namespace CyanPreview
             MovementCapabilities species, out JumpCandidate result)
         {
             result = default;
-            if (species.LaunchMax <= 0 || !species.ClimbWalls) return false;
+            if (species.LaunchMax <= 0 || !species.Supports(surfaces.SupportAt(target).Kind)) return false;
             var landing = surfaces.Nearest(target, out var normal) + normal * 8;
             for (int duration = 8; duration <= 60; duration += 2)
             {
