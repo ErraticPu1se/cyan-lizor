@@ -36,7 +36,7 @@ namespace CyanPreview
         Task<string> importerOutput, importerError;
         float phase, depth=.7f, desktopScale=DesktopSettings.DefaultScale, previewClock;
         bool animate=true, desktopClicks, desktopSounds=true, desktopRoam=true, autonomousJumps=true;
-        bool advancedOpen;
+        bool advancedOpen, preparedAssetsOpen;
         int desktopVocalizeRequest;
         string vocalizePetKey;
         ClimbingMode desktopClimbingMode=ClimbingMode.EdgesAndBackgrounds;
@@ -80,7 +80,7 @@ namespace CyanPreview
             id=PlayerPrefs.GetString("LastId","12345");
             var preferences=CompanionPreferences.Read(PlayerPrefs.GetString(PreferencesKey,""),out preferenceWarning);
             gameFolder=preferences.gameFolder; desktopScale=preferences.scale; desktopClimbingMode=preferences.climbingMode;
-            desktopClicks=preferences.clickToExplore; desktopSounds=preferences.sound; desktopRoam=preferences.roam; autonomousJumps=preferences.jumps;
+            desktopClicks=preferences.clickToExplore; desktopSounds=preferences.sound; desktopRoam=preferences.roam; autonomousJumps=preferences.jumps; muteAll=preferences.muteAll;
             showAttentionLabels=PlayerPrefs.GetInt(AttentionLabelsKey,1)!=0;
             InitializePresets(preferences);
             savedPreferences=JsonUtility.ToJson(preferences); initialized=true;
@@ -108,7 +108,7 @@ namespace CyanPreview
                     SavePreset(); SelectPreset(PetSelection.Create(presets.Data,selectedSpecies,id,CurrentPreferences())); return;
                 }
                 reference.Generate(id); phase=0; RefreshPreview();
-                status=reference.Identity+"  ·  "+reference.Species.DisplayName+"  ·  "+reference.Manifest.gameVersion;
+                status=reference.Identity+"  ��  "+reference.Species.DisplayName+"  ��  "+reference.Manifest.gameVersion;
                 error=null; appliedId=id; PlayerPrefs.SetString("LastId",id); PlayerPrefs.Save();
             }
             catch(Exception e) { Fail(e); }
@@ -141,14 +141,14 @@ namespace CyanPreview
         {
             trayState.Sync(desktop.Active);
             if(tray==null) return;
-            tray.UpdateState(desktop.Active,trayState.Paused,desktopSounds);
+            tray.UpdateState(desktop.Active,trayState.Paused,!muteAll);
             while(tray.TryRead(out var action))
             {
                 switch(action)
                 {
                     case TrayAction.Settings: tray.ShowSettings(); break;
                     case TrayAction.PauseResume: trayState.TogglePause(desktop.Active); break;
-                    case TrayAction.Sound: desktopSounds=!desktopSounds; SavePreferences(); break;
+                    case TrayAction.Sound: muteAll=!muteAll; SavePreferences(); break;
                     case TrayAction.StopPet: desktop.Stop(); trayState.Sync(false); break;
                     case TrayAction.Quit: QuitApp(); break;
                     case TrayAction.Hidden:
@@ -167,14 +167,14 @@ namespace CyanPreview
         {
             if(detection!=null) return;
             detectionInput=gameFolder; string saved=gameFolder;
-            setupMessage="Looking in Steam libraries…";
+            setupMessage="Looking in Steam libraries��";
             detection=Task.Run(()=>GameInstallation.Detect(saved));
         }
         void SavePreferences()
         {
             if(!initialized) return;
             var preferences=new CompanionPreferences { gameFolder=gameFolder, scale=desktopScale, climbingMode=desktopClimbingMode,
-                sound=desktopSounds, roam=desktopRoam, jumps=autonomousJumps, clickToExplore=desktopClicks };
+                sound=desktopSounds, roam=desktopRoam, jumps=autonomousJumps, clickToExplore=desktopClicks, muteAll=muteAll };
             string json=JsonUtility.ToJson(preferences);
             // Preset changes are explicit; browsing and editing a live pet never overwrite a saved preset.
             if(json==savedPreferences) return;
@@ -255,7 +255,7 @@ namespace CyanPreview
             GUI.enabled=importer==null && folderPicker==null;
             gameFolder=GUILayout.TextField(gameFolder,GUILayout.Height(34));
             GUILayout.BeginHorizontal();
-            if(GUILayout.Button("Browse…",GUILayout.Height(32))) folderPicker=WindowsFolderPicker.Browse();
+            if(GUILayout.Button("Browse��",GUILayout.Height(32))) folderPicker=WindowsFolderPicker.Browse();
             GUI.enabled=importer==null && folderPicker==null && detection==null;
             if(GUILayout.Button("Detect again",GUILayout.Height(32))) DetectInstallation();
             GUILayout.EndHorizontal(); GUI.enabled=true;
@@ -265,15 +265,18 @@ namespace CyanPreview
             GUI.enabled=importer==null && folderPicker==null && validFolder;
             if(GUILayout.Button("Prepare local game assets",theme.Primary,GUILayout.Height(34))) ImportReference();
             GUI.enabled=true;
-            if(importer!=null) GUILayout.Label("Preparing your local reference… Please wait.",theme.Small);
-            GUI.enabled=importer==null; GUILayout.Label("Already prepared assets? Reference folder",theme.Small); cache=GUILayout.TextField(cache??"",GUILayout.Height(32));
+            if(importer!=null) GUILayout.Label("Preparing your local reference�� Please wait.",theme.Small);
+            if(Section("Advanced: prepared assets",ref preparedAssetsOpen))
+            {
+            GUI.enabled=importer==null; GUILayout.Label("Reference folder",theme.Small); cache=GUILayout.TextField(cache??"",GUILayout.Height(32));
             GUI.enabled=importer==null;
             if(GUILayout.Button("Load prepared reference")) LoadReference();
+            }
             GUI.enabled=true; GUILayout.EndVertical();
         }
         bool Section(string label,ref bool open)
         {
-            if(GUILayout.Button(label+"   "+(open?"−":"+"),theme.Heading,GUILayout.Height(24))) open=!open;
+            if(GUILayout.Button(label+"   "+(open?"?":"+"),theme.Heading,GUILayout.Height(24))) open=!open;
             if(open) GUILayout.Space(8);
             return open;
         }
@@ -330,3 +333,4 @@ namespace CyanPreview
         }
     }
 }
+

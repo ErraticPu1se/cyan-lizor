@@ -10,7 +10,7 @@ namespace CyanPreview
         public static readonly Color Background = new Color(.075f,.085f,.10f);
         public static readonly Color Accent = new Color(.32f,.89f,.83f);
         public readonly GUISkin Skin;
-        public readonly GUIStyle Title, Small, Heading, Card, Primary, Selected, Badge, Error;
+        public readonly GUIStyle Title, Small, Heading, Card, Primary, Selected, Badge, Error, Warning;
         readonly List<Texture2D> textures = new List<Texture2D>();
         public PanelTheme(GUISkin original)
         {
@@ -41,6 +41,7 @@ namespace CyanPreview
             Selected=Button(new Color(.13f,.32f,.33f),Accent); Selected.fontStyle=FontStyle.Bold;
             Badge=new GUIStyle(Selected) {fontSize=11,alignment=TextAnchor.MiddleCenter};
             Error=new GUIStyle(Card) {fontSize=12,wordWrap=true}; Error.normal.textColor=new Color(1f,.76f,.54f);
+            Warning=new GUIStyle(Small); Warning.normal.textColor=new Color(1f,.76f,.54f);
         }
         GUIStyle Button(Color fill,Color text)
         {
@@ -70,3 +71,4 @@ namespace CyanPreview
         }
     }
 }
+

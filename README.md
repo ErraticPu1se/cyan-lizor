@@ -1,5 +1,7 @@
 # Cyan Lizor
 
+> Experimental UI refinement source: [preview notes](docs/ui-preview.md). The earlier panel is preserved on [`archive/ui-before-refinement`](https://github.com/ErraticPu1se/cyan-lizor/tree/archive/ui-before-refinement). The public release download below remains available.
+
 A desktop cyan lizard.
 
 It roams, rests, climbs, observes the cursor, and propels itself across the screen. Its decisions are influenced by personality and current state. It will not always cooperate. That is not a defect.
@@ -8,11 +10,11 @@ Developed by ErraticPu1se. Any resemblance between that name and another iterato
 
 ## Download
 
-**[Download the Windows preview ZIP](https://github.com/ErraticPu1se/cyan-lizor/releases/download/v0.2.1-preview.1/Lizor-0.2.1-preview.1-win-x64.zip)** · [Release notes](https://github.com/ErraticPu1se/cyan-lizor/releases/tag/v0.2.1-preview.1)
+**[Download the Windows preview ZIP](https://github.com/ErraticPu1se/cyan-lizor/releases/download/v0.2.1-preview.1/Lizor-0.2.1-preview.1-win-x64.zip)** �� [Release notes](https://github.com/ErraticPu1se/cyan-lizor/releases/tag/v0.2.1-preview.1)
 
 Download the packaged **Lizor** ZIP.
 
-Do not use GitHub’s **Source code** archives or **Code → Download ZIP**. They are not the application.
+Do not use GitHub��s **Source code** archives or **Code �� Download ZIP**. They are not the application.
 
 ## Requirements
 
@@ -47,8 +49,8 @@ Your appearance ID, game folder, size, climbing mode, roaming, propulsion, click
 
 ## Behavior and interaction
 
-- Enter an ID to select the lizard’s generated appearance.
-- Adjust its desktop size. **Medium (1.2×)** is the default and reset size.
+- Enter an ID to select the lizard��s generated appearance.
+- Adjust its desktop size. **Medium (1.2��)** is the default and reset size.
 - Allow it to roam, rest, crawl, and propel itself.
 - Improved cursor responsiveness, steadier resting posture, and optimized memory usage.
 - Choose **Edges only** to climb desktop borders and visible window edges.
@@ -67,14 +69,14 @@ The body and tail react while being dragged. After release, it falls about one b
 
 The lizard produces calls, propulsion sounds, and landing impacts, accompanied by head glow and particles.
 
-Ordinary calls have a **10-second cooldown**. Idle calls occur after **30–60 seconds** of idle time. Affection calls have a separate **3-second cooldown** during continued petting. Grabbing and open menus do not count as petting. Calls do not overlap. Sound may be muted.
+Ordinary calls have a **10-second cooldown**. Idle calls occur after **30�C60 seconds** of idle time. Affection calls have a separate **3-second cooldown** during continued petting. Grabbing and open menus do not count as petting. Calls do not overlap. Sound may be muted.
 
 ## Right-click menu
 
 Right-click the lizard to:
 
 - Open **Settings**.
-- Select **Small (1.0×)**, **Medium (1.2×)**, **Large (1.5×)**, or **Extra large (2.0×)**.
+- Select **Small (1.0��)**, **Medium (1.2��)**, **Large (1.5��)**, or **Extra large (2.0��)**.
 - Choose **Edges only** or **Edges + backgrounds** climbing.
 - Toggle roaming.
 - Toggle click exploration.
@@ -109,7 +111,7 @@ Include:
 - Expected behavior
 - Observed behavior
 
-Be precise. “It behaved strangely” conveys nothing.
+Be precise. ��It behaved strangely�� conveys nothing.
 
 The desktop log is located at:
 
@@ -117,6 +119,7 @@ The desktop log is located at:
 %USERPROFILE%\AppData\LocalLow\ErraticPu1se\Lizor\desktop-player.log
 ```
 
-[Developer build instructions](docs/development.md) · [Source for this release](https://github.com/ErraticPu1se/cyan-lizor/tree/v0.2.1-preview.1)
+[Developer build instructions](docs/development.md) �� [Source for this release](https://github.com/ErraticPu1se/cyan-lizor/tree/v0.2.1-preview.1)
 
 An unofficial project inspired by **Rain World**, created by Videocult and published by Akupara Games. This project does not distribute game assemblies, extracted graphics, audio, or decompiled sources. Third-party dependency notices accompany the download.
+

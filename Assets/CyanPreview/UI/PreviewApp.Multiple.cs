@@ -7,7 +7,7 @@ namespace CyanPreview
         readonly List<DesktopPetConfiguration> extraPets=new List<DesktopPetConfiguration>();
         const string AttentionLabelsKey="Lizor.ShowAttentionLabels";
         bool showAttentionLabels=true;
-        bool primaryPresent=true, allowFighting;
+        bool primaryPresent=true, allowFighting, muteAll;
         DesktopSettings DesktopConfiguration()
         {
             var settings=PrimaryConfiguration(); var roster=new List<DesktopPetConfiguration>();
@@ -15,7 +15,7 @@ namespace CyanPreview
             roster.AddRange(extraPets);
             // Stopping the last pet still needs a valid shutdown message.
             if(roster.Count==0) roster.Add(DesktopPetConfiguration.From(settings));
-            settings.showAttentionLabels=false; settings.pets=roster.ToArray(); settings.allowFighting=allowFighting;
+            settings.showAttentionLabels=false; settings.pets=roster.ToArray(); settings.allowFighting=allowFighting; settings.muteAll=muteAll;
             return settings;
         }
         void RemoveActivePet(string key)
@@ -26,3 +26,4 @@ namespace CyanPreview
         }
     }
 }
+

@@ -79,11 +79,11 @@ namespace CyanPreview
             FoodRevision=-1; FollowingFood=false;
             Camouflage=Pet.Species.CanCamouflage?new PetCamouflage():null;
         }
-        public void Configure(DesktopPetConfiguration config,bool paused)
+        public void Configure(DesktopPetConfiguration config,bool paused,bool muteAll=false)
         {
             if(Surfaces.Mode!=config.climbingMode) { Surfaces.Mode=config.climbingMode; Motion.RefreshSurfaceSupport(); }
             Config=config; Motion.Roam=config.roam; Motion.AutonomousJumps=Pet.Species.Movement.CanPropel && !FollowingFood && !Feeding.UsingRoute; Input.ClickToExplore=config.clickToExplore;
-            if(Audio!=null) Audio.Enabled=config.sound&&!paused;
+            if(Audio!=null) Audio.Enabled=config.sound&&!paused&&!muteAll;
         }
         public void RefreshWindows(IEnumerable<DesktopWindow> snapshot)
         {
@@ -126,3 +126,4 @@ namespace CyanPreview
         { Input?.Cancel(); Audio?.Dispose(); Effects?.Dispose(); View?.Dispose(); Pet?.Dispose(); if(Root!=null) UnityEngine.Object.Destroy(Root); }
     }
 }
+
