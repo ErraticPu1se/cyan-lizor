@@ -1,5 +1,7 @@
 # Cyan Lizor
 
+> Restored UI preview source: [preview notes](docs/ui-preview.md). The earlier panel is preserved on [`archive/ui-before-refinement`](https://github.com/ErraticPu1se/cyan-lizor/tree/archive/ui-before-refinement). The public release download below remains available.
+
 A desktop cyan lizard.
 
 It roams, rests, climbs, observes the cursor, and propels itself across the screen. Its decisions are influenced by personality and current state. It will not always cooperate. That is not a defect.
@@ -120,3 +122,4 @@ The desktop log is located at:
 [Developer build instructions](docs/development.md) · [Source for this release](https://github.com/ErraticPu1se/cyan-lizor/tree/v0.2.1-preview.1)
 
 An unofficial project inspired by **Rain World**, created by Videocult and published by Akupara Games. This project does not distribute game assemblies, extracted graphics, audio, or decompiled sources. Third-party dependency notices accompany the download.
+

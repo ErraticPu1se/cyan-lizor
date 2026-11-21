@@ -75,7 +75,7 @@ namespace CyanPreview
             try
             {
                 var next=presets.Data.Copy();
-                string key=livePresetKeys.TryGetValue(pet.key,out var mapped)?mapped:pet.key=="primary"?next.selected:null;
+                string key=LivePreset(pet)?.key;
                 var existing=next.pets.Find(p=>p.key==key);
                 if(!asNew && existing==null) throw new InvalidOperationException("Save this pet as a new preset first.");
                 var value=PetPreset.Capture(pet.id,new CompanionPreferences {scale=pet.scale,sound=pet.sound,roam=pet.roam,
@@ -87,6 +87,20 @@ namespace CyanPreview
                 presets.Commit(next); livePresetKeys[pet.key]=value.key;
                 if(pet.key=="primary") primaryName=value.name; else pet.name=value.name;
                 presetFeedback="Saved: "+value.name; error=null;
+            }
+            catch(Exception e) { Fail(e); }
+        }
+        PetPreset LivePreset(DesktopPetConfiguration pet)
+        {
+            if(presets==null || pet==null) return null;
+            return livePresetKeys.TryGetValue(pet.key,out var key)?presets.Data.pets.Find(p=>p.key==key):null;
+        }
+        void UseOnNextLaunch(string key)
+        {
+            try
+            {
+                var next=presets.Data.Copy(); next.selected=key; presets.Commit(next);
+                presetFeedback="Next launch: "+presets.Data.Current.name; error=null;
             }
             catch(Exception e) { Fail(e); }
         }
@@ -184,8 +198,13 @@ namespace CyanPreview
             if(liveName==null) liveName=pet.name;
             GUILayout.BeginVertical(theme.Card);
             GUILayout.Label(pet.name+" · "+LizardSpecies.Find(pet.species).DisplayName,theme.Heading);
-            var hero=GUILayoutUtility.GetRect(100,92,GUILayout.ExpandWidth(true));
+            var hero=GUILayoutUtility.GetRect(100,Mathf.Clamp(Screen.height*.28f,180,340),GUILayout.ExpandWidth(true));
             if(previewTexture!=null) GUI.DrawTexture(hero,previewTexture,ScaleMode.ScaleToFit,false);
+            GUILayout.BeginHorizontal(); GUILayout.Label("Preview zoom: "+previewZoom.ToString("0.00")+"x");
+            if(GUILayout.Button("Reset",GUILayout.Width(64))) SetPreviewZoom(1.5f);
+            GUILayout.EndHorizontal();
+            float zoom=GUILayout.HorizontalSlider(previewZoom,.5f,3);
+            if(zoom!=previewZoom) SetPreviewZoom(zoom);
             GUILayout.Label("Appearance ID"); GUILayout.BeginHorizontal();
             liveId=GUILayout.TextField(liveId,64,GUILayout.Height(32));
             GUI.enabled=ReferenceBridge.TryParseId(liveId,out _,out _);
@@ -204,12 +223,13 @@ namespace CyanPreview
             GUILayout.EndHorizontal();
             ToggleRow("Explore where I click",ref pet.clickToExplore);
             ToggleRow("Sound",ref pet.sound);
-            GUI.enabled=desktop.Active && pet.sound && !trayState.Paused;
+            GUI.enabled=desktop.Active && pet.sound && !trayState.Paused && !muteAll;
             if(GUILayout.Button("Play sample call")) { vocalizePetKey=pet.key; desktopVocalizeRequest++; }
             GUI.enabled=true;
             ApplyLiveControls(pet);
             GUILayout.EndVertical();
             GUILayout.BeginVertical(theme.Card); GUILayout.Label("All pets",theme.Heading);
+            ToggleRow("Mute all sounds",ref muteAll);
             ToggleRow("Allow fighting",ref allowFighting); GUILayout.EndVertical();
             GUILayout.BeginVertical(theme.Card);
             if(Section("Save preset",ref savePresetOpen))
@@ -217,17 +237,27 @@ namespace CyanPreview
             liveName=GUILayout.TextField(liveName,40);
             GUILayout.BeginHorizontal(); GUI.enabled=presets!=null;
             if(GUILayout.Button("Save as new")) SaveLivePreset(pet,true);
-            bool hasPreset=pet.key=="primary" || livePresetKeys.ContainsKey(pet.key);
+            var saved=LivePreset(pet);
+            bool hasPreset=saved!=null;
             GUI.enabled=presets!=null && hasPreset;
             if(GUILayout.Button("Update preset")) SaveLivePreset(pet,false);
             GUI.enabled=true; GUILayout.EndHorizontal();
+            if(saved!=null)
+            {
+                GUI.enabled=presets.Data.selected!=saved.key;
+                if(GUILayout.Button(presets.Data.selected==saved.key?"Used on next launch":"Use on next launch")) UseOnNextLaunch(saved.key);
+                GUI.enabled=true;
+            }
             if(presetFeedback!=null) GUILayout.Label(presetFeedback,theme.Small);
             }
             GUILayout.EndVertical();
             GUILayout.BeginVertical(theme.Card);
-            if(Section("Details",ref advancedOpen))
+            if(Section("Advanced",ref advancedOpen))
             {
                 var shown=selectionPreview??reference;
+                GUILayout.Label("Body specifications and cosmetics",theme.Heading);
+                GUILayout.Label(shown.Summary??"",theme.Small);
+                GUILayout.Label("Personality from ID",theme.Small);
                 GUILayout.Label(shown.Personality.ToString(),theme.Small);
                 ToggleRow("Animated preview",ref animate);
                 GUILayout.Label("View angle");
@@ -267,6 +297,9 @@ namespace CyanPreview
                     if(preset.species!=addDraft.species) continue; any=true;
                     if(GUILayout.Button(preset.name+" · "+preset.appearanceId,draftPresetKey==preset.key?theme.Selected:GUI.skin.button))
                     { addDraft=JsonUtility.FromJson<PetPreset>(JsonUtility.ToJson(preset)); draftPresetKey=preset.key; }
+                    GUI.enabled=presets.Data.selected!=preset.key;
+                    if(GUILayout.Button(presets.Data.selected==preset.key?"Used on next launch":"Use on next launch")) UseOnNextLaunch(preset.key);
+                    GUI.enabled=true;
                 }
                 if(!any) GUILayout.Label("No saved presets yet.",theme.Small);
                 GUILayout.Space(8); GUILayout.Label("Appearance ID");
@@ -299,3 +332,4 @@ namespace CyanPreview
         }
     }
 }
+

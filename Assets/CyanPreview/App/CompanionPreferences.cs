@@ -12,6 +12,7 @@ namespace CyanPreview
         public float scale = DesktopSettings.DefaultScale;
         public ClimbingMode climbingMode = ClimbingMode.EdgesAndBackgrounds;
         public bool sound = true, roam = true, jumps = true, clickToExplore;
+        public bool muteAll;
 
         public static CompanionPreferences Read(string json, out string warning)
         {
@@ -36,3 +37,4 @@ namespace CyanPreview
         }
     }
 }
+

@@ -55,6 +55,12 @@ namespace CyanPreview.Editor
                 Check(File.ReadAllText(Path.Combine(directory,"pets.json"))==original,"Browsing/adding/removing overwrote saved presets");
                 var settings=(DesktopSettings)Call(app,"DesktopConfiguration");
                 Check(!settings.showAttentionLabels && settings.feedRequest==0 && settings.scuffleRequest==0,"Release configuration enables prototype controls");
+                CheckPreview(app,primary);
+                CheckStartup(app,store,directory);
+                Set(app,"muteAll",true);
+                settings=(DesktopSettings)Call(app,"DesktopConfiguration");
+                Check(settings.muteAll && settings.pets.Length==1 && settings.pets[0].key!="primary","Global mute depends on primary being present");
+                CheckMute(context,root.transform);
             }
             finally
             {
@@ -68,5 +74,59 @@ namespace CyanPreview.Editor
             UnityEngine.Object.DestroyImmediate(host);
             Debug.Log("RELEASE_PANEL_CHECKS_PASSED");
         }
+        static void CheckPreview(PreviewApp app,ReferenceBridge primary)
+        {
+            var cameraObject=new GameObject("Preview zoom check");
+            var camera=cameraObject.AddComponent<Camera>(); Set(app,"previewCamera",camera);
+            try
+            {
+                Call(app,"SetPreviewZoom",2f); Check(camera.orthographicSize==24,"Zoom did not reach the preview camera");
+                Check(primary.Seed==9320 && (float)Get(app,"desktopScale")==DesktopSettings.DefaultScale,"Preview zoom changed the live pet");
+                Call(app,"SetPreviewZoom",1.5f); Check(camera.orthographicSize==32,"Preview zoom reset failed");
+                Check(primary.Summary.Contains("headSize") && primary.Summary.Contains("tailLength"),"Body specifications are unavailable");
+            }
+            finally { Set(app,"previewCamera",null); UnityEngine.Object.DestroyImmediate(cameraObject); }
+        }
+        static void CheckStartup(PreviewApp app,PetPresetStore store,string directory)
+        {
+            string originalKey=store.Data.selected;
+            ((Dictionary<string,string>)Get(app,"livePresetKeys"))["primary"]=originalKey;
+            var next=store.Data.Copy(); var white=PetPreset.Capture("7205",new CompanionPreferences {sound=false});
+            white.species="white"; white.name="Next White"; next.pets.Add(white); store.Commit(next);
+            var reference=Get(app,"reference"); var selection=Get(app,"selectedPetKey");
+            Call(app,"UseOnNextLaunch",white.key);
+            Check(store.Data.selected==white.key && ReferenceEquals(reference,Get(app,"reference")) && Equals(selection,Get(app,"selectedPetKey")),"Startup selection changed a live pet");
+            var reloaded=new PetPresetStore(Path.Combine(directory,"pets.json"),PetPreset.Capture("1",new CompanionPreferences()));
+            Check(reloaded.Data.Current.species=="white" && reloaded.Data.Current.appearanceId=="7205" && !reloaded.Data.Current.sound,"Next-launch choice did not survive reload");
+            Set(app,"liveName","Updated live Cyan");
+            var primary=DesktopPetConfiguration.From(new DesktopSettings {id="9320",scale=1.5f},"primary");
+            Call(app,"SaveLivePreset",primary,false);
+            Check(store.Data.selected==white.key && store.Data.Current.name=="Next White" && store.Data.Current.species=="white","Updating live Cyan overwrote the startup White");
+            Check(store.Data.pets.Find(p=>p.key==originalKey).name=="Updated live Cyan","Live pet lost its original preset mapping");
+            string before=File.ReadAllText(Path.Combine(directory,"pets.json"));
+            Call(app,"UseOnNextLaunch","missing");
+            Check(store.Data.selected==white.key && File.ReadAllText(Path.Combine(directory,"pets.json"))==before,"Invalid startup selection changed saved data");
+        }
+        static void CheckMute(ReferenceContext context,Transform parent)
+        {
+            var bounds=new Rect(-400,-300,800,600);
+            var audible=DesktopPetConfiguration.From(new DesktopSettings {id="9320"},"audible");
+            var silent=DesktopPetConfiguration.From(new DesktopSettings {id="7205",species="white",sound=false},"silent");
+            using(var a=new DesktopPet(context,parent,audible,bounds,0))
+            using(var b=new DesktopPet(context,parent,silent,bounds,1))
+            {
+                Check(a.Audio!=null && b.Audio!=null,"Mute regression requires actual audio instances");
+                a.Configure(audible,false,true); b.Configure(silent,false,true);
+                Check(!a.Audio.Enabled && !b.Audio.Enabled && audible.sound && !silent.sound,"Mute changed per-pet choices or left audio enabled");
+                a.Configure(audible,false,false); b.Configure(silent,false,false);
+                Check(a.Audio.Enabled && !b.Audio.Enabled,"Unmute did not restore individual sound choices");
+                a.Configure(audible,true,false); Check(!a.Audio.Enabled,"Unmute bypassed pause");
+            }
+            var prefs=CompanionPreferences.Read(JsonUtility.ToJson(new CompanionPreferences {sound=true,muteAll=true}),out var warning);
+            Check(warning==null && prefs.muteAll && prefs.sound,"Global mute preference did not round-trip independently");
+            Check(!CompanionPreferences.Read("{\"sound\":false}",out _).muteAll,"Old preferences unexpectedly mute all pets");
+            Debug.Log("MASTER_MUTE_AND_STARTUP_PRESET_CHECKS_PASSED");
+        }
     }
 }
+

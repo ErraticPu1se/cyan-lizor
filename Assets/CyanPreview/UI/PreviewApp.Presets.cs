@@ -10,7 +10,7 @@ namespace CyanPreview
         bool confirmPresetDelete;
         string selectedSpecies="cyan";
         CompanionPreferences CurrentPreferences() => new CompanionPreferences { gameFolder=gameFolder, scale=desktopScale,
-            climbingMode=desktopClimbingMode,sound=desktopSounds,roam=desktopRoam,jumps=autonomousJumps,clickToExplore=desktopClicks };
+            climbingMode=desktopClimbingMode,sound=desktopSounds,roam=desktopRoam,jumps=autonomousJumps,clickToExplore=desktopClicks,muteAll=muteAll };
         void ApplyPresetValues(PetPreset value)
         {
             selectedSpecies=value.species;
@@ -24,6 +24,7 @@ namespace CyanPreview
             {
                 presets=new PetPresetStore(Path.Combine(Application.persistentDataPath,"saved-pets.v1.json"),PetPreset.Capture(id,legacy));
                 ApplyPresetValues(presets.Data.Current); presetWarning=presets.Warning;
+                livePresetKeys["primary"]=presets.Data.selected; primaryName=presets.Data.Current.name;
             }
             catch(Exception e) { presetWarning=e.Message+" Preset saving is disabled; your current lizard is still available."; }
         }
@@ -57,3 +58,4 @@ namespace CyanPreview
         }
     }
 }
+

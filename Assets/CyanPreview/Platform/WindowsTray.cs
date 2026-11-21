@@ -188,9 +188,9 @@ namespace CyanPreview
             try
             {
                 AppendMenu(menu,0,(UIntPtr)(uint)TrayAction.Settings,"Settings...");
-                AppendMenu(menu,petActive?0u:1u,(UIntPtr)(uint)TrayAction.PauseResume,paused?"Resume pet":"Pause pet");
-                AppendMenu(menu,sound?8u:0u,(UIntPtr)(uint)TrayAction.Sound,"Sound");
-                AppendMenu(menu,petActive?0u:1u,(UIntPtr)(uint)TrayAction.StopPet,"Stop desktop pet");
+                AppendMenu(menu,petActive?0u:1u,(UIntPtr)(uint)TrayAction.PauseResume,paused?"Resume all pets":"Pause all pets");
+                AppendMenu(menu,sound?0u:8u,(UIntPtr)(uint)TrayAction.Sound,"Mute all sounds");
+                AppendMenu(menu,petActive?0u:1u,(UIntPtr)(uint)TrayAction.StopPet,"Stop all pets");
                 AppendMenu(menu,0x800,UIntPtr.Zero,null);
                 AppendMenu(menu,0,(UIntPtr)(uint)TrayAction.Quit,"Quit Lizor");
                 GetCursorPos(out var point); SetForegroundWindow(window);
@@ -219,3 +219,4 @@ namespace CyanPreview
         }
     }
 }
+

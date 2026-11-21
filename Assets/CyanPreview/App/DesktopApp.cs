@@ -22,6 +22,7 @@ namespace CyanPreview
         public int vocalizeRequest, feedRequest, cancelFeedRequest, scuffleRequest;
         public string scuffleFirst, scuffleSecond, vocalizePetKey;
         public bool paused;
+        public bool muteAll;
         public bool allowFighting;
         public bool showAttentionLabels=true;
         public DesktopPetConfiguration[] pets;
@@ -212,7 +213,7 @@ namespace CyanPreview
                     foodView.Show(false,Vector2.zero); food.Remove(p.Config.key,Clamp(p.WorldMouth));
                     if(pointerPet==p) CancelPointer(); p.Rebuild(config,Bounds,Clamp(p.WorldPosition)); scuffles.Clear();
                 }
-                p.Configure(config,settings.paused);
+                p.Configure(config,settings.paused,settings.muteAll);
             }
             cameraView.orthographicSize=native.WorkArea.height/2;
             if(displayChanged) CancelFeeding();
@@ -347,3 +348,4 @@ namespace CyanPreview
         }
     }
 }
+

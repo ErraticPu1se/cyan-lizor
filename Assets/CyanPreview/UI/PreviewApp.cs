@@ -37,6 +37,7 @@ namespace CyanPreview
         float phase, depth=.7f, desktopScale=DesktopSettings.DefaultScale, previewClock;
         bool animate=true, desktopClicks, desktopSounds=true, desktopRoam=true, autonomousJumps=true;
         bool advancedOpen;
+        float previewZoom=1.5f;
         int desktopVocalizeRequest;
         string vocalizePetKey;
         ClimbingMode desktopClimbingMode=ClimbingMode.EdgesAndBackgrounds;
@@ -70,17 +71,17 @@ namespace CyanPreview
             backgroundCamera.depth=-10; backgroundCamera.cullingMask=0;
             backgroundCamera.clearFlags=CameraClearFlags.SolidColor; backgroundCamera.backgroundColor=PanelTheme.Background;
             previewCamera=new GameObject("Preview camera").AddComponent<Camera>();
-            previewCamera.orthographic=true; previewCamera.orthographicSize=48;
-            previewCamera.transform.position=new Vector3(-35,0,-10);
+            previewCamera.orthographic=true; previewCamera.orthographicSize=48/previewZoom;
+            previewCamera.transform.position=new Vector3(-5,0,-10);
             previewCamera.clearFlags=CameraClearFlags.SolidColor;
             previewCamera.backgroundColor=new Color(.10f,.14f,.165f);
-            previewTexture=new RenderTexture(768,240,16,RenderTextureFormat.ARGB32) {name="Companion preview",filterMode=FilterMode.Bilinear};
+            previewTexture=new RenderTexture(1024,384,16,RenderTextureFormat.ARGB32) {name="Companion preview",filterMode=FilterMode.Bilinear};
             previewTexture.Create(); previewCamera.targetTexture=previewTexture;
             cache=PlayerPrefs.GetString("ReferenceCache",Path.Combine(Path.GetDirectoryName(Application.dataPath),"local-data"));
             id=PlayerPrefs.GetString("LastId","12345");
             var preferences=CompanionPreferences.Read(PlayerPrefs.GetString(PreferencesKey,""),out preferenceWarning);
             gameFolder=preferences.gameFolder; desktopScale=preferences.scale; desktopClimbingMode=preferences.climbingMode;
-            desktopClicks=preferences.clickToExplore; desktopSounds=preferences.sound; desktopRoam=preferences.roam; autonomousJumps=preferences.jumps;
+            desktopClicks=preferences.clickToExplore; desktopSounds=preferences.sound; desktopRoam=preferences.roam; autonomousJumps=preferences.jumps; muteAll=preferences.muteAll;
             showAttentionLabels=PlayerPrefs.GetInt(AttentionLabelsKey,1)!=0;
             InitializePresets(preferences);
             savedPreferences=JsonUtility.ToJson(preferences); initialized=true;
@@ -119,6 +120,11 @@ namespace CyanPreview
             shown.Pose(phase,depth); shown.Draw(); view.Refresh(shown);
         }
         void Fail(Exception e) { error=e.Message; Debug.LogException(e); }
+        void SetPreviewZoom(float value)
+        {
+            previewZoom=Mathf.Clamp(value,.5f,3);
+            if(previewCamera!=null) previewCamera.orthographicSize=48/previewZoom;
+        }
         DesktopSettings PrimaryConfiguration() => new DesktopSettings {id=reference.Identity,species=reference.Species.Id,cache=cache,scale=desktopScale,
             paused=trayState.Paused,climbingMode=desktopClimbingMode,clickToExplore=desktopClicks,sound=desktopSounds,vocalizeRequest=desktopVocalizeRequest,vocalizePetKey=vocalizePetKey,roam=desktopRoam,jumps=autonomousJumps};
         System.Collections.IEnumerator InitializeTray()
@@ -141,14 +147,14 @@ namespace CyanPreview
         {
             trayState.Sync(desktop.Active);
             if(tray==null) return;
-            tray.UpdateState(desktop.Active,trayState.Paused,desktopSounds);
+            tray.UpdateState(desktop.Active,trayState.Paused,!muteAll);
             while(tray.TryRead(out var action))
             {
                 switch(action)
                 {
                     case TrayAction.Settings: tray.ShowSettings(); break;
                     case TrayAction.PauseResume: trayState.TogglePause(desktop.Active); break;
-                    case TrayAction.Sound: desktopSounds=!desktopSounds; SavePreferences(); break;
+                    case TrayAction.Sound: muteAll=!muteAll; SavePreferences(); break;
                     case TrayAction.StopPet: desktop.Stop(); trayState.Sync(false); break;
                     case TrayAction.Quit: QuitApp(); break;
                     case TrayAction.Hidden:
@@ -174,7 +180,7 @@ namespace CyanPreview
         {
             if(!initialized) return;
             var preferences=new CompanionPreferences { gameFolder=gameFolder, scale=desktopScale, climbingMode=desktopClimbingMode,
-                sound=desktopSounds, roam=desktopRoam, jumps=autonomousJumps, clickToExplore=desktopClicks };
+                sound=desktopSounds, roam=desktopRoam, jumps=autonomousJumps, clickToExplore=desktopClicks, muteAll=muteAll };
             string json=JsonUtility.ToJson(preferences);
             // Preset changes are explicit; browsing and editing a live pet never overwrite a saved preset.
             if(json==savedPreferences) return;
@@ -330,3 +336,4 @@ namespace CyanPreview
         }
     }
 }
+
