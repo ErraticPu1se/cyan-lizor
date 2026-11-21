@@ -55,7 +55,7 @@ namespace CyanPreview.Editor
                 Check(File.ReadAllText(Path.Combine(directory,"pets.json"))==original,"Browsing/adding/removing overwrote saved presets");
                 var settings=(DesktopSettings)Call(app,"DesktopConfiguration");
                 Check(!settings.showAttentionLabels && settings.feedRequest==0 && settings.scuffleRequest==0,"Release configuration enables prototype controls");
-                CheckLayout();
+                CheckPreview(app,primary);
                 CheckStartup(app,store,directory);
                 Set(app,"muteAll",true);
                 settings=(DesktopSettings)Call(app,"DesktopConfiguration");
@@ -74,15 +74,18 @@ namespace CyanPreview.Editor
             UnityEngine.Object.DestroyImmediate(host);
             Debug.Log("RELEASE_PANEL_CHECKS_PASSED");
         }
-        static void CheckLayout()
+        static void CheckPreview(PreviewApp app,ReferenceBridge primary)
         {
-            var method=typeof(PreviewApp).GetMethod("UseTwoColumns",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static);
-            foreach(int width in new[]{420,540,839,840,920})
-                Check((bool)method.Invoke(null,new object[]{(float)width,true})==(width>=840),"Narrow panel did not reflow");
-            Check(!(bool)method.Invoke(null,new object[]{920f,false}),"Collapsed panel retains sidebar");
-            var ids=typeof(PreviewApp).GetMethod("SameAppearanceId",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static);
-            Check((bool)ids.Invoke(null,new object[]{"9320","ID.-1.9320"}),"Canonical ID is incorrectly shown as an unapplied edit");
-            Check(!(bool)ids.Invoke(null,new object[]{"9320","9321"}) && !(bool)ids.Invoke(null,new object[]{"bad","bad"}),"Invalid or different IDs compare as equal");
+            var cameraObject=new GameObject("Preview zoom check");
+            var camera=cameraObject.AddComponent<Camera>(); Set(app,"previewCamera",camera);
+            try
+            {
+                Call(app,"SetPreviewZoom",2f); Check(camera.orthographicSize==24,"Zoom did not reach the preview camera");
+                Check(primary.Seed==9320 && (float)Get(app,"desktopScale")==DesktopSettings.DefaultScale,"Preview zoom changed the live pet");
+                Call(app,"SetPreviewZoom",1.5f); Check(camera.orthographicSize==32,"Preview zoom reset failed");
+                Check(primary.Summary.Contains("headSize") && primary.Summary.Contains("tailLength"),"Body specifications are unavailable");
+            }
+            finally { Set(app,"previewCamera",null); UnityEngine.Object.DestroyImmediate(cameraObject); }
         }
         static void CheckStartup(PreviewApp app,PetPresetStore store,string directory)
         {

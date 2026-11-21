@@ -136,7 +136,7 @@ namespace CyanPreview
             if(!Available && DateTime.UtcNow.Ticks>=retryAt)
             { retryAt=DateTime.UtcNow.AddSeconds(2).Ticks; Available=Shell_NotifyIcon(0,ref data); }
             petActive=active; paused=isPaused; sound=sounds;
-            string tip=paused?"Lizor �� paused":active?"Lizor �� pet running":"Lizor";
+            string tip=paused?"Lizor — paused":active?"Lizor — pet running":"Lizor";
             if(tip==data.Tip || !Available) return;
             data.Tip=tip; Shell_NotifyIcon(1,ref data);
         }

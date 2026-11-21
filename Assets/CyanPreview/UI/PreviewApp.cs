@@ -36,7 +36,8 @@ namespace CyanPreview
         Task<string> importerOutput, importerError;
         float phase, depth=.7f, desktopScale=DesktopSettings.DefaultScale, previewClock;
         bool animate=true, desktopClicks, desktopSounds=true, desktopRoam=true, autonomousJumps=true;
-        bool advancedOpen, preparedAssetsOpen;
+        bool advancedOpen;
+        float previewZoom=1.5f;
         int desktopVocalizeRequest;
         string vocalizePetKey;
         ClimbingMode desktopClimbingMode=ClimbingMode.EdgesAndBackgrounds;
@@ -70,11 +71,11 @@ namespace CyanPreview
             backgroundCamera.depth=-10; backgroundCamera.cullingMask=0;
             backgroundCamera.clearFlags=CameraClearFlags.SolidColor; backgroundCamera.backgroundColor=PanelTheme.Background;
             previewCamera=new GameObject("Preview camera").AddComponent<Camera>();
-            previewCamera.orthographic=true; previewCamera.orthographicSize=48;
-            previewCamera.transform.position=new Vector3(-35,0,-10);
+            previewCamera.orthographic=true; previewCamera.orthographicSize=48/previewZoom;
+            previewCamera.transform.position=new Vector3(-5,0,-10);
             previewCamera.clearFlags=CameraClearFlags.SolidColor;
             previewCamera.backgroundColor=new Color(.10f,.14f,.165f);
-            previewTexture=new RenderTexture(768,240,16,RenderTextureFormat.ARGB32) {name="Companion preview",filterMode=FilterMode.Bilinear};
+            previewTexture=new RenderTexture(1024,384,16,RenderTextureFormat.ARGB32) {name="Companion preview",filterMode=FilterMode.Bilinear};
             previewTexture.Create(); previewCamera.targetTexture=previewTexture;
             cache=PlayerPrefs.GetString("ReferenceCache",Path.Combine(Path.GetDirectoryName(Application.dataPath),"local-data"));
             id=PlayerPrefs.GetString("LastId","12345");
@@ -108,7 +109,7 @@ namespace CyanPreview
                     SavePreset(); SelectPreset(PetSelection.Create(presets.Data,selectedSpecies,id,CurrentPreferences())); return;
                 }
                 reference.Generate(id); phase=0; RefreshPreview();
-                status=reference.Identity+"  ��  "+reference.Species.DisplayName+"  ��  "+reference.Manifest.gameVersion;
+                status=reference.Identity+"  ·  "+reference.Species.DisplayName+"  ·  "+reference.Manifest.gameVersion;
                 error=null; appliedId=id; PlayerPrefs.SetString("LastId",id); PlayerPrefs.Save();
             }
             catch(Exception e) { Fail(e); }
@@ -119,6 +120,11 @@ namespace CyanPreview
             shown.Pose(phase,depth); shown.Draw(); view.Refresh(shown);
         }
         void Fail(Exception e) { error=e.Message; Debug.LogException(e); }
+        void SetPreviewZoom(float value)
+        {
+            previewZoom=Mathf.Clamp(value,.5f,3);
+            if(previewCamera!=null) previewCamera.orthographicSize=48/previewZoom;
+        }
         DesktopSettings PrimaryConfiguration() => new DesktopSettings {id=reference.Identity,species=reference.Species.Id,cache=cache,scale=desktopScale,
             paused=trayState.Paused,climbingMode=desktopClimbingMode,clickToExplore=desktopClicks,sound=desktopSounds,vocalizeRequest=desktopVocalizeRequest,vocalizePetKey=vocalizePetKey,roam=desktopRoam,jumps=autonomousJumps};
         System.Collections.IEnumerator InitializeTray()
@@ -167,7 +173,7 @@ namespace CyanPreview
         {
             if(detection!=null) return;
             detectionInput=gameFolder; string saved=gameFolder;
-            setupMessage="Looking in Steam libraries��";
+            setupMessage="Looking in Steam libraries…";
             detection=Task.Run(()=>GameInstallation.Detect(saved));
         }
         void SavePreferences()
@@ -255,7 +261,7 @@ namespace CyanPreview
             GUI.enabled=importer==null && folderPicker==null;
             gameFolder=GUILayout.TextField(gameFolder,GUILayout.Height(34));
             GUILayout.BeginHorizontal();
-            if(GUILayout.Button("Browse��",GUILayout.Height(32))) folderPicker=WindowsFolderPicker.Browse();
+            if(GUILayout.Button("Browse…",GUILayout.Height(32))) folderPicker=WindowsFolderPicker.Browse();
             GUI.enabled=importer==null && folderPicker==null && detection==null;
             if(GUILayout.Button("Detect again",GUILayout.Height(32))) DetectInstallation();
             GUILayout.EndHorizontal(); GUI.enabled=true;
@@ -265,18 +271,15 @@ namespace CyanPreview
             GUI.enabled=importer==null && folderPicker==null && validFolder;
             if(GUILayout.Button("Prepare local game assets",theme.Primary,GUILayout.Height(34))) ImportReference();
             GUI.enabled=true;
-            if(importer!=null) GUILayout.Label("Preparing your local reference�� Please wait.",theme.Small);
-            if(Section("Advanced: prepared assets",ref preparedAssetsOpen))
-            {
-            GUI.enabled=importer==null; GUILayout.Label("Reference folder",theme.Small); cache=GUILayout.TextField(cache??"",GUILayout.Height(32));
+            if(importer!=null) GUILayout.Label("Preparing your local reference… Please wait.",theme.Small);
+            GUI.enabled=importer==null; GUILayout.Label("Already prepared assets? Reference folder",theme.Small); cache=GUILayout.TextField(cache??"",GUILayout.Height(32));
             GUI.enabled=importer==null;
             if(GUILayout.Button("Load prepared reference")) LoadReference();
-            }
             GUI.enabled=true; GUILayout.EndVertical();
         }
         bool Section(string label,ref bool open)
         {
-            if(GUILayout.Button(label+"   "+(open?"?":"+"),theme.Heading,GUILayout.Height(24))) open=!open;
+            if(GUILayout.Button(label+"   "+(open?"−":"+"),theme.Heading,GUILayout.Height(24))) open=!open;
             if(open) GUILayout.Space(8);
             return open;
         }

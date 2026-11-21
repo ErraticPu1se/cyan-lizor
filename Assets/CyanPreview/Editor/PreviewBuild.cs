@@ -19,7 +19,7 @@ namespace CyanPreview.Editor
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene("Assets/Scenes/Preview.unity", true) };
             PlayerSettings.companyName = "ErraticPu1se";
             PlayerSettings.productName = "Lizor";
-            PlayerSettings.bundleVersion = "0.2.2-ui-preview.1";
+            PlayerSettings.bundleVersion = "0.2.2-ui-preview.2";
             PlayerSettings.defaultScreenWidth = 540;
             PlayerSettings.defaultScreenHeight = 840;
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;

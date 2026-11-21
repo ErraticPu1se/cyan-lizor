@@ -50,7 +50,7 @@ namespace CyanPreview
                 presets.Commit(next);
                 if(candidate!=null) { var old=reference; reference=candidate; candidate=null; old?.Dispose(); phase=0; view.Refresh(reference); }
                 ApplyPresetValues(presets.Data.Current); appliedId=Ready?id:null;
-                if(Ready) { PlayerPrefs.SetString("LastId",id); status=reference.Identity+"  ��  "+reference.Species.DisplayName; }
+                if(Ready) { PlayerPrefs.SetString("LastId",id); status=reference.Identity+"  ·  "+reference.Species.DisplayName; }
                 error=null; SavePreferences();
             }
             catch(Exception e) { Fail(e); }

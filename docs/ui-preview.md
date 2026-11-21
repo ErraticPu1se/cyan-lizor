@@ -1,25 +1,16 @@
-# UI refinement preview
+# Restored panel preview
 
-The previous panel is preserved at `archive/ui-before-refinement` (commit `e757742`). This preview lives on `preview/ui-refinement`; existing published ZIPs remain available.
+The UI redesign from preview.1 has been rolled back. This branch uses the previous panel layout and theme, retaining the global mute and explicit next-launch preset fixes.
 
-The panel keeps the current editing target visible. Opening Lizards reveals the roster, the next-launch preset chooser, and the add flow. Below 840 pixels wide, these sections move below the editor without scaling the text down. Start/Stop and Pause remain in a fixed footer. Setup keeps prepared-reference paths in Advanced. Appearance ID feedback and preset-name labels explain incomplete input.
+Advanced again shows the selected lizard's body specifications and cosmetic summary: head size, fatness, tail length, tail fatness, tail colour, cosmetic names, and personality. The preview has a taller viewport and its own 0.5x-3x zoom slider with Reset. Preview zoom adjusts only the preview camera, independently of desktop pet size. The preview render texture is 1024x384.
 
-Settings apply to the live pet. Save as new and Update preset are explicit writes; pending appearance IDs must be applied before saving. The next-launch chooser commits only the startup preset key. It neither switches a live pet nor changes the preset associated with that pet. Extra pets remain session-only; selecting a startup preset does not automatically start the desktop overlay.
+The original baseline remains at `archive/ui-before-refinement` (`e757742`). The rejected redesign remains in commit `0fbc2be`; the preview branch and PR now contain the restoration on top of it.
 
-Mute all sounds is a global override, available in the panel and tray. It affects every pet, including after removing the primary. Unmuting restores individual sound preferences and respects pause. Global mute is persisted separately from per-pet sound inside the existing versioned companion preferences. Older preferences and IPC settings default to unmuted.
+Global mute preserves each pet's sound preference. Use on next launch persists a saved-preset choice without switching live pets or redirecting later saves. Extra pets remain session-only.
 
-## Verification contract
+## Validation and packaging
 
-- Viewports: 540x840 compact, 920x840 expanded, and 540x840 with the roster open.
-- Exercise empty roster, invalid ID, stopped/running/paused, missing setup, saved/unsaved, and muted states.
-- Check text fit, scrolling, focus visibility, keyboard operation, and selection at each viewport. No claim of screen-reader support is made for Unity IMGUI.
-- ReleasePanelChecks covers layout thresholds, next-launch round-trip, live-preset mapping, rejected startup keys, and global mute with mixed sound preferences and no primary pet.
-- Run PreviewBuild.Verify and build the Windows player. Record actual outcomes here before publication.
+Runtime and editor/test assemblies compile against Unity 2020.3.45f1. Targeted runtime checks cover mute, startup-preset persistence and ownership, camera zoom/reset without changing desktop scale, and body-spec availability. Render checks inspect the restored panel, zoom levels, and Advanced for Cyan and White.
 
-## Results and experimental package
+The Editor previously exited at LicensingClient IPC (199), so this experimental package uses the existing pinned 2020.3.45f1 Mono player shell with the rebuilt production runtime. It is not a fresh Editor export. Test harnesses, game assemblies, and local reference assets are excluded. Full Editor verification, keyboard navigation, and native tray/desktop interaction remain unverified.
 
-The runtime and editor/test assemblies compile against the installed Unity 2020.3.45f1 libraries using its Roslyn compiler. Only existing unused-field warnings remain. ReleasePanelChecks ran successfully in the existing 2020.3.45f1 Mono player with a temporary, isolated test harness. This includes master mute, preference compatibility, canonical appearance IDs, startup persistence, and preserving the live pet's preset mapping. The harness never starts the ordinary controller or desktop overlay.
-
-The actual panel was rendered in that player at 540x840 and 920x840. Compact, expanded three-pet, narrow scrolled roster, invalid ID, muted, empty, and setup states were inspected. The rendered pass exposed and corrected the removal-label wrap and canonical-ID dirty-state mismatch. Keyboard navigation, native tray interaction, and real desktop overlay interaction remain unverified.
-
-The Editor verification/build attempt stops before project loading: LicensingClient IPC connection times out, returning exit code 199. Therefore the downloadable experimental package combines the existing 2020.3.45f1 Mono player shell with the newly compiled production runtime assembly; it is not a fresh Editor player export. Test harnesses, local reference assets, and game assemblies are excluded. A normal Editor export and native interaction checks are still required before publishing a supported release or merging this draft.
